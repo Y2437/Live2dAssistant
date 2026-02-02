@@ -1,13 +1,4 @@
-const WIDTH = 800;
-const HEIGHT = 600;
-const WINDOW_KEYS = [
-    'assistant',
-    'pomodoro',
-    'organizer',
-    'cards',
-    'clipboard',
-    'devShell',  //作为测试模式的主窗口
-]
+const {WIDTH, HEIGHT, WINDOW_KEYS} = require('./config');
 const path = require('path');
 const {app,BrowserWindow,ipcMain} = require('electron');
 class WindowManager{
