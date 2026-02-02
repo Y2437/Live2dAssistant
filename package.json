@@ -1,0 +1,25 @@
+{
+  "name": "live2dassistant",
+  "version": "1.0.0",
+  "description": "哎也不知道能不能搞成",
+  "main": "src/main/main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Y2437/Live2dAssistant.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Y2437/Live2dAssistant/issues"
+  },
+  "homepage": "https://github.com/Y2437/Live2dAssistant#readme",
+  "devDependencies": {
+    "electron": "^40.1.0"
+  }
+}
