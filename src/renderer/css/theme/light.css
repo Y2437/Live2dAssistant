@@ -1,0 +1,16 @@
+:root[data-theme="light"]{
+    --c-bg: #ffffff;
+    --c-panel: #f6f7f9;
+    --c-text: #111827;
+    --c-muted: #6b7280;
+
+    --c-border: #e5e7eb;
+
+    --c-btn: #ffffff;
+    --c-btn-hover: #f3f4f6;
+
+    --c-active: #111827;
+    --c-active-text: #ffffff;
+
+    --c-focus: #2563eb;
+}

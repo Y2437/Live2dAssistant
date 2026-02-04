@@ -1,0 +1,87 @@
+html, body{
+    height: 100%;
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+body{
+    background: var(--c-bg);
+    color: var(--c-text);
+}
+
+.shell{
+    height: 100%;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+}
+
+.shell__nav{
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: var(--c-panel);
+    border-right: 1px solid var(--c-border);
+}
+
+.shell__main{
+    min-width: 0;
+    padding: 16px;
+}
+.nav__title{
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.nav__group{
+    display: grid;
+    gap: 8px;
+}
+
+.nav__btn{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+
+    padding: 10px 12px;
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+
+    background: var(--c-btn);
+    color: var(--c-text);
+
+    cursor: pointer;
+    user-select: none;
+}
+
+.nav__btn:hover{
+    background: var(--c-btn-hover);
+}
+
+.nav__btn:focus{
+    outline: 2px solid var(--c-focus);
+    outline-offset: 2px;
+}
+
+.nav__btn.is-active{
+    background: var(--c-active);
+    color: var(--c-active-text);
+    border-color: transparent;
+}
+
+.nav__footer{
+    margin-top: auto;
+    display: grid;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--c-border);
+}
+
+.nav__hint{
+    font-size: 12px;
+    color: var(--c-muted);
+    line-height: 1.4;
+}

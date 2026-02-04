@@ -18,7 +18,7 @@ class WindowManager{
             filePath:null
         }
         ]}));
-        this.defs.get("devShell").filePath=path.join(__dirname, '../renderer/index.html');
+        this.defs.get("devShell").filePath=path.join(__dirname, '../renderer/view/index.html');
     }
     list(){
         let result=[];

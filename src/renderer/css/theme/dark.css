@@ -1,0 +1,16 @@
+:root[data-theme="dark"]{
+    --c-bg: #0b0f14;
+    --c-panel: #111827;
+    --c-text: #e5e7eb;
+    --c-muted: #9ca3af;
+
+    --c-border: #243244;
+
+    --c-btn: #111827;
+    --c-btn-hover: #162033;
+
+    --c-active: #e5e7eb;
+    --c-active-text: #0b0f14;
+
+    --c-focus: #60a5fa;
+}
