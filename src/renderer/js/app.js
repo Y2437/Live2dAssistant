@@ -13,9 +13,9 @@ function showView(viewKey) {
     const views = getAllElementsById('.view');
     setNavBtnActive(viewKey);
     views.forEach(view => {
-        view.hidden = view.classList.view !== viewKey;
+        view.hidden = view.dataset.view !== viewKey;
     })
-    const hintText=getElementById(`p.nav__hint[data-view="ActiveText"]`);
+    const hintText=getElementById(`p.nav__hint[data-role="ActiveText"]`);
     hintText.textContent=`当前激活视图：${viewKey}`;
 }
 function wireNav() {
