@@ -3,7 +3,13 @@
 <head>
     <meta charset="utf-8">
     <title>网页标题</title>
+    <script src="../vendor/live2d/live2dcubismcore.min.js" defer></script>
+    <script src="../vendor/pixi/pixi.min.js" defer></script>
+    <script src="../vendor/live2d/cubism4.min.js" defer></script>
+
+    <script type="module" src="../js/assistant.js" defer></script>
     <script src="../js/app.js" defer></script>
+
     <link rel="stylesheet" href="../css/theme/light.css">
     <link rel="stylesheet" href="../css/theme/dark.css">
     <link rel="stylesheet" href="../css/style/shell.css">
@@ -38,7 +44,11 @@
                         <div class="placeholder-card">
                             <h3 class="placeholder-title">看板娘占位</h3>
                             <p class="placeholder-desc">后续在这里挂载 Live2D 画布与交互层</p>
-                            <div class="placeholder-slot" data-slot="assistant-live2d"></div>
+
+                            <div class="assistant-live2d" data-slot="assistant-live2d">
+                                <div class="assistant-live2d__stage" data-role="assistant-live2d-stage"></div>
+                                <div class="assistant-bubble" data-role="assistant-bubble" hidden></div>
+                            </div>
                         </div>
                     </div>
                 </div>

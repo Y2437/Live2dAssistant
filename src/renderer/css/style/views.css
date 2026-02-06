@@ -41,3 +41,24 @@
     border-radius: 10px;
     background: var(--c-bg);
 }
+.shell__main{
+    position: relative;
+    overflow: hidden;
+}
+
+.shell__main > .view{
+    position: absolute;
+    inset: 0;
+
+    overflow: auto;
+
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.shell__main > .view.is-active{
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}

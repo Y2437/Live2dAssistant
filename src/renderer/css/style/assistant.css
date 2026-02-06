@@ -2,3 +2,41 @@
     display: grid;
     gap: 12px;
 }
+
+/* Live2D 舞台容器
+   只使用主题变量，不写死颜色 */
+.assistant-live2d{
+    position: relative;
+    min-height: 520px;
+    border: 1px solid var(--c-border);
+    /*border-radius: contentReference[oaicite:18]{index=18}d: var(--c-bg);*/
+    overflow: hidden;
+}
+
+/* Pixi canvas 挂载区 */
+.assistant-live2d__stage{
+    position: absolute;
+    inset: 0;
+}
+
+/* 气泡层
+   这是助手交互的最小 UI 入口 */
+.assistant-bubble{
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+
+    padding: 10px 12px;
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+
+    background: var(--c-panel);
+    color: var(--c-text);
+
+    font-size: 12px;
+    line-height: 1.6;
+
+    user-select: none;
+    pointer-events: none;
+}

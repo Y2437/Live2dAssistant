@@ -40,10 +40,10 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
-
+CubismSdkForWeb-5-r.4/
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
-
+src/renderer/assets/live2d/Roxy/
 # TypeScript cache
 *.tsbuildinfo
 
