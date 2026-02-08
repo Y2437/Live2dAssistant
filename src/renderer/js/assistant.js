@@ -100,7 +100,6 @@ function wireNavBtn(){
         if(!selected.classList.contains("assistant-actionBtn")){
             return;
         }
-
         window.api.openWindow(selected.dataset.action);
     })
 
