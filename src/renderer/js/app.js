@@ -36,5 +36,5 @@ function boot(){
     wireIpc();
     showView(DEFAULT_VIEW);
 }
-boot();
+document.addEventListener('DOMContentLoaded',boot);
 

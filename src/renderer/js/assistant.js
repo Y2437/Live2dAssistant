@@ -2,6 +2,9 @@
 import {CONFIG} from "./config.js";
 const getElementById = (el,root=document) => root.querySelector(el);
 const getAllElementsById = (el,root=document) => Array.from(root.querySelectorAll(el));
+
+let inputText=null;
+
 const assistantState = {
     pixiApp: null,
     stage: null,
@@ -21,8 +24,6 @@ function mountAssistant() {
         return;
     }
     assistantState.mounted = true;
-    // <div className="assistant-live2d__stage" data-role="assistant-live2d-stage"></div>
-    // <div className="assistant-bubble" data-role="assistant-bubble" hidden></div>
     assistantState.stage = getElementById('.assistant-live2d__stage');
     assistantState.bubble = getElementById('.assistant-bubble');
 }
@@ -76,7 +77,37 @@ async function initAssistant() {
     initResizeObserver();
 
 }
+function wireInput(){
+    const inputForm=getElementById("form.assistant-form");
+    const input=getElementById("input.assistant-input[data-role=assistant-input]");
+    inputForm.addEventListener("submit", (event)=>{
+        event.preventDefault();
+        let context=input.value.trim();
+        if(context===''){
+            console.log("submitted nothing");
+            return;
+        }
+        inputText=context;
+        console.log(context);
+        input.value="";
+    })
+}
+function wireNavBtn(){
+    const navPanel=getElementById("div.assistant-actions[data-role=assistant-actions]");
+    navPanel.addEventListener("click", (event)=>{
+        const selected=event.target;
+        console.log(selected);
+        if(!selected.classList.contains("assistant-actionBtn")){
+            return;
+        }
+
+        window.api.openWindow(selected.dataset.action);
+    })
+
+}
+
 document.addEventListener('DOMContentLoaded',async ()=>{
     await initAssistant();
+    wireInput();
+    wireNavBtn();
 })
-document.addEventListener("",async ()=>{})

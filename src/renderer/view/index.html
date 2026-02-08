@@ -42,12 +42,46 @@
                 <div class="view__mount" data-mount>
                     <div class="assistant-root">
                         <div class="placeholder-card">
-                            <h3 class="placeholder-title">看板娘占位</h3>
-                            <p class="placeholder-desc">后续在这里挂载 Live2D 画布与交互层</p>
-
+<!--                            在下面这个节点之后插入面板 DOM-->
+<!--                            目标节点是 div.assistant-live2d 的闭合标签后面-->
+<!--                            你要插入的结构包含三类元素-->
+<!--                            1 快捷按钮容器-->
+<!--                            2 输入框-->
+<!--                            3 发送按钮-->
+<!--                            插入的元素需带固定的 data-role 便于脚本稳定查询-->
+<!--                            面板根节点 data-role="assistant-panel-->
+<!--                            输入框 data-role="assistant-input"-->
+<!--                            快捷按钮区 data-role="assistant-actions"-->
+<!--                            所有快捷按钮都带 data-action，值为你要执行的动作名，例如 open:pomodoro-->
+<!--                            面板里建议先放这五个快捷按钮，按钮文本按你自己的 UI 文案调整-->
                             <div class="assistant-live2d" data-slot="assistant-live2d">
+                                <div class="assistant-bubble" data-role="assistant-bubble" hidden>请输入文本</div>
                                 <div class="assistant-live2d__stage" data-role="assistant-live2d-stage"></div>
-                                <div class="assistant-bubble" data-role="assistant-bubble" hidden></div>
+                            </div>
+                        </div>
+                        <div class="assistant-panel">
+                            <div class="assistant-actions" data-role="assistant-actions">
+                                <button type="button" class="assistant-actionBtn" data-action="pomodoro">番茄钟</button>
+                                <button type="button" class="assistant-actionBtn" data-action="organizer">资料整理</button>
+                                <button type="button" class="assistant-actionBtn" data-action="cards">知识卡片</button>
+                                <button type="button" class="assistant-actionBtn" data-action="clipboard">剪贴板</button>
+                            </div>
+                            <div class="assistant-inputRow">
+                                <form class="assistant-form">
+                                    <label for="assistant-input">
+                                        <input
+                                                id="assistant-input"
+                                                class="assistant-input"
+                                                data-role="assistant-input"
+                                                type="text"
+                                                placeholder="输入指令，例如 open pomodoro"
+                                                autocomplete="off"
+                                                spellcheck="false"
+                                        />
+                                    </label>
+                                    <button type="button" class="assistant-send" data-role="assistant-send">发送</button>
+                                </form>
+
                             </div>
                         </div>
                     </div>
