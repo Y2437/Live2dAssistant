@@ -77,10 +77,10 @@ async function initAssistant() {
     initResizeObserver();
 
 }
-function wireInput(){
+ function wireInput(){
     const inputForm=getElementById("form.assistant-form");
     const input=getElementById("input.assistant-input[data-role=assistant-input]");
-    inputForm.addEventListener("submit", (event)=>{
+    inputForm.addEventListener("submit", async (event)=>{
         event.preventDefault();
         let context=input.value.trim();
         if(context===''){
@@ -90,6 +90,8 @@ function wireInput(){
         inputText=context;
         console.log(context);
         input.value="";
+        let rawResponse=await window.api.chat(context);
+        console.log(rawResponse.choices[0].message.content);
     })
 }
 function wireNavBtn(){

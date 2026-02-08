@@ -1,6 +1,7 @@
 const {ipcMain} = require('electron');
+const {aiChat} = require('./aiService.js');
 const {wm} = require("../WindowManager");
-const {WIDTH, HEIGHT, WINDOW_KEYS} = require('../config');
+const {WIDTH, HEIGHT, WINDOW_KEYS,AI_CHAT_SYSTEM_PROMPT} = require('../config');
 class ipcRegister{
     constructor(ipc){
     }
@@ -19,9 +20,19 @@ class ipcRegister{
             await wm.open(windowKey);
         });
     }
+    static registerAiChat(){
+        ipcMain.handle("app:aiChat",async (event,message)=>{
+            const  aiChatMessage =[
+                {role:"system",message:AI_CHAT_SYSTEM_PROMPT},
+                {role:"user",message:message},
+            ]
+            return await aiChat(aiChatMessage);
+        })
+    }
     static registerAll(){
         this.registerOpenWindow();
         this.registerPing();
+        this.registerAiChat();
     }
 }
 module.exports = {ipcRegister};
