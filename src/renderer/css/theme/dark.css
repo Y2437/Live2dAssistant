@@ -14,3 +14,83 @@
 
     --c-focus: #60a5fa;
 }
+
+/* =========================
+   Theme color mapping
+   Only color related properties live here
+   ========================= */
+
+:root[data-theme="dark"] body{
+    background-color: var(--c-bg);
+    color: var(--c-text);
+}
+
+/* Surfaces */
+:root[data-theme="dark"] .shell__nav,
+:root[data-theme="dark"] .placeholder-card,
+:root[data-theme="dark"] .assistant-panel,
+:root[data-theme="dark"] [data-role="assistant-panel"],
+:root[data-theme="dark"] .assistant-bubble{
+    background-color: var(--c-panel);
+}
+
+:root[data-theme="dark"] .shell__main,
+:root[data-theme="dark"] .assistant-live2d,
+:root[data-theme="dark"] .placeholder-slot,
+:root[data-theme="dark"] .assistant-actionBtn,
+:root[data-theme="dark"] [data-role="assistant-actions"] [data-action],
+:root[data-theme="dark"] .assistant-input,
+:root[data-theme="dark"] [data-role="assistant-input"],
+:root[data-theme="dark"] .assistant-send,
+:root[data-theme="dark"] [data-role="assistant-send"]{
+    background-color: var(--c-bg);
+}
+
+/* Borders */
+:root[data-theme="dark"] .shell__nav,
+:root[data-theme="dark"] .nav__btn,
+:root[data-theme="dark"] .nav__footer,
+:root[data-theme="dark"] .placeholder-card,
+:root[data-theme="dark"] .placeholder-slot,
+:root[data-theme="dark"] .assistant-live2d,
+:root[data-theme="dark"] .assistant-bubble,
+:root[data-theme="dark"] .assistant-panel,
+:root[data-theme="dark"] [data-role="assistant-panel"],
+:root[data-theme="dark"] .assistant-actionBtn,
+:root[data-theme="dark"] [data-role="assistant-actions"] [data-action],
+:root[data-theme="dark"] .assistant-input,
+:root[data-theme="dark"] [data-role="assistant-input"],
+:root[data-theme="dark"] .assistant-send,
+:root[data-theme="dark"] [data-role="assistant-send"]{
+    border-color: var(--c-border);
+}
+
+/* Navigation button colors */
+:root[data-theme="dark"] .nav__btn{
+    background-color: var(--c-btn);
+    color: var(--c-text);
+}
+:root[data-theme="dark"] .nav__btn:hover{
+    background-color: var(--c-btn-hover);
+}
+:root[data-theme="dark"] .nav__btn.is-active{
+    background-color: var(--c-active);
+    color: var(--c-active-text);
+}
+
+/* Secondary text */
+:root[data-theme="dark"] .nav__hint,
+:root[data-theme="dark"] .placeholder-desc{
+    color: var(--c-muted);
+}
+
+/* Focus rings */
+:root[data-theme="dark"] .nav__btn:focus-visible,
+:root[data-theme="dark"] .assistant-actionBtn:focus-visible,
+:root[data-theme="dark"] [data-role="assistant-actions"] [data-action]:focus-visible,
+:root[data-theme="dark"] .assistant-input:focus,
+:root[data-theme="dark"] [data-role="assistant-input"]:focus,
+:root[data-theme="dark"] .assistant-send:focus-visible,
+:root[data-theme="dark"] [data-role="assistant-send"]:focus-visible{
+    outline-color: var(--c-focus);
+}

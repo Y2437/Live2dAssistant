@@ -1,32 +1,31 @@
 /* =========================
-   Assistant 页面布局基础
+   Assistant layout
+   Square and minimal
+   No color properties in this file
    ========================= */
 
 .assistant-root{
     display: grid;
-    gap: 12px;
+    gap: 14px;
 }
-
-/* =========================
-   Live2D 舞台区域
-   ========================= */
 
 .assistant-live2d{
     position: relative;
     min-height: 520px;
-    border: 1px solid var(--c-border);
-    border-radius: 12px;
-    background: var(--c-bg);
+
+    border-style: solid;
+    border-width: 1px;
+
+    border-radius: 0;
+
     overflow: hidden;
 }
 
-/* Pixi canvas 挂载区 */
 .assistant-live2d__stage{
     position: absolute;
     inset: 0;
 }
 
-/* 气泡层 */
 .assistant-bubble{
     position: absolute;
     left: 12px;
@@ -34,11 +33,11 @@
     bottom: 12px;
 
     padding: 10px 12px;
-    border: 1px solid var(--c-border);
-    border-radius: 12px;
 
-    background: var(--c-panel);
-    color: var(--c-text);
+    border-style: solid;
+    border-width: 1px;
+
+    border-radius: 0;
 
     font-size: 12px;
     line-height: 1.6;
@@ -47,26 +46,19 @@
     pointer-events: none;
 }
 
-/* =========================
-   助手面板
-   你在 HTML 里如果只写了 data-role
-   这份 CSS 同时兼容 class 与 data-role 两种写法
-   ========================= */
-
 .assistant-panel,
 [data-role="assistant-panel"]{
     display: grid;
-    gap: 10px;
+    gap: 12px;
 
-    padding: 12px;
-    border: 1px solid var(--c-border);
-    border-radius: 12px;
+    padding: 14px;
 
-    background: var(--c-panel);
-    color: var(--c-text);
+    border-style: solid;
+    border-width: 1px;
+
+    border-radius: 0;
 }
 
-/* 快捷按钮区 */
 .assistant-actions,
 [data-role="assistant-actions"]{
     display: flex;
@@ -75,112 +67,127 @@
     align-items: center;
 }
 
-/* 快捷按钮本体
-   你可以给按钮加 class assistant-actionBtn
-   或者只用 data-action 也能命中下面的规则 */
 .assistant-actionBtn,
 [data-role="assistant-actions"] [data-action]{
     appearance: none;
+    -webkit-appearance: none;
 
     padding: 8px 10px;
-    border: 1px solid var(--c-border);
-    border-radius: 10px;
 
-    background: var(--c-bg);
-    color: var(--c-text);
+    border-style: solid;
+    border-width: 1px;
+
+    border-radius: 0;
 
     font-size: 12px;
     line-height: 1;
-    cursor: pointer;
+    font-weight: 650;
 
+    cursor: pointer;
     user-select: none;
 
-    transition: opacity 120ms ease, transform 120ms ease;
+    transition: transform 120ms ease, opacity 120ms ease;
 }
 
 .assistant-actionBtn:hover,
 [data-role="assistant-actions"] [data-action]:hover{
-    opacity: 0.92;
+    transform: translateY(-1px);
 }
 
 .assistant-actionBtn:active,
 [data-role="assistant-actions"] [data-action]:active{
-    transform: translateY(1px);
+    transform: translateY(0);
+    opacity: 0.95;
 }
 
 .assistant-actionBtn:focus-visible,
 [data-role="assistant-actions"] [data-action]:focus-visible{
-    outline: none;
-    box-shadow: 0 0 0 2px var(--c-border);
+    outline-style: solid;
+    outline-width: 2px;
+    outline-offset: 2px;
 }
 
-/* 输入行 */
 .assistant-inputRow{
     display: flex;
     gap: 8px;
     align-items: center;
 }
 
-/* 输入框
-   你在 HTML 里可以用 class assistant-input
-   或者只用 data-role="assistant-input" */
 .assistant-input,
 [data-role="assistant-input"]{
     flex: 1;
 
     padding: 10px 12px;
-    border: 1px solid var(--c-border);
-    border-radius: 10px;
 
-    background: var(--c-bg);
-    color: var(--c-text);
+    border-style: solid;
+    border-width: 1px;
+
+    border-radius: 0;
 
     font-size: 12px;
-    line-height: 1.2;
+    line-height: 1.25;
 
     outline: none;
 }
 
 .assistant-input:focus,
 [data-role="assistant-input"]:focus{
-    box-shadow: 0 0 0 2px var(--c-border);
+    outline-style: solid;
+    outline-width: 2px;
+    outline-offset: 2px;
 }
 
-/* 发送按钮
-   你在 HTML 里可以用 class assistant-send
-   或者给按钮加 data-role="assistant-send" */
 .assistant-send,
 [data-role="assistant-send"]{
     appearance: none;
+    -webkit-appearance: none;
 
     padding: 10px 12px;
-    border: 1px solid var(--c-border);
-    border-radius: 10px;
 
-    background: var(--c-bg);
-    color: var(--c-text);
+    border-style: solid;
+    border-width: 1px;
+
+    border-radius: 0;
 
     font-size: 12px;
     line-height: 1;
+    font-weight: 650;
 
     cursor: pointer;
     user-select: none;
 
-    transition: opacity 120ms ease, transform 120ms ease;
+    transition: transform 120ms ease, opacity 120ms ease;
 }
 
 .assistant-send:hover,
 [data-role="assistant-send"]:hover{
-    opacity: 0.92;
+    transform: translateY(-1px);
 }
 
 .assistant-send:active,
 [data-role="assistant-send"]:active{
-    transform: translateY(1px);
+    transform: translateY(0);
+    opacity: 0.95;
 }
 
 .assistant-send:focus-visible,
 [data-role="assistant-send"]:focus-visible{
-    outline: none;
-    box-shadow: 0 0 0 2px var(--c-border);
+    outline-style: solid;
+    outline-width: 2px;
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce){
+    .assistant-actionBtn,
+    [data-role="assistant-actions"] [data-action],
+    .assistant-send,
+    [data-role="assistant-send"]{
+        transition: none;
+    }
+    .assistant-actionBtn:hover,
+    [data-role="assistant-actions"] [data-action]:hover,
+    .assistant-send:hover,
+    [data-role="assistant-send"]:hover{
+        transform: none;
+    }
 }

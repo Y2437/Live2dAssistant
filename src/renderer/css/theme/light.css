@@ -14,3 +14,83 @@
 
     --c-focus: #2563eb;
 }
+
+/* =========================
+   Theme color mapping
+   Only color related properties live here
+   ========================= */
+
+:root[data-theme="light"] body{
+    background-color: var(--c-bg);
+    color: var(--c-text);
+}
+
+/* Surfaces */
+:root[data-theme="light"] .shell__nav,
+:root[data-theme="light"] .placeholder-card,
+:root[data-theme="light"] .assistant-panel,
+:root[data-theme="light"] [data-role="assistant-panel"],
+:root[data-theme="light"] .assistant-bubble{
+    background-color: var(--c-panel);
+}
+
+:root[data-theme="light"] .shell__main,
+:root[data-theme="light"] .assistant-live2d,
+:root[data-theme="light"] .placeholder-slot,
+:root[data-theme="light"] .assistant-actionBtn,
+:root[data-theme="light"] [data-role="assistant-actions"] [data-action],
+:root[data-theme="light"] .assistant-input,
+:root[data-theme="light"] [data-role="assistant-input"],
+:root[data-theme="light"] .assistant-send,
+:root[data-theme="light"] [data-role="assistant-send"]{
+    background-color: var(--c-bg);
+}
+
+/* Borders */
+:root[data-theme="light"] .shell__nav,
+:root[data-theme="light"] .nav__btn,
+:root[data-theme="light"] .nav__footer,
+:root[data-theme="light"] .placeholder-card,
+:root[data-theme="light"] .placeholder-slot,
+:root[data-theme="light"] .assistant-live2d,
+:root[data-theme="light"] .assistant-bubble,
+:root[data-theme="light"] .assistant-panel,
+:root[data-theme="light"] [data-role="assistant-panel"],
+:root[data-theme="light"] .assistant-actionBtn,
+:root[data-theme="light"] [data-role="assistant-actions"] [data-action],
+:root[data-theme="light"] .assistant-input,
+:root[data-theme="light"] [data-role="assistant-input"],
+:root[data-theme="light"] .assistant-send,
+:root[data-theme="light"] [data-role="assistant-send"]{
+    border-color: var(--c-border);
+}
+
+/* Navigation button colors */
+:root[data-theme="light"] .nav__btn{
+    background-color: var(--c-btn);
+    color: var(--c-text);
+}
+:root[data-theme="light"] .nav__btn:hover{
+    background-color: var(--c-btn-hover);
+}
+:root[data-theme="light"] .nav__btn.is-active{
+    background-color: var(--c-active);
+    color: var(--c-active-text);
+}
+
+/* Secondary text */
+:root[data-theme="light"] .nav__hint,
+:root[data-theme="light"] .placeholder-desc{
+    color: var(--c-muted);
+}
+
+/* Focus rings */
+:root[data-theme="light"] .nav__btn:focus-visible,
+:root[data-theme="light"] .assistant-actionBtn:focus-visible,
+:root[data-theme="light"] [data-role="assistant-actions"] [data-action]:focus-visible,
+:root[data-theme="light"] .assistant-input:focus,
+:root[data-theme="light"] [data-role="assistant-input"]:focus,
+:root[data-theme="light"] .assistant-send:focus-visible,
+:root[data-theme="light"] [data-role="assistant-send"]:focus-visible{
+    outline-color: var(--c-focus);
+}
