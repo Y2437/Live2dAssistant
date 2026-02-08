@@ -1,7 +1,7 @@
 /* =========================
    Assistant layout
-   Square and minimal
-   No color properties in this file
+   Square and minimal, stronger modern feel
+   No direct color properties in this file
    ========================= */
 
 .assistant-root{
@@ -19,13 +19,16 @@
     border-radius: 0;
 
     overflow: hidden;
+    box-shadow: var(--shadow-2);
 }
 
+/* Pixi canvas mount */
 .assistant-live2d__stage{
     position: absolute;
     inset: 0;
 }
 
+/* bubble overlay */
 .assistant-bubble{
     position: absolute;
     left: 12px;
@@ -44,6 +47,9 @@
 
     user-select: none;
     pointer-events: none;
+
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .assistant-panel,
@@ -57,6 +63,8 @@
     border-width: 1px;
 
     border-radius: 0;
+
+    box-shadow: var(--shadow-1);
 }
 
 .assistant-actions,
@@ -72,7 +80,7 @@
     appearance: none;
     -webkit-appearance: none;
 
-    padding: 8px 10px;
+    padding: 9px 10px;
 
     border-style: solid;
     border-width: 1px;
@@ -81,12 +89,15 @@
 
     font-size: 12px;
     line-height: 1;
-    font-weight: 650;
+    font-weight: 720;
+    letter-spacing: 0.2px;
 
     cursor: pointer;
     user-select: none;
 
-    transition: transform 120ms ease, opacity 120ms ease;
+    transition: transform 120ms var(--ease-out),
+    box-shadow 120ms var(--ease-out),
+    opacity 120ms var(--ease-out);
 }
 
 .assistant-actionBtn:hover,
@@ -97,14 +108,14 @@
 .assistant-actionBtn:active,
 [data-role="assistant-actions"] [data-action]:active{
     transform: translateY(0);
-    opacity: 0.95;
+    opacity: 0.97;
 }
 
 .assistant-actionBtn:focus-visible,
 [data-role="assistant-actions"] [data-action]:focus-visible{
     outline-style: solid;
     outline-width: 2px;
-    outline-offset: 2px;
+    outline-offset: 3px;
 }
 
 .assistant-inputRow{
@@ -128,13 +139,15 @@
     line-height: 1.25;
 
     outline: none;
+
+    transition: box-shadow 120ms var(--ease-out), transform 120ms var(--ease-out);
 }
 
 .assistant-input:focus,
 [data-role="assistant-input"]:focus{
     outline-style: solid;
     outline-width: 2px;
-    outline-offset: 2px;
+    outline-offset: 3px;
 }
 
 .assistant-send,
@@ -151,12 +164,15 @@
 
     font-size: 12px;
     line-height: 1;
-    font-weight: 650;
+    font-weight: 720;
+    letter-spacing: 0.2px;
 
     cursor: pointer;
     user-select: none;
 
-    transition: transform 120ms ease, opacity 120ms ease;
+    transition: transform 120ms var(--ease-out),
+    box-shadow 120ms var(--ease-out),
+    opacity 120ms var(--ease-out);
 }
 
 .assistant-send:hover,
@@ -167,14 +183,14 @@
 .assistant-send:active,
 [data-role="assistant-send"]:active{
     transform: translateY(0);
-    opacity: 0.95;
+    opacity: 0.97;
 }
 
 .assistant-send:focus-visible,
 [data-role="assistant-send"]:focus-visible{
     outline-style: solid;
     outline-width: 2px;
-    outline-offset: 2px;
+    outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce){

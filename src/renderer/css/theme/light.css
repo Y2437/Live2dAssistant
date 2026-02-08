@@ -1,31 +1,41 @@
 :root[data-theme="light"]{
     --c-bg: #ffffff;
-    --c-panel: #f6f7f9;
-    --c-text: #111827;
-    --c-muted: #6b7280;
+    --c-panel: #f5f7fb;
+    --c-text: #0e1420;
+    --c-muted: #5b6678;
 
-    --c-border: #e5e7eb;
+    --c-border: #d8e0ea;
+    --c-border-strong: #c6d2e2;
 
     --c-btn: #ffffff;
-    --c-btn-hover: #f3f4f6;
+    --c-btn-hover: #eef3f9;
 
-    --c-active: #111827;
+    --c-active: #0e1420;
     --c-active-text: #ffffff;
 
     --c-focus: #2563eb;
+    --c-accent: #2563eb;
+
+    --shadow-1: 0 1px 0 rgba(14,20,32,0.04), 0 10px 20px rgba(14,20,32,0.08);
+    --shadow-2: 0 1px 0 rgba(14,20,32,0.05), 0 18px 50px rgba(14,20,32,0.12);
 }
 
 /* =========================
    Theme color mapping
-   Only color related properties live here
+   Color related properties live here
    ========================= */
 
 :root[data-theme="light"] body{
-    background-color: var(--c-bg);
+    background: linear-gradient(180deg, #ffffff 0%, #f6f8fc 100%);
     color: var(--c-text);
 }
 
-/* Surfaces */
+:root[data-theme="light"] ::selection{
+    background-color: rgba(37,99,235,0.18);
+    color: var(--c-text);
+}
+
+/* surfaces */
 :root[data-theme="light"] .shell__nav,
 :root[data-theme="light"] .placeholder-card,
 :root[data-theme="light"] .assistant-panel,
@@ -46,7 +56,7 @@
     background-color: var(--c-bg);
 }
 
-/* Borders */
+/* borders */
 :root[data-theme="light"] .shell__nav,
 :root[data-theme="light"] .nav__btn,
 :root[data-theme="light"] .nav__footer,
@@ -65,7 +75,18 @@
     border-color: var(--c-border);
 }
 
-/* Navigation button colors */
+/* hover borders */
+:root[data-theme="light"] .nav__btn:hover,
+:root[data-theme="light"] .assistant-actionBtn:hover,
+:root[data-theme="light"] [data-role="assistant-actions"] [data-action]:hover,
+:root[data-theme="light"] .assistant-send:hover,
+:root[data-theme="light"] [data-role="assistant-send"]:hover,
+:root[data-theme="light"] .assistant-input:hover,
+:root[data-theme="light"] [data-role="assistant-input"]:hover{
+    border-color: var(--c-border-strong);
+}
+
+/* navigation button colors */
 :root[data-theme="light"] .nav__btn{
     background-color: var(--c-btn);
     color: var(--c-text);
@@ -74,17 +95,21 @@
     background-color: var(--c-btn-hover);
 }
 :root[data-theme="light"] .nav__btn.is-active{
-    background-color: var(--c-active);
-    color: var(--c-active-text);
+    background-color: rgba(37,99,235,0.08);
 }
 
-/* Secondary text */
+/* active indicator */
+:root[data-theme="light"] .nav__btn.is-active::before{
+    background-color: var(--c-accent);
+}
+
+/* secondary text */
 :root[data-theme="light"] .nav__hint,
 :root[data-theme="light"] .placeholder-desc{
     color: var(--c-muted);
 }
 
-/* Focus rings */
+/* focus rings */
 :root[data-theme="light"] .nav__btn:focus-visible,
 :root[data-theme="light"] .assistant-actionBtn:focus-visible,
 :root[data-theme="light"] [data-role="assistant-actions"] [data-action]:focus-visible,
@@ -93,4 +118,21 @@
 :root[data-theme="light"] .assistant-send:focus-visible,
 :root[data-theme="light"] [data-role="assistant-send"]:focus-visible{
     outline-color: var(--c-focus);
+}
+
+/* scrollbars */
+:root[data-theme="light"] *::-webkit-scrollbar{
+    width: 10px;
+    height: 10px;
+}
+:root[data-theme="light"] *::-webkit-scrollbar-thumb{
+    background-color: rgba(14,20,32,0.10);
+    border: 2px solid rgba(0,0,0,0);
+    background-clip: padding-box;
+}
+:root[data-theme="light"] *::-webkit-scrollbar-thumb:hover{
+    background-color: rgba(14,20,32,0.16);
+}
+:root[data-theme="light"] *::-webkit-scrollbar-track{
+    background-color: rgba(0,0,0,0);
 }
