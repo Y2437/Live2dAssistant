@@ -62,8 +62,8 @@ function initResizeObserver() {
             return;
         }
         app.renderer.resize(width,height);
-        live2d.pivot.set(assistantState.baseWidth / 2, assistantState.baseHeight);
-        const s = Math.min(width / assistantState.baseWidth, height / assistantState.baseHeight) * 0.9;
+        live2d.pivot.set(assistantState.baseWidth / 2, assistantState.baseHeight/2);
+        const s = Math.min(width / assistantState.baseWidth, height / assistantState.baseHeight) * 1.5;
         live2d.scale.set(s);
         live2d.position.set(width / 2, height);
     })
