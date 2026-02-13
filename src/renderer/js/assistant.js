@@ -75,7 +75,14 @@ async function initAssistant() {
     initPixiApp();
     await initLive2d();
     initResizeObserver();
-
+    wireHit()
+}
+function wireHit(){
+    assistantState.live2d.on("hit",async (hitArea)=>{
+        console.log(hitArea);
+        let rawResponse=await window.api.chat("[触摸"+hitArea[0]+"]");
+        console.log(rawResponse.choices[0].message.content);
+    })
 }
  function wireInput(){
     const inputForm=getElementById("form.assistant-form");
