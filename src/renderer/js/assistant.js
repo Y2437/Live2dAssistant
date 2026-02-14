@@ -1,5 +1,6 @@
 
 import {CONFIG} from "./config.js";
+import {marked} from "../vendor/marked/lib/marked.esm.js";
 const getElementById = (el,root=document) => root.querySelector(el);
 const getAllElementsById = (el,root=document) => Array.from(root.querySelectorAll(el));
 
@@ -10,13 +11,17 @@ const assistantState = {
     stage: null,
     live2d: null,
     bubble: null,
+
+
     resizeObserver: null,
+    bubbleTimer:null,
 
     baseHeight: null,
     baseWidth: null,
 
     mounted: false,
 };
+const TIMEOUT_MS = CONFIG.LIVE2D_CONFIG.TIMEOUT_MS;
 const WEIGHT_FALLBACK=CONFIG.LIVE2D_CONFIG.WIDTH;
 const HEIGHT_FALLBACK=CONFIG.LIVE2D_CONFIG.HEIGHT;
 function mountAssistant() {
@@ -24,8 +29,9 @@ function mountAssistant() {
         return;
     }
     assistantState.mounted = true;
-    assistantState.stage = getElementById('.assistant-live2d__stage');
-    assistantState.bubble = getElementById('.assistant-bubble');
+    assistantState.stage = getElementById('.assistant-live2d__stage[data-role="assistant-live2d-stage"]');
+    assistantState.bubble = getElementById('.assistant-bubble[data-role="assistant-bubble"]');
+    console.log(assistantState.bubble);
 }
 
 function initPixiApp() {
@@ -80,11 +86,14 @@ async function initAssistant() {
 function wireHit(){
     assistantState.live2d.on("hit",async (hitArea)=>{
         console.log(hitArea);
-        let rawResponse=await window.api.chat("[触摸"+hitArea[0]+"]");
-        console.log(rawResponse.choices[0].message.content);
+        let text="[触摸"+hitArea[0]+"]";
+        let response=await getResponse(text);
+        console.log(response);
+        renderBubble(response);
+
     })
 }
- function wireInput(){
+function wireInput(){
     const inputForm=getElementById("form.assistant-form");
     const input=getElementById("input.assistant-input[data-role=assistant-input]");
     inputForm.addEventListener("submit", async (event)=>{
@@ -97,8 +106,9 @@ function wireHit(){
         inputText=context;
         console.log(context);
         input.value="";
-        let rawResponse=await window.api.chat(context);
-        console.log(rawResponse.choices[0].message.content);
+        let response=await getResponse(context);
+        console.log(response);
+        renderBubble(response);
     })
 }
 function wireNavBtn(){
@@ -113,7 +123,27 @@ function wireNavBtn(){
     })
 
 }
-
+async function getResponse(text){
+    return (await window.api.chat(text)).choices[0].message.content;
+}
+function toggleBubbleVisibility(setVisibility){
+    const bubble=assistantState.bubble;
+    if(!bubble){ return}
+    if(setVisibility){
+        if(!bubble.classList.contains("is-visible")) bubble.classList.add("is-visible");
+    }else bubble.classList.remove("is-visible");
+}
+function renderBubble(text){
+    if(assistantState.bubbleTimer){
+        clearTimeout(assistantState.bubbleTimer);
+    }
+    if(!assistantState.bubble){ return}
+    assistantState.bubble.innerHTML=marked.parse(text);
+    toggleBubbleVisibility(true);
+    assistantState.bubbleTimer=setTimeout(()=>{
+        toggleBubbleVisibility(false);
+    },TIMEOUT_MS)
+}
 document.addEventListener('DOMContentLoaded',async ()=>{
     await initAssistant();
     wireInput();

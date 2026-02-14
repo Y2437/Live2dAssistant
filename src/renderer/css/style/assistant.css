@@ -25,6 +25,7 @@
 /* Pixi canvas mount */
 .assistant-live2d__stage{
     position: absolute;
+    z-index: 1;
     inset: 0;
 }
 
@@ -33,7 +34,9 @@
     position: absolute;
     left: 12px;
     right: 12px;
-    bottom: 12px;
+    top: 12px;
+    bottom: auto;
+    z-index: 2;
 
     padding: 10px 12px;
 
@@ -50,6 +53,29 @@
 
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
+
+    /* 本轮新增 默认隐藏与过渡 */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+
+    transition: opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out),
+    visibility 0ms linear 140ms;
+
+    /* 本轮新增 避免长文本把画面盖满 */
+    max-height: clamp(84px, 30%, 180px);
+    overflow: hidden;
+}
+
+.assistant-bubble.is-visible{
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+
+    transition: opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out),
+    visibility 0ms linear 0ms;
 }
 
 .assistant-panel,
@@ -204,6 +230,12 @@
     [data-role="assistant-actions"] [data-action]:hover,
     .assistant-send:hover,
     [data-role="assistant-send"]:hover{
+        transform: none;
+    }
+
+    /* 本轮新增 减弱气泡动效 */
+    .assistant-bubble{
+        transition: none;
         transform: none;
     }
 }

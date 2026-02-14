@@ -7,6 +7,7 @@
     <script src="../vendor/pixi/pixi.min.js" defer></script>
     <script src="../vendor/live2d/cubism4.min.js" defer></script>
 
+
     <script type="module" src="../js/assistant.js" defer></script>
     <script src="../js/app.js" defer></script>
 
@@ -55,7 +56,8 @@
 <!--                            所有快捷按钮都带 data-action，值为你要执行的动作名，例如 open:pomodoro-->
 <!--                            面板里建议先放这五个快捷按钮，按钮文本按你自己的 UI 文案调整-->
                             <div class="assistant-live2d" data-slot="assistant-live2d">
-                                <div class="assistant-bubble" data-role="assistant-bubble" hidden>请输入文本</div>
+                                <div class="assistant-bubble" data-role="assistant-bubble" data-state="idle" aria-live="polite"></div>
+
                                 <div class="assistant-live2d__stage" data-role="assistant-live2d-stage"></div>
                             </div>
                         </div>
