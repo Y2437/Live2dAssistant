@@ -44,6 +44,7 @@ CubismSdkForWeb-5-r.4/
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 src/renderer/assets/live2d/Roxy/
+src/renderer/assets/live2d/hiyori_pro_zh/
 # TypeScript cache
 *.tsbuildinfo
 
