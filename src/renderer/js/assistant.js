@@ -3,7 +3,8 @@ import {CONFIG} from "./config.js";
 import {marked} from "../vendor/marked/lib/marked.esm.js";
 const getElementById = (el,root=document) => root.querySelector(el);
 const getAllElementsById = (el,root=document) => Array.from(root.querySelectorAll(el));
-
+const inputForm=getElementById("form.assistant-form");
+const input=getElementById("input.assistant-input[data-role=assistant-input]");
 let inputText=null;
 
 const assistantState = {
@@ -11,7 +12,8 @@ const assistantState = {
     stage: null,
     live2d: null,
     bubble: null,
-
+    bubbleQueue:null,
+    isBubbleCooling:false,
 
     resizeObserver: null,
     bubbleTimer:null,
@@ -22,6 +24,7 @@ const assistantState = {
     mounted: false,
 };
 const TIMEOUT_MS = CONFIG.LIVE2D_CONFIG.TIMEOUT_MS;
+const SHORTEST_TIME_GAP=CONFIG.LIVE2D_CONFIG.SHORTEST_TIME_GAP
 const WEIGHT_FALLBACK=CONFIG.LIVE2D_CONFIG.WIDTH;
 const HEIGHT_FALLBACK=CONFIG.LIVE2D_CONFIG.HEIGHT;
 function mountAssistant() {
@@ -31,6 +34,7 @@ function mountAssistant() {
     assistantState.mounted = true;
     assistantState.stage = getElementById('.assistant-live2d__stage[data-role="assistant-live2d-stage"]');
     assistantState.bubble = getElementById('.assistant-bubble[data-role="assistant-bubble"]');
+    assistantState.bubbleQueue=[];
     console.log(assistantState.bubble);
 }
 
@@ -86,30 +90,28 @@ async function initAssistant() {
 function wireHit(){
     assistantState.live2d.on("hit",async (hitArea)=>{
         console.log(hitArea);
-        let text="[触摸"+hitArea[0]+"]";
-        let response=await getResponse(text);
+        const response=await window.api.touch(hitArea[0]);
         console.log(response);
         renderBubble(response);
-
     })
 }
+const chatWithAi=async (event)=>{
+    event.preventDefault();
+    let context=input.value.trim();
+    if(context===''){
+        console.log("submitted nothing");
+        return;
+    }
+    inputText=context;
+    console.log(context);
+    input.value="";
+    let response=await thinkAndGetResponse(context);
+    console.log(response);
+    renderBubble(response);
+
+}
 function wireInput(){
-    const inputForm=getElementById("form.assistant-form");
-    const input=getElementById("input.assistant-input[data-role=assistant-input]");
-    inputForm.addEventListener("submit", async (event)=>{
-        event.preventDefault();
-        let context=input.value.trim();
-        if(context===''){
-            console.log("submitted nothing");
-            return;
-        }
-        inputText=context;
-        console.log(context);
-        input.value="";
-        let response=await getResponse(context);
-        console.log(response);
-        renderBubble(response);
-    })
+    inputForm.addEventListener("submit", chatWithAi)
 }
 function wireNavBtn(){
     const navPanel=getElementById("div.assistant-actions[data-role=assistant-actions]");
@@ -121,7 +123,20 @@ function wireNavBtn(){
         }
         window.api.openWindow(selected.dataset.action);
     })
-
+}
+async function thinkAndGetResponse(text){
+    if(assistantState.isBubbleCooling){
+        return "AI接口正在冷却中,请慢点互动哦";
+    }
+    assistantState.isBubbleCooling=true;
+    toggleBubbleVisibility(true);
+    assistantState.bubble.innerHTML=marked.parse("思考中...");
+    let response= await getResponse(text);
+    toggleBubbleVisibility(false);
+    setTimeout(()=>{
+        assistantState.isBubbleCooling=false;
+    },SHORTEST_TIME_GAP)
+    return response
 }
 async function getResponse(text){
     return (await window.api.chat(text)).choices[0].message.content;

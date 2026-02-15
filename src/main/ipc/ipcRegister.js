@@ -1,7 +1,7 @@
 const {ipcMain} = require('electron');
 const {aiChat} = require('./aiService.js');
 const {wm} = require("../WindowManager");
-const {WIDTH, HEIGHT, WINDOW_KEYS,AI_CHAT_SYSTEM_PROMPT} = require('../config');
+const {WIDTH, HEIGHT, WINDOW_KEYS,AI_CHAT_SYSTEM_PROMPT,AI_TOUCH_RESPONSE} = require('../config');
 class ipcRegister{
     constructor(ipc){
     }
@@ -29,10 +29,19 @@ class ipcRegister{
             return await aiChat(aiChatMessage);
         })
     }
+    static registerTouchResponse(){
+        ipcMain.handle("app:touch",async (event,name)=>{
+            const totalNum=AI_TOUCH_RESPONSE[name].response.length;
+            const selectedNum=Math.floor(Math.random() * (totalNum));
+            return AI_TOUCH_RESPONSE[name].response[selectedNum].content;
+        })
+    }
     static registerAll(){
         this.registerOpenWindow();
         this.registerPing();
         this.registerAiChat();
+        this.registerTouchResponse();
     }
+
 }
 module.exports = {ipcRegister};

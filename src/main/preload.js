@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld("api",{
     },
     openWindow:(windowKey)=>ipcRenderer.invoke("app:openWindow",windowKey),
     chat:(message)=>ipcRenderer.invoke("app:aiChat",message),
+    touch: (name)=>ipcRenderer.invoke("app:touch",name)
 });
