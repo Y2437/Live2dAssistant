@@ -1,6 +1,6 @@
-
 import {CONFIG} from "./config.js";
 import {marked} from "../vendor/marked/lib/marked.esm.js";
+
 const getElementById = (el,root=document) => root.querySelector(el);
 const getAllElementsById = (el,root=document) => Array.from(root.querySelectorAll(el));
 const inputForm=getElementById("form.assistant-form");
@@ -13,7 +13,8 @@ const assistantState = {
     live2d: null,
     bubble: null,
     bubbleQueue:null,
-    isBubbleCooling:false,
+    bubbleState:"free",   // free | thinking | showing | touching
+
 
     resizeObserver: null,
     bubbleTimer:null,
@@ -87,31 +88,156 @@ async function initAssistant() {
     initResizeObserver();
     wireHit()
 }
-function wireHit(){
-    assistantState.live2d.on("hit",async (hitArea)=>{
-        console.log(hitArea);
-        const response=await window.api.touch(hitArea[0]);
-        console.log(response);
-        renderBubble(response);
-    })
+
+
+
+
+
+const BUBBLE_START=["free","thinking","showing","touching"]
+class bubbleEvent{
+    constructor(type,content){
+        if(type!=="touch"&&type!=="chat"){ throw new Error("不支持的气泡类型"); }
+        this.type =type;  //touch,chat
+        this.content=content;  // String
+    }
 }
-const chatWithAi=async (event)=>{
-    event.preventDefault();
-    let context=input.value.trim();
-    if(context===''){
-        console.log("submitted nothing");
+function toggleBubbleVisibility(setVisibility){
+    const bubble = assistantState.bubble;
+    if(setVisibility){
+        bubble.classList.remove("is-hiding");
+        bubble.classList.add("is-visible");
         return;
     }
-    inputText=context;
-    console.log(context);
-    input.value="";
-    let response=await thinkAndGetResponse(context);
-    console.log(response);
-    renderBubble(response);
+    if(!bubble.classList.contains("is-visible")) {
+        return;
+    }
+    bubble.classList.add("is-hiding");
+    const onEnd = (e) => {
+        if(e.target !== bubble){
+            return;
+        }
+        if(e.propertyName !== "opacity"){
+            return;
+        }
+        bubble.classList.remove("is-visible");
+        bubble.classList.remove("is-hiding");
+        bubble.removeEventListener("transitionend", onEnd);
+    };
+    bubble.addEventListener("transitionend", onEnd);
+}
 
+async function solveBubbleEvent(event){
+    if(event.type==="touch"){
+        if(assistantState.bubbleState==="free"||assistantState.bubbleState==="touching"){
+            if(assistantState.bubbleTimer){
+                clearTimeout(assistantState.bubbleTimer);
+                assistantState.bubbleTimer = null;
+            }
+            assistantState.bubbleState="touching";
+            let  response= await solveTouchEvent(event.content);
+            showing(response);
+            assistantState.bubbleTimer=setTimeout(async ()=>{
+
+                assistantState.bubbleTimer = null;
+                assistantState.bubbleState="free";
+                toggleBubbleVisibility(false);
+
+                if(assistantState.bubbleQueue.length > 0){
+                    await solveFrontEvent();
+                }
+            },TIMEOUT_MS);
+
+        }else {
+            console.log("气泡窗口正忙")
+        }
+    }else if(event.type==="chat"){
+        assistantState.bubbleQueue.push(solveChatEvent(event.content));
+        if(assistantState.bubbleState==="free"||assistantState.bubbleState==="touching"){
+            if(assistantState.bubbleTimer){
+                clearTimeout(assistantState.bubbleTimer);
+                assistantState.bubbleTimer = null;
+            }
+            await solveFrontEvent();
+        }
+    }else{
+        console.log("不支持的气泡类型");
+    }
+}
+async function solveFrontEvent(){
+    if(assistantState.bubbleQueue.length>0){
+        toggleBubbleVisibility(true);
+        assistantState.bubbleState="thinking";
+        thinking();
+        let  response=await assistantState.bubbleQueue.shift();
+        assistantState.bubbleState="showing";
+        showing(response);
+        assistantState.bubbleTimer = setTimeout(async () => {
+            assistantState.bubbleTimer = null;
+            toggleBubbleVisibility(false);
+            const hasNext = await solveFrontEvent();
+            if(!hasNext){
+                assistantState.bubbleState = "free";
+            }
+        }, TIMEOUT_MS);
+
+        return true;
+    }else return false;
+}
+
+
+
+
+
+async function getResponse(text){
+    return (await window.api.chat(text)).choices[0].message.content;
+}
+
+async function solveTouchEvent(name){
+    console.log(name);
+    return await window.api.touch(name);
+}
+async function solveChatEvent(text){
+    console.log(text);
+    return await getResponse(text);
+}
+function thinking(){
+    showing("思考中...");
+}
+function showing(text){
+    console.log(text);
+    toggleBubbleVisibility(true);
+    const bubble = assistantState.bubble;
+    bubble.classList.remove("is-updating");
+    void bubble.offsetWidth;
+    bubble.classList.add("is-updating");
+    bubble.innerHTML = marked.parse(text);
+}
+
+
+
+
+
+function wireHit(){
+    assistantState.live2d.on("hit",async (hitArea)=>{
+       await solveBubbleEvent(new bubbleEvent("touch",hitArea[0]));
+    })
 }
 function wireInput(){
-    inputForm.addEventListener("submit", chatWithAi)
+    const inputForm=getElementById("form.assistant-form");
+    const input=getElementById("input.assistant-input[data-role=assistant-input]");
+    inputForm.addEventListener("submit", async (event)=>{
+        event.preventDefault();
+        let context=input.value.trim();
+        if(context===''){
+            console.log("submitted nothing");
+            return;
+        }
+        inputText=context;
+        console.log(context);
+        input.value="";
+        await solveBubbleEvent(new bubbleEvent("chat",context));
+
+    })
 }
 function wireNavBtn(){
     const navPanel=getElementById("div.assistant-actions[data-role=assistant-actions]");
@@ -124,41 +250,7 @@ function wireNavBtn(){
         window.api.openWindow(selected.dataset.action);
     })
 }
-async function thinkAndGetResponse(text){
-    if(assistantState.isBubbleCooling){
-        return "AI接口正在冷却中,请慢点互动哦";
-    }
-    assistantState.isBubbleCooling=true;
-    toggleBubbleVisibility(true);
-    assistantState.bubble.innerHTML=marked.parse("思考中...");
-    let response= await getResponse(text);
-    toggleBubbleVisibility(false);
-    setTimeout(()=>{
-        assistantState.isBubbleCooling=false;
-    },SHORTEST_TIME_GAP)
-    return response
-}
-async function getResponse(text){
-    return (await window.api.chat(text)).choices[0].message.content;
-}
-function toggleBubbleVisibility(setVisibility){
-    const bubble=assistantState.bubble;
-    if(!bubble){ return}
-    if(setVisibility){
-        if(!bubble.classList.contains("is-visible")) bubble.classList.add("is-visible");
-    }else bubble.classList.remove("is-visible");
-}
-function renderBubble(text){
-    if(assistantState.bubbleTimer){
-        clearTimeout(assistantState.bubbleTimer);
-    }
-    if(!assistantState.bubble){ return}
-    assistantState.bubble.innerHTML=marked.parse(text);
-    toggleBubbleVisibility(true);
-    assistantState.bubbleTimer=setTimeout(()=>{
-        toggleBubbleVisibility(false);
-    },TIMEOUT_MS)
-}
+
 document.addEventListener('DOMContentLoaded',async ()=>{
     await initAssistant();
     wireInput();
