@@ -29,7 +29,7 @@
     inset: 0;
 }
 
-/* bubble overlay */
+/* bubble overlay - 增强动效版本 */
 .assistant-bubble{
     position: absolute;
     left: 12px;
@@ -54,28 +54,79 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
 
-    /* 本轮新增 默认隐藏与过渡 */
+    /* 增强的默认隐藏状态 */
     opacity: 0;
     visibility: hidden;
-    transform: translateY(8px);
+    transform: translateY(20px) scale(0.95);
 
-    transition: opacity 140ms var(--ease-out),
-    transform 140ms var(--ease-out),
-    visibility 0ms linear 140ms;
+    /* 更丰富的过渡效果 */
+    transition:
+            opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
+            transform 400ms cubic-bezier(0.16, 1, 0.3, 1),
+            filter 400ms cubic-bezier(0.16, 1, 0.3, 1),
+            visibility 0ms linear 400ms;
 
-    /* 本轮新增 避免长文本把画面盖满 */
+    /* 避免长文本把画面盖满 */
     max-height: clamp(84px, 30%, 180px);
     overflow: hidden;
+}
+
+
+/* 呼吸光晕效果 */
+@keyframes bubble-glow {
+    0%, 100% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    50% {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    }
 }
 
 .assistant-bubble.is-visible{
     opacity: 1;
     visibility: visible;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
 
-    transition: opacity 140ms var(--ease-out),
-    transform 140ms var(--ease-out),
-    visibility 0ms linear 0ms;
+    /* 浮动动画 */
+    animation:
+            bubble-float 6s ease-in-out infinite,
+            bubble-glow 4s ease-in-out infinite;
+
+    transition:
+            opacity 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
+            transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
+            filter 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
+            visibility 0ms linear 0ms;
+}
+
+/* 内容变化时的闪烁提示 */
+@keyframes content-update {
+    0% {
+        opacity: 0.7;
+        transform: scale(0.98);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.02);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.assistant-bubble.is-updating {
+    animation: content-update 300ms ease-out;
+}
+
+/* 消失时的特殊效果 */
+.assistant-bubble.is-hiding {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+    transition:
+            opacity 300ms cubic-bezier(0.4, 0, 1, 1),
+            transform 300ms cubic-bezier(0.4, 0, 1, 1),
+            filter 300ms cubic-bezier(0.4, 0, 1, 1);
 }
 
 .assistant-panel,
@@ -232,10 +283,9 @@
     [data-role="assistant-send"]:hover{
         transform: none;
     }
-
-    /* 本轮新增 减弱气泡动效 */
-    .assistant-bubble{
-        transition: none;
-        transform: none;
+    .assistant-bubble,
+    .assistant-bubble.is-visible {
+        animation: none;
+        transition: opacity 200ms ease, visibility 0ms linear 200ms;
     }
 }
