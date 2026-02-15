@@ -3,9 +3,6 @@ import {marked} from "../vendor/marked/lib/marked.esm.js";
 
 const getElementById = (el,root=document) => root.querySelector(el);
 const getAllElementsById = (el,root=document) => Array.from(root.querySelectorAll(el));
-const inputForm=getElementById("form.assistant-form");
-const input=getElementById("input.assistant-input[data-role=assistant-input]");
-let inputText=null;
 
 const assistantState = {
     pixiApp: null,
@@ -232,8 +229,6 @@ function wireInput(){
             console.log("submitted nothing");
             return;
         }
-        inputText=context;
-        console.log(context);
         input.value="";
         await solveBubbleEvent(new bubbleEvent("chat",context));
 

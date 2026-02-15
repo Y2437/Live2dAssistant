@@ -39,14 +39,15 @@
     z-index: 2;
 
     padding: 10px 12px;
-
+    /*margin: 2em 0 2em 0;*/
     border-style: solid;
     border-width: 1px;
 
     border-radius: 0;
 
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 0.8em;
+
 
     user-select: none;
     pointer-events: none;
