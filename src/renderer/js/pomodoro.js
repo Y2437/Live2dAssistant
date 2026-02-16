@@ -75,6 +75,6 @@ function initTaskList(){
 
 }
 document.addEventListener("DOMContentLoaded",async ()=>{
-    switchPage("edit");
+    switchPage("run");
     wireListBtn();
 })
