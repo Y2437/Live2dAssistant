@@ -13,6 +13,7 @@ const assistantState = {
     bubbleState:"free",   // free | thinking | showing | touching
 
 
+
     resizeObserver: null,
     bubbleTimer:null,
 

@@ -1,4 +1,5 @@
- export const CONFIG = {
+
+export const CONFIG = {
     DEFAULT_VIEW: "assistant",
     LIVE2D_CONFIG: {
         HEIGHT: 520,
