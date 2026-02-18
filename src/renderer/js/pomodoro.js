@@ -114,19 +114,21 @@ function wireListBtn(){
     const task=pomodoroState.taskList.find(t=>t.id===pomodoroState.selectedTaskId);
     if(!task) editBtn.classList.add("disabled");
     editBtn.addEventListener("click",()=>{  //编辑pomodoroState.selectedTaskId对应的Task
+        if(editBtn.classList.contains("disabled")) return;
         console.log("editBtn");
-        if(!pomodoroState.selectedTaskId) return;
-        const task=pomodoroState.taskList.find(t=>t.id===pomodoroState.selectedTaskId);
-        if(task===undefined) return;
         switchPage("edit");
         showEditingTask(task);
     });
+    if(!task) deleteBtn.classList.add("disabled");
     deleteBtn.addEventListener("click",()=>{  //删除pomodoroState.selectedTaskId对应的Task
+        if(deleteBtn.classList.contains("disabled")) return;
         console.log("deleteBtn");
         pomodoroState.taskList=pomodoroState.taskList.filter(t=>t.id!==pomodoroState.selectedTaskId);
         renderTaskList();
     });
+    if(!task) goBtn.classList.add("disabled");
     goBtn.addEventListener("click",()=>{  //开始pomodoroState.selectedTaskId对应的Task
+        if(goBtn.classList.contains("disabled")) return;
         console.log("goBtn");
         switchPage("run");
     });
@@ -239,8 +241,16 @@ function renderTaskList(){
         return;
     }
     const selectedTask=pomodoroState.taskList.find(t=>t.id===pomodoroState.selectedTaskId);
-    if(!selectedTask) dom.btnEdit.classList.add("disabled");
-    else dom.btnEdit.classList.remove("disabled");
+    if(!selectedTask) {
+        dom.btnEdit.classList.add("disabled");
+        dom.btnDelete.classList.add("disabled");
+        dom.btnGo.classList.add("disabled");
+    }
+    else {
+        dom.btnEdit.classList.remove("disabled");
+        dom.btnDelete.classList.remove("disabled");
+        dom.btnGo.classList.remove("disabled");
+    }
     pomodoroState.taskList.forEach(task=>{
         const li=makePomoItem(task);
         if(pomodoroState.selectedTaskId===task.id) li.classList.add("selected");

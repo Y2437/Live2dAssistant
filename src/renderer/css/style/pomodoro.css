@@ -173,7 +173,10 @@
     background: rgba(255,255,255,0.05);
     backdrop-filter: blur(5px);
 }
-
+.pomoBtn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 /* =========================================
    Header Styling
    ========================================= */
