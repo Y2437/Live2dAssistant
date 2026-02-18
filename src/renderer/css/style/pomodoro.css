@@ -501,7 +501,9 @@
 .pomoItem:hover{ border-color: var(--pomo-line-strong); transform: translateY(-1px); }
 .pomoItem__title{ font-size: 13px; font-weight: 900; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pomoItem__handle{ height: 32px; width: 32px; display: grid; place-items: center; border: 1px solid var(--pomo-line); background: var(--pomo-btn-bg); cursor: grab; }
-
+.pomoItem.dragging {
+    background: var(--pomo-focus);
+}
 /* Run Page Rainbow */
 /* =========================
    Pomodoro — Rainbow Progress Border (Canvas Wave版)

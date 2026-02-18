@@ -22,10 +22,10 @@ const dom = {
     inputCycles: $('[data-pomo="cycle-input"]'),
     btnCycleInc: $('[data-pomo-action="cycle-inc"]'),
     btnCycleDec: $('[data-pomo-action="cycle-dec"]'),
-    workDigitTen: $('.pomoDigit[data-pomo-digit="work"][data-digit-pos="t"]'),
-    workDigitOne: $('.pomoDigit[data-pomo-digit="work"][data-digit-pos="o"]'),
-    restDigitTen: $('.pomoDigit[data-pomo-digit="rest"][data-digit-pos="t"]'),
-    restDigitOne: $('.pomoDigit[data-pomo-digit="rest"][data-digit-pos="o"]'),
+    workDigitTen: $('[data-pomo-digit="work"][data-digit-pos="t"]'),
+    workDigitOne: $('[data-pomo-digit="work"][data-digit-pos="o"]'),
+    restDigitTen: $('[data-pomo-digit="rest"][data-digit-pos="t"]'),
+    restDigitOne: $('[data-pomo-digit="rest"][data-digit-pos="o"]'),
 
     // run
     runCard: $('[data-pomo="run-card"]'),
@@ -49,7 +49,6 @@ const pomodoroState={
     selectedTaskId:null,
     runningTaskId:null,
     editingTask:null,
-    isAddingTask:false,
     timer:{
         phase:"idle", //idle,work ,rest
         status:"idle", //running,paused,done,idle,finished
@@ -116,6 +115,7 @@ function wireListBtn(){
     editBtn.addEventListener("click",()=>{  //编辑pomodoroState.selectedTaskId对应的Task
         if(editBtn.classList.contains("disabled")) return;
         console.log("editBtn");
+        const task=pomodoroState.taskList.find(t=>t.id===pomodoroState.selectedTaskId);
         switchPage("edit");
         showEditingTask(task);
     });
@@ -161,7 +161,6 @@ function addTask(){
 
 }
 function saveEditingTask(){  //编辑pomodoroState.editingTask对应的Task
-    switchPage("edit");
     console.log("saveEditingTask");
     const title=dom.inputTitle.value;
     const workTimeDigitTen=parseInt(dom.workDigitTen.style.getPropertyValue("--pomo-digit"));
@@ -190,11 +189,58 @@ function wireEditBtn(){
         switchPage("list");
     });
     confirmBtn.addEventListener("click",()=>{
+        if(confirmBtn.classList.contains("disabled")) return;
         console.log("confirmBtn");
         saveEditingTask();
         showEditingTask(pomodoroState.editingTask);
 
         switchPage("list");
+    });
+
+
+    const cycleIncBtn=dom.btnCycleInc;
+    const cycleDecBtn=dom.btnCycleDec;
+    cycleIncBtn.addEventListener("click",()=>{
+        dom.inputCycles.value=parseInt(dom.inputCycles.value)+1;
+    });
+    cycleDecBtn.addEventListener("click",()=>{
+        dom.inputCycles.value=Math.max(parseInt(dom.inputCycles.value)-1,1);
+    });
+
+    const digits = [
+        dom.workDigitTen,
+        dom.workDigitOne,
+        dom.restDigitTen,
+        dom.restDigitOne
+    ];
+    digits.forEach(el => {
+        el.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+        });
+        el.addEventListener("mousedown", (e) => {
+            const container = e.currentTarget;
+            let currentVal = parseInt(container.style.getPropertyValue("--pomo-digit"));
+            if (isNaN(currentVal)) currentVal = 0;
+            if(e.button === 0){
+                currentVal = (currentVal + 1) % 10;
+            } else if (e.button === 2){
+                currentVal = (currentVal - 1 + 10) % 10;
+            } else {
+                return;
+            }
+            container.style.setProperty("--pomo-digit", currentVal.toString());
+            console.log("Digit changed to:", currentVal);
+            const workTimeDigitTen=parseInt(dom.workDigitTen.style.getPropertyValue("--pomo-digit"));
+            const workTimeDigitOne=parseInt(dom.workDigitOne.style.getPropertyValue("--pomo-digit"));
+            const workMinutes=parseDigitsToNum({ten:workTimeDigitTen,one:workTimeDigitOne});
+            const restTimeDigitTen=parseInt(dom.restDigitTen.style.getPropertyValue("--pomo-digit"));
+            const restTimeDigitOne=parseInt(dom.restDigitOne.style.getPropertyValue("--pomo-digit"));
+            const restMinutes=parseDigitsToNum({ten:restTimeDigitTen,one:restTimeDigitOne});
+            if(workMinutes===0||restMinutes===0||isNaN(workMinutes)||isNaN(restMinutes)){
+                console.log("Invalid time settings");
+                dom.btnConfirm.classList.add("disabled");
+            }else dom.btnConfirm.classList.remove("disabled");
+        });
     });
 }
 function wireRunBtn(){
@@ -226,7 +272,6 @@ class Task{
 async function initTaskList(){
     console.log("initTaskList");
     pomodoroState.taskList=[];
-    pomodoroState.index=0;
     await window.api.loadPomodoroJson().then(data=>{
         if(data.length===0) return;
         pomodoroState.taskList=data;
@@ -257,7 +302,29 @@ function renderTaskList(){
         taskListDom.appendChild(li);
     });
 }
-
+function wireDragList(){
+    dom.taskList.addEventListener("dragover",e=>{
+        e.preventDefault();
+        const afterElement=getDragAfterElement(dom.taskList,e.clientY);
+        const dragging=$(".dragging");
+        if(afterElement==null) dom.taskList.appendChild(dragging);
+        else dom.taskList.insertBefore(dragging,afterElement);
+    });
+}
+function getDragAfterElement(container,y){
+    const elements=[...container.querySelectorAll(".pomoItem:not(.dragging)")];
+    return elements.reduce((closest,child)=>{
+        const box=child.getBoundingClientRect();
+        const offset=y-box.top-box.height/2;
+        if(offset<0&&offset>closest.offset) return {offset:offset,element:child};
+        else return closest;
+    },{offset:Number.NEGATIVE_INFINITY}).element;
+}
+function updateTaskOrder(){
+    const newIds=[...dom.taskList.querySelectorAll(".pomoItem")].map(li=>parseInt(li.getAttribute("data-task-id")));
+    const taskMap=new Map(pomodoroState.taskList.map(t=>[t.id,t]));
+    pomodoroState.taskList=newIds.map(id=>taskMap.get(id));
+}
 function makePomoItem(task) {
     const li = document.createElement("li");
     const title = document.createElement("span");
@@ -282,6 +349,15 @@ function makePomoItem(task) {
     editBtn.classList.add("pomoIconBtn");
     deleteBtn.classList.add("pomoIconBtn");
     handle.classList.add("pomoItem__handle");
+    handle.addEventListener("mouseenter",()=>li.setAttribute("draggable","true"));
+    handle.addEventListener("mouseleave",()=>li.setAttribute("draggable","false"));
+    li.addEventListener("dragstart",()=>{
+        li.classList.add("dragging");
+    });
+    li.addEventListener("dragend",()=>{
+        li.classList.remove("dragging");
+        updateTaskOrder();
+    });
     dom.taskList.addEventListener("click",(event)=>{
         if(event.target.classList.contains("pomoItem")||event.target.classList.contains("pomoItem__title")) return;
         dom.taskList.querySelectorAll(".pomoItem.selected").forEach(item=>item.classList.remove("selected"));
@@ -297,7 +373,9 @@ function makePomoItem(task) {
     editBtn.addEventListener("click",(event)=>{
         const li=event.target.closest(".pomoItem");
         console.log("editBtn",li.getAttribute("data-task-id"));
-        pomodoroState.editingTaskId=parseInt(li.getAttribute("data-task-id"));
+        pomodoroState.editingTask=pomodoroState.taskList.find(t=>t.id===parseInt(li.getAttribute("data-task-id")));
+        console.log("editingTask",pomodoroState.editingTask);
+        showEditingTask(pomodoroState.editingTask);
         switchPage("edit");
     });
     deleteBtn.addEventListener("click",(event)=>{
@@ -322,4 +400,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     wireListBtn();
     wireRunBtn();
     wireEditBtn();
+    wireDragList();
 })
