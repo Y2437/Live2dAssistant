@@ -13,8 +13,8 @@
     --c-active: #e9eef6;
     --c-active-text: #0a0d12;
 
-    --c-focus: #7dd3fc;
-    --c-accent: #38bdf8;
+    --c-focus: rgba(183,95,21,0.52);
+    --c-accent: #b75f15;
 
     --shadow-1: 0 1px 0 rgba(255,255,255,0.03), 0 10px 20px rgba(0,0,0,0.25);
     --shadow-2: 0 1px 0 rgba(255,255,255,0.04), 0 18px 50px rgba(0,0,0,0.45);

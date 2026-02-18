@@ -1,9 +1,18 @@
 import {CONFIG} from "./config.js";
 import {marked} from "../vendor/marked/lib/marked.esm.js";
 
-const getElementById = (el,root=document) => root.querySelector(el);
-const getAllElementsById = (el,root=document) => Array.from(root.querySelectorAll(el));
+const $= (el,root=document) => root.querySelector(el);
+const $$ = (el,root=document) => Array.from(root.querySelectorAll(el));
+const dom = {
+    stage: $('[data-role="assistant-live2d-stage"]'),
+    bubble: $('[data-role="assistant-bubble"]'),
 
+    inputForm: $('form.assistant-form'),
+    input: $('input.assistant-input[data-role="assistant-input"]'),
+
+    navPanel: $('div.assistant-actions[data-role="assistant-actions"]'),
+    actionBtns: $$('.assistant-actionBtn'),
+};
 const assistantState = {
     pixiApp: null,
     stage: null,
@@ -11,7 +20,6 @@ const assistantState = {
     bubble: null,
     bubbleQueue:null,
     bubbleState:"free",   // free | thinking | showing | touching
-
 
 
     resizeObserver: null,
@@ -31,8 +39,8 @@ function mountAssistant() {
         return;
     }
     assistantState.mounted = true;
-    assistantState.stage = getElementById('.assistant-live2d__stage[data-role="assistant-live2d-stage"]');
-    assistantState.bubble = getElementById('.assistant-bubble[data-role="assistant-bubble"]');
+    assistantState.stage = dom.stage;
+    assistantState.bubble = dom.bubble;
     assistantState.bubbleQueue=[];
     console.log(assistantState.bubble);
 }
@@ -88,10 +96,6 @@ async function initAssistant() {
 }
 
 
-
-
-
-const BUBBLE_START=["free","thinking","showing","touching"]
 class bubbleEvent{
     constructor(type,content){
         if(type!=="touch"&&type!=="chat"){ throw new Error("不支持的气泡类型"); }
@@ -221,8 +225,8 @@ function wireHit(){
     })
 }
 function wireInput(){
-    const inputForm=getElementById("form.assistant-form");
-    const input=getElementById("input.assistant-input[data-role=assistant-input]");
+    const inputForm=dom.inputForm;
+    const input=dom.input;
     inputForm.addEventListener("submit", async (event)=>{
         event.preventDefault();
         let context=input.value.trim();
@@ -236,7 +240,7 @@ function wireInput(){
     })
 }
 function wireNavBtn(){
-    const navPanel=getElementById("div.assistant-actions[data-role=assistant-actions]");
+    const navPanel=dom.navPanel;
     navPanel.addEventListener("click", (event)=>{
         const selected=event.target;
         console.log(selected);

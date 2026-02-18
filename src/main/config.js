@@ -1,5 +1,8 @@
+const path = require('path');
+const app = require('electron').app;
 const WIDTH = 800;
 const HEIGHT = 600;
+const POMODORO_JSON_PATH =path.join(app.getPath("userData"), "pomodoro.json");
 const WINDOW_KEYS = [
     'assistant',
     'pomodoro',
@@ -243,4 +246,4 @@ const AI_CHAT_SYSTEM_PROMPT=
     "- [ ] 结尾是不是**开放式**的，让人想接话？\n" +
     "- [ ] 如果是任务，有没有把它包装成**游戏或手账**的形式？\n" +
     "- [ ] 只要不是绝望的场景，有没有加上**一点点元气**？\n" ;
-module.exports = {WIDTH, HEIGHT, WINDOW_KEYS,AI_CHAT_SYSTEM_PROMPT ,AI_TOUCH_RESPONSE};
+module.exports = {WIDTH, HEIGHT, WINDOW_KEYS,AI_CHAT_SYSTEM_PROMPT ,AI_TOUCH_RESPONSE,POMODORO_JSON_PATH};
