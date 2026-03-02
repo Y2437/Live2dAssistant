@@ -56,7 +56,7 @@ const pomodoroState={
         cycleTotal:0,
         phaseRemainMs:0,
         phaseTotalMs:0,
-        timerHandle:null,
+        handle:null,
     }
 }
 function parseTimeStamp(timeStamp){
@@ -209,6 +209,7 @@ function wireEditBtn(){
     cancelBtn.addEventListener("click",()=>{
         console.log("cancelBtn");
         pomodoroState.editingTask=null;
+        pomodoroState.timer.handle
         switchPage("list");
     });
     confirmBtn.addEventListener("click",()=>{
@@ -425,24 +426,29 @@ function makePomoItem(task) {
 function onTimerTick(remainMs,totalMs){
     const progress=remainMs/totalMs;
     dom.runCard.__pomoWave.setProgress(progress);
+    const timeStamp=parseMs(remainMs);
+    const minutes=timeStamp.minute;
+    const seconds=timeStamp.second;
+    setTimeDigits(minutes,seconds);
     console.log("onTimerTick",progress);
     console.log("remainMs",remainMs,"totalMs",totalMs);
 }
+const timeInterVal=()=>{
+    onTimerTick(pomodoroState.timer.phaseRemainMs,pomodoroState.timer.phaseTotalMs);
+    pomodoroState.timer.phaseRemainMs-=100;
+    if(pomodoroState.timer.phaseRemainMs<=0){
+        pomodoroState.timer.phaseRemainMs=0;
+    }
+}
 function loadTask(task){
     pomodoroState.runningTaskId=task.id;
-    pomodoroState.timer.phase="work";
+    switchStatus("running");
     pomodoroState.timer.cycleCur=1;
     pomodoroState.timer.cycleTotal=task.repeatTimes;
     pomodoroState.timer.phaseRemainMs=task.workTime;
     pomodoroState.timer.phaseTotalMs=task.workTime;
     dom.runCard.__pomoWave.setProgress(1.0);
-    pomodoroState.timer.handle=setInterval(()=>{
-        onTimerTick(pomodoroState.timer.phaseRemainMs,pomodoroState.timer.phaseTotalMs);
-        pomodoroState.timer.phaseRemainMs-=100;
-        if(pomodoroState.timer.phaseRemainMs<=0){
-            pomodoroState.timer.phaseRemainMs=0;
-        }
-    },100);
+    pomodoroState.timer.handle=setInterval(timeInterVal,100);
 }
 function pauseRunningTask(){
     clearInterval(pomodoroState.timer.handle);
@@ -450,14 +456,23 @@ function pauseRunningTask(){
     pomodoroState.timer.status="paused";
 }
 function resumeRunningTask(){
-    pomodoroState.timer.handle=setInterval(()=>{
-        onTimerTick(pomodoroState.timer.phaseRemainMs,pomodoroState.timer.phaseTotalMs);
-        pomodoroState.timer.phaseRemainMs-=100;
-        if(pomodoroState.timer.phaseRemainMs<=0){
-            pomodoroState.timer.phaseRemainMs=0;
-        }
-    },100);
+    pomodoroState.timer.handle=setInterval(timeInterVal,100);
     pomodoroState.timer.status="running";
+}
+function setTimeDigits(minutes,seconds){
+    // runMmDigitTen: $('[data-pomo-digit="run-mm"][data-digit-pos="t"]'),
+    //     runMmDigitOne: $('[data-pomo-digit="run-mm"][data-digit-pos="o"]'),
+    //     runSsDigitTen: $('[data-pomo-digit="run-ss"][data-digit-pos="t"]'),
+    //     runSsDigitOne: $('[data-pomo-digit="run-ss"][data-digit-pos="o"]'),
+    let minuteDigitTen=dom.runMmDigitTen;
+    let minuteDigitOne=dom.runMmDigitOne;
+    let secondDigitTen=dom.runSsDigitTen;
+    let secondDigitOne=dom.runSsDigitOne;
+    minuteDigitTen.style.setProperty("--pomo-digit",(Math.floor(minutes/10)).toString());
+    minuteDigitOne.style.setProperty("--pomo-digit",(minutes%10).toString());
+    secondDigitTen.style.setProperty("--pomo-digit",(Math.floor(seconds/10)).toString());
+    secondDigitOne.style.setProperty("--pomo-digit",(seconds%10).toString());
+    console.log(minutes,seconds);
 }
 function switchToNextPhase(){
     const task=pomodoroState.taskList.find(t=>t.id===pomodoroState.runningTaskId);
