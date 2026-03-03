@@ -7,6 +7,10 @@ const POMODORO_JSON_PATH =path.join(app.getPath("userData"), "pomodoro.json");
 const AI_CONTEXT_JSON_PATH = path.join(app.getPath("userData"), "assistant-context.json");
 const AI_LONG_TERM_MEMORY_JSON_PATH = path.join(app.getPath("userData"), "assistant-long-term-memory.json");
 const KNOWLEDGE_CARDS_JSON_PATH = path.join(app.getPath("userData"), "knowledge-cards.json");
+const AGENT_LIBRARY_INDEX_JSON_PATH = path.join(app.getPath("userData"), "agent-library-index.json");
+const AGENT_LIBRARY_ROOTS_JSON_PATH = path.join(app.getPath("userData"), "agent-library-roots.json");
+const AGENT_SCREENSHOT_DIR_PATH = path.join(app.getPath("userData"), "agent-screenshots");
+const PROJECT_ROOT = path.resolve(__dirname, "../..");
 const WINDOW_KEYS = [
     'assistant',
     'pomodoro',
@@ -270,5 +274,9 @@ module.exports = {
     POMODORO_JSON_PATH,
     AI_CONTEXT_JSON_PATH,
     AI_LONG_TERM_MEMORY_JSON_PATH,
-    KNOWLEDGE_CARDS_JSON_PATH
+    KNOWLEDGE_CARDS_JSON_PATH,
+    AGENT_LIBRARY_INDEX_JSON_PATH,
+    AGENT_LIBRARY_ROOTS_JSON_PATH,
+    AGENT_SCREENSHOT_DIR_PATH,
+    PROJECT_ROOT,
 };

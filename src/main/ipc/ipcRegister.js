@@ -1,13 +1,25 @@
 const {ipcMain} = require('electron');
 const {aiChat, aiChatWithModel} = require('./aiService.js');
+const {AgentService} = require("./agentService");
 const fs = require("fs/promises");
 const {wm} = require("../WindowManager");
-const {WIDTH, HEIGHT, WINDOW_KEYS,AI_CHAT_SYSTEM_PROMPT,AI_TOUCH_RESPONSE, POMODORO_JSON_PATH, AI_CONTEXT_JSON_PATH, AI_LONG_TERM_MEMORY_JSON_PATH, KNOWLEDGE_CARDS_JSON_PATH} = require('../config');
+const {
+    WIDTH,
+    HEIGHT,
+    WINDOW_KEYS,
+    AI_CHAT_SYSTEM_PROMPT,
+    AI_TOUCH_RESPONSE,
+    POMODORO_JSON_PATH,
+    AI_CONTEXT_JSON_PATH,
+    AI_LONG_TERM_MEMORY_JSON_PATH,
+    KNOWLEDGE_CARDS_JSON_PATH,
+} = require('../config');
 class ipcRegister{
     static assistantContext = [];
     static assistantLongTermMemory = [];
     static knowledgeCards = [];
-    static MAX_CONTEXT_MESSAGES = 16;
+    static MAX_CONTEXT_MESSAGES = 32;
+    static agentService = null;
     constructor(ipc){
     }
     static buildAiChatMessages(message){
@@ -99,6 +111,134 @@ class ipcRegister{
         return {
             memoryCount: this.assistantLongTermMemory.length,
             items: this.assistantLongTermMemory,
+        };
+    }
+    static async addLongTermMemory(data){
+        const title = typeof data?.title === "string" ? data.title.trim() : "";
+        const content = typeof data?.content === "string" ? data.content.trim() : "";
+        if(!title){
+            throw new Error("Memory title is required.");
+        }
+        if(!content){
+            throw new Error("Memory content is required.");
+        }
+        const now = new Date().toISOString();
+        const record = {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            title,
+            content,
+            source: typeof data?.source === "string" && data.source.trim() ? data.source.trim() : "agent",
+            updatedAt: now,
+        };
+        this.assistantLongTermMemory.unshift(record);
+        await this.saveLongTermMemory();
+        return record;
+    }
+    static async deleteLongTermMemory(memoryId){
+        if(typeof memoryId !== "string" || !memoryId.trim()){
+            throw new Error("Memory id is required.");
+        }
+        const nextItems = this.assistantLongTermMemory.filter((item)=>item.id !== memoryId);
+        if(nextItems.length === this.assistantLongTermMemory.length){
+            throw new Error("Memory not found.");
+        }
+        this.assistantLongTermMemory = nextItems;
+        await this.saveLongTermMemory();
+        return this.getLongTermMemoryData();
+    }
+    static buildMemoryExtractionMessages(contextItems){
+        return [
+            {
+                role: "system",
+                message: [
+                    "You extract durable user memory from chat history.",
+                    "Return valid JSON only.",
+                    "Schema: {\"memories\":[{\"title\":\"...\",\"content\":\"...\",\"source\":\"daily-extract\"}]}",
+                    "Rules:",
+                    "- Keep only stable, reusable facts, preferences, projects, constraints, or long-running goals.",
+                    "- Ignore one-off small talk.",
+                    "- At most 6 memories.",
+                    "- Each memory should be concise and deduplicated.",
+                ].join("\n"),
+            },
+            {
+                role: "user",
+                message: contextItems.map((item, index)=>`${index + 1}. ${item.role}: ${item.message}`).join("\n"),
+            },
+        ];
+    }
+    static parseJsonObject(text){
+        const value = String(text || "").trim();
+        try{
+            return JSON.parse(value);
+        }catch(err){
+            const match = value.match(/```json\s*([\s\S]*?)```/i) || value.match(/```([\s\S]*?)```/);
+            if(match){
+                try{
+                    return JSON.parse(match[1].trim());
+                }catch(innerErr){
+                    return null;
+                }
+            }
+            const start = value.indexOf("{");
+            const end = value.lastIndexOf("}");
+            if(start !== -1 && end > start){
+                try{
+                    return JSON.parse(value.slice(start, end + 1));
+                }catch(innerErr){
+                    return null;
+                }
+            }
+            return null;
+        }
+    }
+    static async extractLongTermMemoriesFromContext(){
+        const contextItems = this.assistantContext.slice(-16);
+        if(!contextItems.length){
+            return {
+                added: [],
+                skipped: [],
+                data: this.getLongTermMemoryData(),
+            };
+        }
+        const model = process.env.AI_SUMMARY_MODEL || process.env.AI_MODEL;
+        if(!model){
+            throw new Error("Missing memory extraction model configuration.");
+        }
+        const response = await aiChatWithModel(this.buildMemoryExtractionMessages(contextItems), {
+            model,
+            temperature: 0.2,
+            maxTokens: 512,
+        });
+        const raw = this.getAssistantReplyContent(response);
+        const parsed = this.parseJsonObject(raw);
+        const items = Array.isArray(parsed?.memories) ? parsed.memories : [];
+        const added = [];
+        const skipped = [];
+        for(const item of items){
+            const title = typeof item?.title === "string" ? item.title.trim() : "";
+            const content = typeof item?.content === "string" ? item.content.trim() : "";
+            if(!title || !content){
+                continue;
+            }
+            const duplicate = this.assistantLongTermMemory.find((memory)=>{
+                return memory.title.trim().toLowerCase() === title.toLowerCase()
+                    || memory.content.trim().toLowerCase() === content.toLowerCase();
+            });
+            if(duplicate){
+                skipped.push({title, reason: "duplicate"});
+                continue;
+            }
+            added.push(await this.addLongTermMemory({
+                title,
+                content,
+                source: typeof item?.source === "string" && item.source.trim() ? item.source.trim() : "daily-extract",
+            }));
+        }
+        return {
+            added,
+            skipped,
+            data: this.getLongTermMemoryData(),
         };
     }
     static normalizeKnowledgeCards(data){
@@ -285,6 +425,57 @@ class ipcRegister{
         ipcMain.handle("app:getLongTermMemoryData",async ()=>{
             return this.getLongTermMemoryData();
         });
+        ipcMain.handle("app:extractLongTermMemories", async ()=>{
+            return await this.extractLongTermMemoriesFromContext();
+        });
+        ipcMain.handle("app:deleteLongTermMemory", async (event, memoryId)=>{
+            return await this.deleteLongTermMemory(memoryId);
+        });
+    }
+    static registerAgent(){
+        ipcMain.handle("app:getAgentCapabilities", async ()=>{
+            if(!this.agentService){
+                throw new Error("Agent service is not ready.");
+            }
+            return this.agentService.getCapabilities();
+        });
+        ipcMain.handle("app:getAgentLibraryIndex", async ()=>{
+            if(!this.agentService){
+                throw new Error("Agent service is not ready.");
+            }
+            return this.agentService.getLibraryIndexData();
+        });
+        ipcMain.handle("app:readAgentLibraryFile", async (event, filePath)=>{
+            if(!this.agentService){
+                throw new Error("Agent service is not ready.");
+            }
+            return await this.agentService.readLibraryFile(filePath);
+        });
+        ipcMain.handle("app:rebuildAgentLibraryIndex", async ()=>{
+            if(!this.agentService){
+                throw new Error("Agent service is not ready.");
+            }
+            await this.agentService.rebuildLibraryIndex();
+            return this.agentService.getCapabilities();
+        });
+        ipcMain.handle("app:agentChat", async (event, message)=>{
+            if(typeof message !== "string" || !message.trim()){
+                throw new Error("Message is required.");
+            }
+            if(!this.agentService){
+                throw new Error("Agent service is not ready.");
+            }
+            const result = await this.agentService.chat(message.trim());
+
+            this.assistantContext.push({role:"user", message: message.trim()});
+            if(result?.content){
+                this.assistantContext.push({role:"assistant", message: result.content});
+            }
+            this.trimAssistantContext();
+            await this.saveAssistantContext();
+
+            return result;
+        });
     }
     static registerTouchResponse(){
         ipcMain.handle("app:touch",async (event,name)=>{
@@ -403,10 +594,39 @@ class ipcRegister{
         await this.loadAssistantContext();
         await this.loadLongTermMemory();
         await this.loadKnowledgeCards();
+        this.agentService = new AgentService({
+            getAssistantContext: ()=>[...this.assistantContext],
+            getLongTermMemory: ()=>[...this.assistantLongTermMemory],
+            addLongTermMemory: async (data)=>await this.addLongTermMemory(data),
+            deleteLongTermMemory: async (memoryId)=>await this.deleteLongTermMemory(memoryId),
+            extractLongTermMemories: async ()=>await this.extractLongTermMemoriesFromContext(),
+            getKnowledgeCards: ()=>[...this.knowledgeCards],
+            createKnowledgeCard: async (data)=>{
+                const payload = this.validateKnowledgeCardPayload(data);
+                const now = new Date().toISOString();
+                const summary = await this.generateKnowledgeCardSummary(payload);
+                const card = {
+                    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                    title: payload.title,
+                    content: payload.content,
+                    summary,
+                    category: payload.category,
+                    source: payload.source,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                this.knowledgeCards.push(card);
+                await this.saveKnowledgeCards();
+                return card;
+            },
+            getPomodoroData: async ()=>await this.ensurePomodoroJson(POMODORO_JSON_PATH),
+        });
+        await this.agentService.ensureReady();
         this.registerOpenWindow();
         this.registerPing();
         this.registerAiChat();
         this.registerAiContextManager();
+        this.registerAgent();
         this.registerTouchResponse();
         this.registerPomodoroJson();
         this.registerKnowledgeCards();

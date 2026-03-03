@@ -17,7 +17,12 @@ async function chatCompletionsBigModel(message, options = {}) {
     const url = baseUrl.replace(/\/$/, "") + "/api/paas/v4/chat/completions";
     const body = {
         model,
-        messages: message.map((item) => ({role: item.role, content: item.message})),
+        messages: message.map((item) => ({
+            role: item.role,
+            content: Array.isArray(item.content)
+                ? item.content
+                : (item.message ?? item.content ?? ""),
+        })),
         stream: false,
         do_sample: false,
         temperature,
@@ -28,14 +33,19 @@ async function chatCompletionsBigModel(message, options = {}) {
         },
     };
 
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
-    });
+    let response;
+    try {
+        response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(body),
+        });
+    } catch (error) {
+        throw new Error(`BigModel fetch failed url=${url} model=${model} reason=${error?.message || error}`);
+    }
 
     if (!response.ok) {
         const text = await response.text();
@@ -47,6 +57,9 @@ async function chatCompletionsBigModel(message, options = {}) {
 
 module.exports = {
     aiChat(message, options) {
+        return chatCompletionsBigModel(message, options);
+    },
+    aiChatWithContent(message, options) {
         return chatCompletionsBigModel(message, options);
     },
     aiChatWithModel(message, options) {

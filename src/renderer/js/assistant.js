@@ -114,9 +114,9 @@ function placeLive2d() {
 
     assistantState.pixiApp.renderer.resize(width, height);
     assistantState.live2d.pivot.set(assistantState.baseWidth / 2, assistantState.baseHeight / 2);
-    const scale = Math.min(width / assistantState.baseWidth, height / assistantState.baseHeight) * 1.18;
+    const scale = Math.min(width / assistantState.baseWidth, height / assistantState.baseHeight) * 1.06;
     assistantState.live2d.scale.set(scale);
-    assistantState.live2d.position.set(width / 2, height * 0.96);
+    assistantState.live2d.position.set(width / 2, height * 0.92);
 }
 
 function initResizeObserver() {
@@ -218,6 +218,11 @@ function makeChatEntry(role, initialText = "", status = "") {
     };
 }
 
+function formatTrace(trace, index) {
+    const output = trace?.outputPreview ? `\n\n\`\`\`text\n${trace.outputPreview}\n\`\`\`` : "";
+    return `### Step ${index + 1}: ${trace?.tool || "tool"}\nStatus: ${trace?.status || "unknown"}${output}`;
+}
+
 function setChatStatus(entryHandle, statusText) {
     if (entryHandle?.status) {
         entryHandle.status.textContent = statusText;
@@ -245,7 +250,13 @@ async function streamMarkdown(text, onUpdate) {
 }
 
 async function getResponse(text) {
-    return (await window.api.chat(text)).choices[0].message.content;
+    if (window.api.agentChat) {
+        return await window.api.agentChat(text);
+    }
+    return {
+        content: (await window.api.chat(text)).choices[0].message.content,
+        traces: [],
+    };
 }
 
 async function showTouchResponse(text) {
@@ -269,21 +280,32 @@ async function handleChat(text) {
     makeChatEntry("user", text, "sent");
     const assistantEntry = makeChatEntry("assistant", "Thinking...", "preparing");
     const response = await getResponse(text);
+    const responseText = response?.content || "";
 
     setChatStatus(assistantEntry, "streaming");
-    await streamMarkdown(response, (partialText) => {
+    await streamMarkdown(responseText, (partialText) => {
         renderMarkdown(assistantEntry.content, partialText);
         scrollChatToBottom();
         if (!assistantState.expanded) {
             renderBubble(partialText, "chat");
         }
     });
+
+    if (Array.isArray(response?.traces) && response.traces.length) {
+        const traceEntry = makeChatEntry("agent", "", `${response.traces.length} steps`);
+        renderMarkdown(
+            traceEntry.content,
+            response.traces.map((trace, index) => formatTrace(trace, index)).join("\n\n"),
+        );
+        scrollChatToBottom(true);
+    }
+
     setChatStatus(assistantEntry, "done");
 
     if (assistantState.expanded) {
         updateBubbleExpandButton("touch");
     } else {
-        renderBubble(response, "chat");
+        renderBubble(responseText, "chat");
     }
 }
 
