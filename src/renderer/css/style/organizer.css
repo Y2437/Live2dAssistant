@@ -1,4 +1,7 @@
 .organizer-root{
     display: grid;
     gap: 12px;
+    height: 100%;
+    min-height: 0;
+    align-content: start;
 }

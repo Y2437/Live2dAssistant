@@ -1,8 +1,6 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 const DEFAULT_VIEW = "assistant";
-const LOCAL_VIEWS = new Set(["settings"]);
-
 const settingsDom = {
     clearContextBtn: $('[data-role="settings-clear-context"]'),
     contextMeta: $('[data-role="settings-context-meta"]'),
@@ -33,11 +31,15 @@ function showView(viewKey) {
     if (viewKey === "settings") {
         syncSettingsData();
     }
+
+    window.dispatchEvent(new CustomEvent("shell:viewchange", {
+        detail: {viewKey},
+    }));
 }
 
 async function navigate(viewKey) {
     if (!viewKey) return;
-    if (LOCAL_VIEWS.has(viewKey)) {
+    if (document.querySelector(`.view[data-view="${viewKey}"]`)) {
         showView(viewKey);
         return;
     }

@@ -15,4 +15,9 @@ contextBridge.exposeInMainWorld("api",{
     touch: (name)=>ipcRenderer.invoke("app:touch",name),
     loadPomodoroJson:()=>ipcRenderer.invoke("app:loadPomodoroJson"),
     savePomodoroJson:(data)=>ipcRenderer.invoke("app:savePomodoroJson",data),
+    loadKnowledgeCards:()=>ipcRenderer.invoke("app:loadKnowledgeCards"),
+    createKnowledgeCard:(data)=>ipcRenderer.invoke("app:createKnowledgeCard",data),
+    updateKnowledgeCard:(data)=>ipcRenderer.invoke("app:updateKnowledgeCard",data),
+    generateKnowledgeCardSummary:(data)=>ipcRenderer.invoke("app:generateKnowledgeCardSummary",data),
+    deleteKnowledgeCard:(cardId)=>ipcRenderer.invoke("app:deleteKnowledgeCard",cardId),
 });

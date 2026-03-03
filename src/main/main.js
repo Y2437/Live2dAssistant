@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const {ipcRegister}=require('./ipc/ipcRegister');
 
 const fs = require('fs');

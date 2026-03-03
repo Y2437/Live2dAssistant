@@ -6,6 +6,7 @@ const WINDOW_MODE = "devShell";
 const POMODORO_JSON_PATH =path.join(app.getPath("userData"), "pomodoro.json");
 const AI_CONTEXT_JSON_PATH = path.join(app.getPath("userData"), "assistant-context.json");
 const AI_LONG_TERM_MEMORY_JSON_PATH = path.join(app.getPath("userData"), "assistant-long-term-memory.json");
+const KNOWLEDGE_CARDS_JSON_PATH = path.join(app.getPath("userData"), "knowledge-cards.json");
 const WINDOW_KEYS = [
     'assistant',
     'pomodoro',
@@ -268,5 +269,6 @@ module.exports = {
     AI_TOUCH_RESPONSE,
     POMODORO_JSON_PATH,
     AI_CONTEXT_JSON_PATH,
-    AI_LONG_TERM_MEMORY_JSON_PATH
+    AI_LONG_TERM_MEMORY_JSON_PATH,
+    KNOWLEDGE_CARDS_JSON_PATH
 };

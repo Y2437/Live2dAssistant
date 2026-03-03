@@ -68,7 +68,21 @@
 :root[data-theme="dark"] .assistant-chatCard__collapse,
 :root[data-theme="dark"] .settings-btn,
 :root[data-theme="dark"] .settings-pill,
-:root[data-theme="dark"] .settings-list__item{
+:root[data-theme="dark"] .settings-list__item,
+:root[data-theme="dark"] .cards-search__input,
+:root[data-theme="dark"] .cards-field__control,
+:root[data-theme="dark"] .cards-toolbarBtn,
+:root[data-theme="dark"] .cards-submit,
+:root[data-theme="dark"] .cards-filter,
+:root[data-theme="dark"] .cards-card__btn,
+:root[data-theme="dark"] .cards-pageBtn,
+:root[data-theme="dark"] .cards-pageNum,
+:root[data-theme="dark"] .cards-modal__close,
+:root[data-theme="dark"] .cards-suggest,
+:root[data-theme="dark"] .cards-suggest__item,
+:root[data-theme="dark"] .cards-card__tag,
+:root[data-theme="dark"] .cards-modal__tag,
+:root[data-theme="dark"] .cards-modal__content{
     background-color: var(--c-bg);
 }
 
@@ -98,7 +112,32 @@
 :root[data-theme="dark"] .settings-btn,
 :root[data-theme="dark"] .settings-pill,
 :root[data-theme="dark"] .settings-list__item,
-:root[data-theme="dark"] .settings-record{
+:root[data-theme="dark"] .settings-record,
+:root[data-theme="dark"] .cards-stat,
+:root[data-theme="dark"] .cards-panel,
+:root[data-theme="dark"] .cards-card,
+:root[data-theme="dark"] .cards-empty,
+:root[data-theme="dark"] .cards-preview,
+:root[data-theme="dark"] .cards-modal__dialog,
+:root[data-theme="dark"] .cards-search__input,
+:root[data-theme="dark"] .cards-field__control,
+:root[data-theme="dark"] .cards-toolbarBtn,
+:root[data-theme="dark"] .cards-submit,
+:root[data-theme="dark"] .cards-filter,
+:root[data-theme="dark"] .cards-card__btn,
+:root[data-theme="dark"] .cards-pageBtn,
+:root[data-theme="dark"] .cards-pageNum,
+:root[data-theme="dark"] .cards-pagination,
+:root[data-theme="dark"] .cards-preview,
+:root[data-theme="dark"] .cards-modal__close,
+:root[data-theme="dark"] .cards-suggest,
+:root[data-theme="dark"] .cards-suggest__item,
+:root[data-theme="dark"] .cards-card__tag,
+:root[data-theme="dark"] .cards-markdown__tag,
+:root[data-theme="dark"] .cards-markdown code,
+:root[data-theme="dark"] .cards-markdown__pre,
+:root[data-theme="dark"] .cards-modal__tag,
+:root[data-theme="dark"] .cards-modal__content{
     border-color: var(--c-border);
 }
 
@@ -113,7 +152,17 @@
 :root[data-theme="dark"] .assistant-input:hover,
 :root[data-theme="dark"] [data-role="assistant-input"]:hover,
 :root[data-theme="dark"] .assistant-bubble__expand:hover,
-:root[data-theme="dark"] .assistant-chatCard__collapse:hover{
+:root[data-theme="dark"] .assistant-chatCard__collapse:hover,
+:root[data-theme="dark"] .cards-search__input:hover,
+:root[data-theme="dark"] .cards-field__control:hover,
+:root[data-theme="dark"] .cards-toolbarBtn:hover,
+:root[data-theme="dark"] .cards-submit:hover,
+:root[data-theme="dark"] .cards-filter:hover,
+:root[data-theme="dark"] .cards-card__btn:hover,
+:root[data-theme="dark"] .cards-pageBtn:hover,
+:root[data-theme="dark"] .cards-pageNum:hover,
+:root[data-theme="dark"] .cards-suggest__item:hover,
+:root[data-theme="dark"] .cards-modal__close:hover{
     border-color: var(--c-border-strong);
 }
 
@@ -146,7 +195,14 @@
 :root[data-theme="dark"] .settings-card__desc,
 :root[data-theme="dark"] .settings-list__desc,
 :root[data-theme="dark"] .settings-inlineMeta,
-:root[data-theme="dark"] .settings-record__meta{
+:root[data-theme="dark"] .settings-record__meta,
+:root[data-theme="dark"] .cards-desc,
+:root[data-theme="dark"] .cards-editorHead__desc,
+:root[data-theme="dark"] .cards-form__status,
+:root[data-theme="dark"] .cards-empty__desc,
+:root[data-theme="dark"] .cards-card__time,
+:root[data-theme="dark"] .cards-card__source,
+:root[data-theme="dark"] .cards-modal__time{
     color: var(--c-muted);
 }
 
@@ -162,8 +218,56 @@
 :root[data-theme="dark"] [data-role="assistant-send"]:focus-visible,
 :root[data-theme="dark"] .assistant-bubble__expand:focus-visible,
 :root[data-theme="dark"] .assistant-chatCard__collapse:focus-visible,
-:root[data-theme="dark"] .settings-btn:focus-visible{
+:root[data-theme="dark"] .settings-btn:focus-visible,
+:root[data-theme="dark"] .cards-card:focus-visible,
+:root[data-theme="dark"] .cards-search__input:focus,
+:root[data-theme="dark"] .cards-field__control:focus,
+:root[data-theme="dark"] .cards-toolbarBtn:focus-visible,
+:root[data-theme="dark"] .cards-submit:focus-visible,
+:root[data-theme="dark"] .cards-filter:focus-visible,
+:root[data-theme="dark"] .cards-card__btn:focus-visible,
+:root[data-theme="dark"] .cards-pageBtn:focus-visible,
+:root[data-theme="dark"] .cards-pageNum:focus-visible,
+:root[data-theme="dark"] .cards-suggest__item:focus-visible,
+:root[data-theme="dark"] .cards-modal__close:focus-visible{
     outline-color: var(--c-focus);
+}
+
+:root[data-theme="dark"] .cards-stat,
+:root[data-theme="dark"] .cards-panel,
+:root[data-theme="dark"] .cards-card,
+:root[data-theme="dark"] .cards-empty,
+:root[data-theme="dark"] .cards-modal__dialog{
+    background-color: var(--c-panel);
+}
+
+:root[data-theme="dark"] .cards-filter.is-active,
+:root[data-theme="dark"] .cards-toolbarBtn,
+:root[data-theme="dark"] .cards-submit{
+    background-color: rgba(233,238,246,0.06);
+}
+
+:root[data-theme="dark"] .cards-pageNum.is-active,
+:root[data-theme="dark"] .cards-filter.is-active{
+    background-color: rgba(233,238,246,0.08);
+}
+
+:root[data-theme="dark"] .cards-toolbarBtn--danger,
+:root[data-theme="dark"] .cards-card__btn--danger{
+    background-color: rgba(239,68,68,0.12);
+}
+
+:root[data-theme="dark"] .cards-card.is-selected{
+    border-color: var(--c-accent);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(183,95,21,0.24);
+}
+
+:root[data-theme="dark"] .cards-card__blur{
+    background: linear-gradient(180deg, rgba(15,22,34,0) 0%, rgba(15,22,34,0.86) 55%, rgba(15,22,34,1) 100%);
+}
+
+:root[data-theme="dark"] .cards-modal__backdrop{
+    background-color: rgba(0,0,0,0.52);
 }
 
 /* scrollbars */

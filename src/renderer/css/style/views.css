@@ -8,6 +8,12 @@
     min-width: 0;
 }
 
+.shell__main > .view:not([data-view="settings"]){
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+}
+
 .view__title{
     margin: 14px 14px;
     font-size: 18px;
@@ -15,8 +21,18 @@
     letter-spacing: 0.25px;
 }
 
+.view[data-view="cards"] > .view__title{
+    display: none;
+}
+
 .view__mount{
     min-width: 0;
+    min-height: 0;
+}
+
+.shell__main > .view:not([data-view="settings"]) .view__mount{
+    height: 100%;
+    overflow: hidden;
 }
 
 .placeholder-card{

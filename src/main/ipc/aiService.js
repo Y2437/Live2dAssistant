@@ -1,16 +1,23 @@
+async function chatCompletionsBigModel(message, options = {}) {
+    require("dotenv").config();
 
-async function chatCompletionsBigModel(message, temperature = 0, maxTokens =65536) {
-    require('dotenv').config();
-    const model=process.env.AI_MODEL;
+    const model = options.model || process.env.AI_MODEL;
     const baseUrl = process.env.BASE_URL;
     const apiKey = process.env.API_KEY;
+    const temperature = options.temperature ?? 0;
+    const maxTokens = options.maxTokens ?? 65536;
+
     if (!apiKey) {
-        throw new Error("缺少环境变量 API_KEY");
+        throw new Error("Missing API_KEY environment variable");
     }
+    if (!model) {
+        throw new Error("Missing AI model configuration");
+    }
+
     const url = baseUrl.replace(/\/$/, "") + "/api/paas/v4/chat/completions";
     const body = {
         model,
-        messages: message.map(m=>({role:m.role,content:m.message})),
+        messages: message.map((item) => ({role: item.role, content: item.message})),
         stream: false,
         do_sample: false,
         temperature,
@@ -20,7 +27,8 @@ async function chatCompletionsBigModel(message, temperature = 0, maxTokens =6553
             clear_thinking: true,
         },
     };
-    const r = await fetch(url, {
+
+    const response = await fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -28,13 +36,20 @@ async function chatCompletionsBigModel(message, temperature = 0, maxTokens =6553
         },
         body: JSON.stringify(body),
     });
-    if (!r.ok) {
-        const text = await r.text();
-        throw new Error(`BigModel请求失败 status=${r.status} body=${text}`);
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`BigModel request failed status=${response.status} body=${text}`);
     }
-    return await r.json();
+
+    return await response.json();
 }
 
 module.exports = {
-    aiChat: chatCompletionsBigModel,
+    aiChat(message, options) {
+        return chatCompletionsBigModel(message, options);
+    },
+    aiChatWithModel(message, options) {
+        return chatCompletionsBigModel(message, options);
+    },
 };
