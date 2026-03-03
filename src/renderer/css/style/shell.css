@@ -117,6 +117,11 @@ body{
     opacity var(--motion-fast) var(--ease-out);
 }
 
+.nav__btn--icon{
+    justify-content: center;
+    padding: 10px;
+}
+
 /* active indicator block, color is assigned in theme css */
 .nav__btn::before{
     content: "";

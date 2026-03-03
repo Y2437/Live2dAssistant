@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <title>Pomodoro</title>
+    <script type="module" src="../js/pomodoro.js" defer></script>
+
+    <link rel="stylesheet" href="../css/theme/light.css">
+    <link rel="stylesheet" href="../css/theme/dark.css">
+    <link rel="stylesheet" href="../css/style/shell.css">
+    <link rel="stylesheet" href="../css/style/standalone.css">
+    <link rel="stylesheet" href="../css/style/pomodoro.css">
+</head>
+<body class="window-page">
+<main class="window-main window-panel--center">
+    <section class="window-panel">
+        <div class="pomodoro-root">
+            <div class="pomo" data-pomo="root" data-page="list" data-timer="idle">
+                <div class="pomo__frame" data-pomo="frame">
+                    <div class="pomo__track" data-pomo="track">
+                        <section class="pomo__panel pomo__panel--edit" data-pomo="panel-edit">
+                            <div class="pomoLayout pomoLayout--edit">
+                                <header class="pomoHeader">
+                                    <button class="pomoIconBtn pomoIconBtn--ghost" type="button" data-pomo-action="cancel" aria-label="返回">
+                                        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                            <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        </svg>
+                                    </button>
+
+                                    <div class="pomoNameWrap">
+                                        <label>
+                                            <input
+                                                class="pomoName"
+                                                data-pomo="task-name"
+                                                type="text"
+                                                value="新任务"
+                                                spellcheck="false"
+                                                autocomplete="off"
+                                                placeholder="输入任务名称"
+                                            />
+                                        </label>
+                                    </div>
+                                </header>
+
+                                <div class="pomoEditBody">
+                                    <div class="pomoCycleSection">
+                                        <span class="pomoCycleLabel">循环次数</span>
+                                        <div class="pomoCycleControl">
+                                            <label>
+                                                <input class="pomoCycleInput" data-pomo="cycle-input" type="number" min="1" value="4" readonly />
+                                            </label>
+
+                                            <div class="pomoCycleBtns">
+                                                <button class="pomoMiniBtn" type="button" data-pomo-action="cycle-inc" aria-label="增加">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"><path d="M18 15l-6-6-6 6" fill="none" stroke="currentColor" stroke-width="5"/></svg>
+                                                </button>
+                                                <button class="pomoMiniBtn" type="button" data-pomo-action="cycle-dec" aria-label="减少">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="5"/></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="pomoEditTimes">
+                                        <section class="pomoTimeBox" data-pomo="box-work">
+                                            <h3 class="pomoTimeBox__label">工作时间</h3>
+                                            <div class="pomoDigitGroup" data-pomo="digits-work" aria-label="工作分钟数">
+                                                <div class="pomoDigit" data-pomo-digit="work" data-digit-pos="t" style="--pomo-digit:2">
+                                                    <div class="pomoDigit__viewport">
+                                                        <div class="pomoDigit__wheel">
+                                                            <div class="pomoDigit__cell">0</div><div class="pomoDigit__cell">1</div><div class="pomoDigit__cell">2</div><div class="pomoDigit__cell">3</div><div class="pomoDigit__cell">4</div>
+                                                            <div class="pomoDigit__cell">5</div><div class="pomoDigit__cell">6</div><div class="pomoDigit__cell">7</div><div class="pomoDigit__cell">8</div><div class="pomoDigit__cell">9</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="pomoDigit" data-pomo-digit="work" data-digit-pos="o" style="--pomo-digit:5">
+                                                    <div class="pomoDigit__viewport">
+                                                        <div class="pomoDigit__wheel">
+                                                            <div class="pomoDigit__cell">0</div><div class="pomoDigit__cell">1</div><div class="pomoDigit__cell">2</div><div class="pomoDigit__cell">3</div><div class="pomoDigit__cell">4</div>
+                                                            <div class="pomoDigit__cell">5</div><div class="pomoDigit__cell">6</div><div class="pomoDigit__cell">7</div><div class="pomoDigit__cell">8</div><div class="pomoDigit__cell">9</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </section>
+
+                                        <section class="pomoTimeBox" data-pomo="box-rest">
+                                            <h3 class="pomoTimeBox__label">休息时间</h3>
+                                            <div class="pomoDigitGroup" data-pomo="digits-rest" aria-label="休息分钟数">
+                                                <div class="pomoDigit" data-pomo-digit="rest" data-digit-pos="t" style="--pomo-digit:0">
+                                                    <div class="pomoDigit__viewport">
+                                                        <div class="pomoDigit__wheel">
+                                                            <div class="pomoDigit__cell">0</div><div class="pomoDigit__cell">1</div><div class="pomoDigit__cell">2</div><div class="pomoDigit__cell">3</div><div class="pomoDigit__cell">4</div>
+                                                            <div class="pomoDigit__cell">5</div><div class="pomoDigit__cell">6</div><div class="pomoDigit__cell">7</div><div class="pomoDigit__cell">8</div><div class="pomoDigit__cell">9</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="pomoDigit" data-pomo-digit="rest" data-digit-pos="o" style="--pomo-digit:5">
+                                                    <div class="pomoDigit__viewport">
+                                                        <div class="pomoDigit__wheel">
+                                                            <div class="pomoDigit__cell">0</div><div class="pomoDigit__cell">1</div><div class="pomoDigit__cell">2</div><div class="pomoDigit__cell">3</div><div class="pomoDigit__cell">4</div>
+                                                            <div class="pomoDigit__cell">5</div><div class="pomoDigit__cell">6</div><div class="pomoDigit__cell">7</div><div class="pomoDigit__cell">8</div><div class="pomoDigit__cell">9</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </section>
+                                    </div>
+                                </div>
+
+                                <footer class="pomoFooter">
+                                    <button class="pomoBtn pomoBtn--primary" type="button" data-pomo-action="confirm">确定</button>
+                                </footer>
+                            </div>
+                        </section>
+
+                        <section class="pomo__panel pomo__panel--list" data-pomo="panel-list">
+                            <div class="pomoLayout pomoLayout--list">
+                                <header class="pomoTopbar" aria-label="任务工具栏">
+                                    <button class="pomoIconBtn" type="button" data-pomo-action="delete" aria-label="删除任务">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                            <path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="2"/>
+                                            <path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                            <path d="M6 7l1-3h10l1 3" fill="none" stroke="currentColor" stroke-width="2"/>
+                                            <path d="M7 7l1 14h8l1-14" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        </svg>
+                                    </button>
+
+                                    <button class="pomoIconBtn" type="button" data-pomo-action="edit" aria-label="编辑任务">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                            <path d="M4 20h4l10-10-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                            <path d="M14 6l4 4" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        </svg>
+                                    </button>
+
+                                    <button class="pomoIconBtn" type="button" data-pomo-action="add" aria-label="添加任务">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                            <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        </svg>
+                                    </button>
+                                </header>
+
+                                <div class="pomoListWrap">
+                                    <ul class="pomoList" data-pomo="task-list" aria-label="任务列表"></ul>
+                                    <div class="pomoEmpty" data-pomo="empty">暂无任务</div>
+                                </div>
+
+                                <button class="pomoBtn pomoBtn--go" type="button" data-pomo-action="go" data-state="idle"></button>
+                            </div>
+                        </section>
+
+                        <section class="pomo__panel pomo__panel--run" data-pomo="panel-run">
+                            <div class="pomoLayout pomoLayout--run">
+                                <div class="pomoRunCard" data-pomo="run-card">
+                                    <div class="pomoRunCard__rainbow-bg"></div>
+                                    <div class="pomoRunCard__rainbow" data-pomo="rainbow-border"></div>
+                                    <canvas class="pomoRunCard__wave-canvas" data-pomo="wave-canvas"></canvas>
+
+                                    <div class="pomoRunCard__inner">
+                                        <header class="pomoRunTop">
+                                            <button class="pomoIconBtn" type="button" data-pomo-action="back" aria-label="返回">
+                                                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                                    <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                                </svg>
+                                            </button>
+
+                                            <div class="pomoPhaseDisplay">
+                                                <span class="pomoPhase" data-pomo="phase">FOCUS</span>
+                                                <div class="pomoCycleRow">
+                                                    <span data-pomo="cycle-cur">1</span>/<span data-pomo="cycle-total">4</span>
+                                                </div>
+                                            </div>
+
+                                            <button class="pomoIconBtn" type="button" data-pomo-action="stop" aria-label="停止">
+                                                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                                    <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2"/>
+                                                </svg>
+                                            </button>
+                                        </header>
+
+                                        <div class="pomoRunTime" data-pomo="run-time">
+                                            <div class="pomoDigitGroup pomoDigitGroup--mm" data-pomo="run-mm">
+                                                <div class="pomoDigit pomoDigit--run" data-pomo-digit="run-mm" data-digit-pos="t" style="--pomo-digit:2">
+                                                    <div class="pomoDigit__viewport"><div class="pomoDigit__wheel">
+                                                        <div class="pomoDigit__cell">0</div><div class="pomoDigit__cell">1</div><div class="pomoDigit__cell">2</div><div class="pomoDigit__cell">3</div><div class="pomoDigit__cell">4</div>
+                                                        <div class="pomoDigit__cell">5</div><div class="pomoDigit__cell">6</div><div class="pomoDigit__cell">7</div><div class="pomoDigit__cell">8</div><div class="pomoDigit__cell">9</div>
+                                                    </div></div>
+                                                </div>
+                                                <div class="pomoDigit pomoDigit--run" data-pomo-digit="run-mm" data-digit-pos="o" style="--pomo-digit:5">
+                                                    <div class="pomoDigit__viewport"><div class="pomoDigit__wheel">
+                                                        <div class="pomoDigit__cell">0</div><div class="pomoDigit__cell">1</div><div class="pomoDigit__cell">2</div><div class="pomoDigit__cell">3</div><div class="pomoDigit__cell">4</div>
+                                                        <div class="pomoDigit__cell">5</div><div class="pomoDigit__cell">6</div><div class="pomoDigit__cell">7</div><div class="pomoDigit__cell">8</div><div class="pomoDigit__cell">9</div>
+                                                    </div></div>
+                                                </div>
+                                            </div>
+
+                                            <div class="pomoColon">:</div>
+
+                                            <div class="pomoDigitGroup pomoDigitGroup--ss" data-pomo="run-ss">
+                                                <div class="pomoDigit pomoDigit--run" data-pomo-digit="run-ss" data-digit-pos="t" style="--pomo-digit:0">
+                                                    <div class="pomoDigit__viewport"><div class="pomoDigit__wheel">
+                                                        <div class="pomoDigit__cell">0</div><div class="pomoDigit__cell">1</div><div class="pomoDigit__cell">2</div><div class="pomoDigit__cell">3</div><div class="pomoDigit__cell">4</div>
+                                                        <div class="pomoDigit__cell">5</div><div class="pomoDigit__cell">6</div><div class="pomoDigit__cell">7</div><div class="pomoDigit__cell">8</div><div class="pomoDigit__cell">9</div>
+                                                    </div></div>
+                                                </div>
+                                                <div class="pomoDigit pomoDigit--run" data-pomo-digit="run-ss" data-digit-pos="o" style="--pomo-digit:0">
+                                                    <div class="pomoDigit__viewport"><div class="pomoDigit__wheel">
+                                                        <div class="pomoDigit__cell">0</div><div class="pomoDigit__cell">1</div><div class="pomoDigit__cell">2</div><div class="pomoDigit__cell">3</div><div class="pomoDigit__cell">4</div>
+                                                        <div class="pomoDigit__cell">5</div><div class="pomoDigit__cell">6</div><div class="pomoDigit__cell">7</div><div class="pomoDigit__cell">8</div><div class="pomoDigit__cell">9</div>
+                                                    </div></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button class="pomoBtn pomoBtn--run" type="button" data-pomo-action="pause" data-state="pause"></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="pomoConfetti" data-pomo="confetti" aria-hidden="true"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+</body>
+</html>

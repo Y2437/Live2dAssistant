@@ -2,7 +2,10 @@ const path = require('path');
 const app = require('electron').app;
 const WIDTH = 800;
 const HEIGHT = 600;
+const WINDOW_MODE = "devShell";
 const POMODORO_JSON_PATH =path.join(app.getPath("userData"), "pomodoro.json");
+const AI_CONTEXT_JSON_PATH = path.join(app.getPath("userData"), "assistant-context.json");
+const AI_LONG_TERM_MEMORY_JSON_PATH = path.join(app.getPath("userData"), "assistant-long-term-memory.json");
 const WINDOW_KEYS = [
     'assistant',
     'pomodoro',
@@ -11,6 +14,14 @@ const WINDOW_KEYS = [
     'clipboard',
     'devShell',  //作为测试模式的主窗口
 ]
+const WINDOW_FILE_MAP = {
+    assistant: path.join(__dirname, "../renderer/view/assistant.html"),
+    pomodoro: path.join(__dirname, "../renderer/view/pomodoro.html"),
+    organizer: path.join(__dirname, "../renderer/view/organizer.html"),
+    cards: path.join(__dirname, "../renderer/view/cards.html"),
+    clipboard: path.join(__dirname, "../renderer/view/clipboard.html"),
+    devShell: path.join(__dirname, "../renderer/view/index.html"),
+};
 const AI_TOUCH_RESPONSE = {
     "Body": {
         "name": "Body",
@@ -65,6 +76,7 @@ const AI_TOUCH_RESPONSE = {
             { "id": 47, "content": "【像猫一样眯起眼睛】呼噜...好舒服...要变成只会撒娇的废柴了..." },
             { "id": 48, "content": "【轻轻拽了拽你的衣角】那个...还可以...再来一次吗？" }
         ]
+
     },
     "Head": {
         "name": "Head",
@@ -246,4 +258,15 @@ const AI_CHAT_SYSTEM_PROMPT=
     "- [ ] 结尾是不是**开放式**的，让人想接话？\n" +
     "- [ ] 如果是任务，有没有把它包装成**游戏或手账**的形式？\n" +
     "- [ ] 只要不是绝望的场景，有没有加上**一点点元气**？\n" ;
-module.exports = {WIDTH, HEIGHT, WINDOW_KEYS,AI_CHAT_SYSTEM_PROMPT ,AI_TOUCH_RESPONSE,POMODORO_JSON_PATH};
+module.exports = {
+    WIDTH,
+    HEIGHT,
+    WINDOW_MODE,
+    WINDOW_KEYS,
+    WINDOW_FILE_MAP,
+    AI_CHAT_SYSTEM_PROMPT,
+    AI_TOUCH_RESPONSE,
+    POMODORO_JSON_PATH,
+    AI_CONTEXT_JSON_PATH,
+    AI_LONG_TERM_MEMORY_JSON_PATH
+};

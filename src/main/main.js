@@ -4,13 +4,16 @@ const fs = require('fs');
 const path = require('path');
 const {app,BrowserWindow,ipcMain} = require('electron');
 const {wm} = require('./WindowManager.js');
+const {WINDOW_MODE} = require('./config');
 
 
 app.whenReady().then(async ()=>{
     //why TypeError: ipcRegister.registerAll is not a function ?
-    ipcRegister.registerAll();
+    await ipcRegister.registerAll();
     await wm.open("assistant");
-    wm.get("assistant").webContents.openDevTools();
+    if(WINDOW_MODE === "devShell"){
+        wm.get("assistant").webContents.openDevTools();
+    }
 
 })
 app.on('window-all-closed', () => {

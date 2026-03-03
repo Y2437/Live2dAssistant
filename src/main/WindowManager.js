@@ -1,24 +1,24 @@
-const {WIDTH, HEIGHT, WINDOW_KEYS} = require('./config');
+const {WIDTH, HEIGHT, WINDOW_KEYS, WINDOW_FILE_MAP, WINDOW_MODE} = require('./config');
 const path = require('path');
 const {app,BrowserWindow,ipcMain} = require('electron');
 class WindowManager{
-    devMode = true;
+    devMode = WINDOW_MODE === "devShell";
     constructor(){
         this.windows =new Map(WINDOW_KEYS.map((key)=>{return [key,null]}));
         this.defs=new Map(WINDOW_KEYS.map((key)=>{return [key,{
             config:{
                 width: WIDTH,
                 height:HEIGHT,
+                show: false,
                 webPreferences: {
                     nodeIntegration: false,
                     contextIsolation:true,
                     preload: path.join(__dirname, 'preload.js'),
                 }
             },
-            filePath:null
+            filePath: WINDOW_FILE_MAP[key]
         }
         ]}));
-        this.defs.get("devShell").filePath=path.join(__dirname, '../renderer/view/index.html');
     }
     list(){
         let result=[];

@@ -46,7 +46,10 @@
 :root[data-theme="light"] .placeholder-card,
 :root[data-theme="light"] .assistant-panel,
 :root[data-theme="light"] [data-role="assistant-panel"],
-:root[data-theme="light"] .assistant-bubble{
+:root[data-theme="light"] .assistant-bubble,
+:root[data-theme="light"] .assistant-chatCard,
+:root[data-theme="light"] .assistant-chatEntry,
+:root[data-theme="light"] .assistant-chatMeta__item{
     background-color: var(--c-panel);
 }
 
@@ -58,7 +61,13 @@
 :root[data-theme="light"] .assistant-input,
 :root[data-theme="light"] [data-role="assistant-input"],
 :root[data-theme="light"] .assistant-send,
-:root[data-theme="light"] [data-role="assistant-send"]{
+:root[data-theme="light"] [data-role="assistant-send"],
+:root[data-theme="light"] .assistant-scrollToBottom,
+:root[data-theme="light"] .assistant-bubble__expand,
+:root[data-theme="light"] .assistant-chatCard__collapse,
+:root[data-theme="light"] .settings-btn,
+:root[data-theme="light"] .settings-pill,
+:root[data-theme="light"] .settings-list__item{
     background-color: var(--c-bg);
 }
 
@@ -74,10 +83,21 @@
 :root[data-theme="light"] [data-role="assistant-panel"],
 :root[data-theme="light"] .assistant-actionBtn,
 :root[data-theme="light"] [data-role="assistant-actions"] [data-action],
+:root[data-theme="light"] [data-role="assistant-actions"] [data-local-view],
 :root[data-theme="light"] .assistant-input,
 :root[data-theme="light"] [data-role="assistant-input"],
 :root[data-theme="light"] .assistant-send,
-:root[data-theme="light"] [data-role="assistant-send"]{
+:root[data-theme="light"] [data-role="assistant-send"],
+:root[data-theme="light"] .assistant-scrollToBottom,
+:root[data-theme="light"] .assistant-chatCard,
+:root[data-theme="light"] .assistant-chatEntry,
+:root[data-theme="light"] .assistant-chatMeta__item,
+:root[data-theme="light"] .assistant-bubble__expand,
+:root[data-theme="light"] .assistant-chatCard__collapse,
+:root[data-theme="light"] .settings-btn,
+:root[data-theme="light"] .settings-pill,
+:root[data-theme="light"] .settings-list__item,
+:root[data-theme="light"] .settings-record{
     border-color: var(--c-border);
 }
 
@@ -85,10 +105,18 @@
 :root[data-theme="light"] .nav__btn:hover,
 :root[data-theme="light"] .assistant-actionBtn:hover,
 :root[data-theme="light"] [data-role="assistant-actions"] [data-action]:hover,
+:root[data-theme="light"] [data-role="assistant-actions"] [data-local-view]:hover,
+:root[data-theme="light"] .assistant-scrollToBottom:hover,
 :root[data-theme="light"] .assistant-send:hover,
 :root[data-theme="light"] [data-role="assistant-send"]:hover,
 :root[data-theme="light"] .assistant-input:hover,
-:root[data-theme="light"] [data-role="assistant-input"]:hover{
+:root[data-theme="light"] [data-role="assistant-input"]:hover,
+:root[data-theme="light"] .assistant-bubble__expand:hover,
+:root[data-theme="light"] .assistant-chatCard__collapse:hover{
+    border-color: var(--c-border-strong);
+}
+
+:root[data-theme="light"] .settings-btn:hover{
     border-color: var(--c-border-strong);
 }
 
@@ -111,7 +139,13 @@
 
 /* secondary text */
 :root[data-theme="light"] .nav__hint,
-:root[data-theme="light"] .placeholder-desc{
+:root[data-theme="light"] .placeholder-desc,
+:root[data-theme="light"] .assistant-chatCard__desc,
+:root[data-theme="light"] .assistant-chatEntry__status,
+:root[data-theme="light"] .settings-card__desc,
+:root[data-theme="light"] .settings-list__desc,
+:root[data-theme="light"] .settings-inlineMeta,
+:root[data-theme="light"] .settings-record__meta{
     color: var(--c-muted);
 }
 
@@ -119,10 +153,15 @@
 :root[data-theme="light"] .nav__btn:focus-visible,
 :root[data-theme="light"] .assistant-actionBtn:focus-visible,
 :root[data-theme="light"] [data-role="assistant-actions"] [data-action]:focus-visible,
+:root[data-theme="light"] [data-role="assistant-actions"] [data-local-view]:focus-visible,
+:root[data-theme="light"] .assistant-scrollToBottom:focus-visible,
 :root[data-theme="light"] .assistant-input:focus,
 :root[data-theme="light"] [data-role="assistant-input"]:focus,
 :root[data-theme="light"] .assistant-send:focus-visible,
-:root[data-theme="light"] [data-role="assistant-send"]:focus-visible{
+:root[data-theme="light"] [data-role="assistant-send"]:focus-visible,
+:root[data-theme="light"] .assistant-bubble__expand:focus-visible,
+:root[data-theme="light"] .assistant-chatCard__collapse:focus-visible,
+:root[data-theme="light"] .settings-btn:focus-visible{
     outline-color: var(--c-focus);
 }
 

@@ -1,0 +1,59 @@
+.window-page{
+    min-height: 100%;
+}
+
+.window-main{
+    min-height: 100%;
+    padding: 20px;
+    display: grid;
+    gap: 16px;
+    align-content: start;
+}
+
+.window-panel{
+    width: min(960px, 100%);
+    margin: 0 auto;
+}
+
+.window-panel--wide{
+    width: min(1120px, 100%);
+}
+
+.window-panel--center{
+    min-height: calc(100vh - 40px);
+    align-content: center;
+}
+
+.window-hero{
+    display: grid;
+    gap: 8px;
+}
+
+.window-title{
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.2;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+}
+
+.window-subtitle{
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.65;
+}
+
+.window-frame{
+    width: min(1120px, 100%);
+    margin: 0 auto;
+}
+
+@media (max-width: 720px){
+    .window-main{
+        padding: 14px;
+    }
+
+    .window-panel--center{
+        min-height: calc(100vh - 28px);
+    }
+}
