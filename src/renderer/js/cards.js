@@ -385,7 +385,6 @@ function rebuildEditorForm() {
                         <div class="cards-summaryBar">
                             <div class="cards-summaryBar__head">
                                 <span class="cards-field__label">${COPY.summaryField}</span>
-                                <button type="button" class="cards-toolbarBtn cards-toolbarBtn--compact" data-role="cards-summary-generate">${COPY.summaryGenerate}</button>
                             </div>
                             <textarea
                                 class="cards-field__control cards-field__control--summary"
@@ -399,6 +398,7 @@ function rebuildEditorForm() {
                         </div>
                     </div>
                     <div class="cards-editorDock__actions">
+                        <button type="button" class="cards-toolbarBtn" data-role="cards-summary-generate">${COPY.summaryGenerate}</button>
                         <button type="button" class="cards-toolbarBtn" data-role="cards-cancel-editor-inline">${COPY.cancel}</button>
                         <button type="submit" class="cards-submit">${COPY.save}</button>
                     </div>
