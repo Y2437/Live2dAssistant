@@ -241,10 +241,10 @@
 }
 
 .pomoCycleLabel {
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 900;
     color: var(--pomo-muted);
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
 }
 
 .pomoCycleControl {
@@ -350,7 +350,7 @@
 
 .pomoTimeBox__label{
     margin: 0;
-    font-size: 16px; font-weight: 900; letter-spacing: 0.6px;
+    font-size: 20px; font-weight: 900; letter-spacing: 0.8px;
     color: var(--pomo-muted); text-transform: uppercase;
 }
 
@@ -587,14 +587,40 @@
 }
 .pomoRunTop { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; justify-items: center; width: 100%; }
 .pomoPhaseDisplay { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--pomo-muted); }
-.pomoPhase { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
-.pomoCycleRow { font-size: 14px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--c-text); }
+.pomoPhase { font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.2px; }
+.pomoCycleRow { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--c-text); }
 .pomoRunTime { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .pomoDigitGroup--mm, .pomoDigitGroup--ss { gap: 8px; }
 
 .pomoColon { font-size: 60px; font-weight: 900; color: var(--pomo-text); padding-bottom: 10px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .pomoConfetti{ position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 10; }
+
+.pomoConfetti__piece{
+    position: absolute;
+    width: 10px;
+    height: 18px;
+    background: var(--color, #ff0055);
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    animation: pomoConfettiFall 1.2s ease-out forwards;
+    animation-delay: var(--delay, 0ms);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+}
+
+@keyframes pomoConfettiFall {
+    0% {
+        opacity: 0;
+        transform: translate3d(0, 0, 0) rotate(0deg) scale(0.8);
+    }
+    10% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translate3d(var(--dx, 0px), var(--dy, 220px), 0) rotate(var(--rot, 180deg)) scale(1);
+    }
+}
 
 @media (max-width: 520px){
     .pomo{ --pomo-digit-w: 60px; --pomo-digit-h: 90px; --pomo-cell-h: 90px; }
