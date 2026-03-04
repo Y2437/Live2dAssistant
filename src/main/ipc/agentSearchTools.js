@@ -1,5 +1,6 @@
 const {
     clampTraceOutput,
+    buildSearchVariants,
     safeJsonParse,
     stripMarkdown,
     summarizeText,
@@ -17,7 +18,7 @@ const {
 
 function rankByNeedle(items, buildHaystack, needle, limit = 16) {
     const value = String(needle || "").trim().toLowerCase();
-    const tokens = value.split(/\s+/).filter(Boolean);
+    const variants = buildSearchVariants(value);
     return items
         .map((item) => {
             const haystack = String(buildHaystack(item) || "").toLowerCase();
@@ -25,12 +26,14 @@ function rankByNeedle(items, buildHaystack, needle, limit = 16) {
             if (!value) {
                 score = 1;
             } else {
-                if (haystack.includes(value)) {
-                    score += 10;
-                }
-                for (const token of tokens) {
-                    if (token && haystack.includes(token)) {
-                        score += token.length > 3 ? 3 : 2;
+                for (const variant of variants) {
+                    if (variant.text && haystack.includes(variant.text)) {
+                        score += 8 * (variant.weight || 1);
+                    }
+                    for (const token of variant.tokens || []) {
+                        if (token && haystack.includes(token)) {
+                            score += (token.length > 3 ? 3 : 2) * (variant.weight || 1);
+                        }
                     }
                 }
             }
@@ -44,6 +47,7 @@ function rankByNeedle(items, buildHaystack, needle, limit = 16) {
 
 function searchMemory(service, query) {
     const needle = String(query || "").trim().toLowerCase();
+    const variants = buildSearchVariants(needle);
     const items = rankByNeedle(service.getLongTermMemory()
         .filter((item) => item.status !== "archived")
     , (item) => `${item.title}\n${item.content}\n${item.source || ""}\n${item.category || ""}\n${(item.tags || []).join(" ")}`, needle, 16)
@@ -58,11 +62,12 @@ function searchMemory(service, query) {
             confidence: item.confidence ?? null,
             updatedAt: item.updatedAt || "",
         }));
-    return {items};
+    return {query: needle, queryVariants: variants.map((item) => item.text), items};
 }
 
 function searchCards(service, query) {
     const needle = String(query || "").trim().toLowerCase();
+    const variants = buildSearchVariants(needle);
     const items = rankByNeedle(service.getKnowledgeCards(), (item) => `${item.title}\n${item.category}\n${item.summary || ""}\n${item.content}`, needle, 12)
         .map((item) => ({
             id: item.id,
@@ -75,7 +80,7 @@ function searchCards(service, query) {
                 : String(item.content || ""),
             updatedAt: item.updatedAt || item.createdAt || "",
         }));
-    return {items};
+    return {query: needle, queryVariants: variants.map((item) => item.text), items};
 }
 
 function listCards(service, category) {
@@ -207,10 +212,15 @@ async function runPrefetchTools(service, userMessage, traces, conversation, opti
     }
 }
 
-function buildAgentPlanningSystemPrompt(memories, context, allowedTools = null) {
+function buildAgentPlanningSystemPrompt(memories, context, allowedTools = null, options = {}) {
     const memoryText = memories.length ? memories.map((item, index) => `${index + 1}. ${item.title}: ${item.content}`).join("\n") : NO_LONG_TERM_MEMORY_TEXT;
     const contextText = context.length ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n") : NO_RECENT_CONTEXT_TEXT;
-    return buildPlanningPromptTemplate({contextText, memoryText, allowedTools});
+    return buildPlanningPromptTemplate({
+        contextText,
+        memoryText,
+        allowedTools,
+        directOutput: options.directOutput === true,
+    });
 }
 
 async function runTool(service, toolName, args) {
@@ -265,6 +275,10 @@ async function readWebPage(service, url) {
 async function webSearch(service, query) {
     const value = String(query || "").trim();
     if (!value) throw new Error("Search query is required.");
+    const queryVariants = buildSearchVariants(value)
+        .map((item) => item.text)
+        .filter(Boolean)
+        .slice(0, 4);
     const requestHeaders = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -357,32 +371,68 @@ async function webSearch(service, query) {
     }
 
     let lastError = "";
-    for (const attempt of attempts) {
-        try {
-            const html = await requestText(attempt.url, requestHeaders);
-            const results = attempt.parse(html).filter((item) => item.title && item.url);
-            if (results.length) {
-                const enrichedResults = [];
-                for (let index = 0; index < results.length; index += 1) {
-                    const result = results[index];
-                    if (index < 3) {
-                        enrichedResults.push(await fetchResultContent(result));
-                    } else {
-                        enrichedResults.push({
-                            ...result,
-                            contentPreview: result.snippet || "",
-                            contentStatus: "skipped",
-                        });
+    const mergedResults = new Map();
+    const providerHits = [];
+    for (let queryIndex = 0; queryIndex < queryVariants.length; queryIndex += 1) {
+        const searchQuery = queryVariants[queryIndex];
+        for (const attempt of attempts) {
+            try {
+                const targetUrl = attempt.url.replace(encodeURIComponent(value), encodeURIComponent(searchQuery));
+                const html = await requestText(targetUrl, requestHeaders);
+                const results = attempt.parse(html).filter((item) => item.title && item.url);
+                if (results.length) {
+                    providerHits.push({query: searchQuery, provider: attempt.name});
+                    for (let index = 0; index < results.length && index < 6; index += 1) {
+                        const result = results[index];
+                        const key = String(result.url || "").trim();
+                        const score = ((queryVariants.length - queryIndex) * 100) - (index * 6);
+                        const previous = mergedResults.get(key);
+                        if (!previous || score > previous.searchScore) {
+                            mergedResults.set(key, {
+                                ...result,
+                                matchedQuery: searchQuery,
+                                provider: attempt.name,
+                                searchScore: score,
+                            });
+                        }
                     }
+                    break;
                 }
-                return {query: value, provider: attempt.name, results: enrichedResults};
+                lastError = `${attempt.name} returned no parsable results`;
+            } catch (error) {
+                lastError = error?.message || String(error);
             }
-            lastError = `${attempt.name} returned no parsable results`;
-        } catch (error) {
-            lastError = error?.message || String(error);
+        }
+        if (mergedResults.size >= 8) {
+            break;
         }
     }
-    return {query: value, provider: "unavailable", results: [], error: lastError || "Web search is temporarily unavailable."};
+    if (!mergedResults.size) {
+        return {query: value, queryVariants, provider: "unavailable", results: [], error: lastError || "Web search is temporarily unavailable."};
+    }
+    const rankedResults = [...mergedResults.values()]
+        .sort((a, b) => b.searchScore - a.searchScore)
+        .slice(0, 8);
+    const enrichedResults = [];
+    for (let index = 0; index < rankedResults.length; index += 1) {
+        const result = rankedResults[index];
+        if (index < 3) {
+            enrichedResults.push(await fetchResultContent(result));
+        } else {
+            enrichedResults.push({
+                ...result,
+                contentPreview: result.snippet || "",
+                contentStatus: "skipped",
+            });
+        }
+    }
+    return {
+        query: value,
+        queryVariants,
+        provider: providerHits.map((item) => item.provider).filter((item, index, array) => array.indexOf(item) === index).join(",") || "multi",
+        providerHits,
+        results: enrichedResults,
+    };
 }
 
 module.exports = {searchMemory, searchCards, listCards, getCard, parseAgentResponse, buildPrefetchPlan, runPrefetchTools, buildAgentPlanningSystemPrompt, runTool, webSearch, readWebPage};

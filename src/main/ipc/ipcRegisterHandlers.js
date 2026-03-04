@@ -74,10 +74,11 @@ function registerAgentHandlers(registry) {
             ? payload
             : payload?.message;
         const allowedTools = Array.isArray(payload?.allowedTools) ? payload.allowedTools : null;
+        const directMode = payload?.directMode === true;
         if (typeof message !== "string" || !message.trim()) {
             throw new Error("Message is required.");
         }
-        const result = await ensureAgentService(registry).chat(message.trim(), {}, {allowedTools});
+        const result = await ensureAgentService(registry).chat(message.trim(), {}, {allowedTools, directMode});
         await registry.recordAssistantExchange(message.trim(), result?.content || "");
         return result;
     });
@@ -100,12 +101,13 @@ function registerAgentHandlers(registry) {
         activeAgentStreams.set(requestId, abortController);
         try {
             const allowedTools = Array.isArray(payload?.allowedTools) ? payload.allowedTools : null;
+            const directMode = payload?.directMode === true;
             const result = await ensureAgentService(registry).chat(message, {
-                onStatus: async (status) => send({type: "status", status}),
-                onTrace: async (trace, traces) => send({type: "trace", trace, traces}),
+                onStatus: directMode ? null : async (status) => send({type: "status", status}),
+                onTrace: directMode ? null : async (trace, traces) => send({type: "trace", trace, traces}),
                 onText: async (content) => send({type: "content", content}),
                 signal: abortController.signal,
-            }, {allowedTools});
+            }, {allowedTools, directMode});
             await registry.recordAssistantExchange(message, result?.content || "");
             send({type: "complete", result});
             return result;

@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("api", {
     agentChat: (message, options = {}) => ipcRenderer.invoke("app:agentChat", {
         message,
         allowedTools: Array.isArray(options?.allowedTools) ? options.allowedTools : null,
+        directMode: options?.directMode === true,
     }),
     agentChatStream: (message, handlers = {}, requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`, options = {}) => {
         const listener = (event, payload) => {
@@ -41,6 +42,7 @@ contextBridge.exposeInMainWorld("api", {
             message,
             requestId,
             allowedTools: Array.isArray(options?.allowedTools) ? options.allowedTools : null,
+            directMode: options?.directMode === true,
         })
             .finally(() => {
                 ipcRenderer.removeListener(AGENT_STREAM_EVENT, listener);

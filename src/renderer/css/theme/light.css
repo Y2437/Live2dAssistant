@@ -58,6 +58,9 @@
 :root[data-theme="light"] .shell__main,
 :root[data-theme="light"] .assistant-live2d,
 :root[data-theme="light"] .placeholder-slot,
+:root[data-theme="light"] .assistant-thinkToggle,
+:root[data-theme="light"] .assistant-thinkToggle__track,
+:root[data-theme="light"] .assistant-thinkToggle__knob,
 :root[data-theme="light"] .assistant-scope__trigger,
 :root[data-theme="light"] .assistant-scope__action,
 :root[data-theme="light"] .assistant-scope__option,
@@ -111,6 +114,9 @@
 :root[data-theme="light"] .shell__nav,
 :root[data-theme="light"] .nav__btn,
 :root[data-theme="light"] .nav__footer,
+:root[data-theme="light"] .assistant-thinkToggle,
+:root[data-theme="light"] .assistant-thinkToggle__track,
+:root[data-theme="light"] .assistant-thinkToggle__knob,
 :root[data-theme="light"] .assistant-scope__trigger,
 :root[data-theme="light"] .assistant-scope__menu,
 :root[data-theme="light"] .assistant-scope__action,
@@ -193,6 +199,7 @@
 
 /* hover borders */
 :root[data-theme="light"] .nav__btn:hover,
+:root[data-theme="light"] .assistant-thinkToggle:hover,
 :root[data-theme="light"] .assistant-scope__trigger:hover,
 :root[data-theme="light"] .assistant-scope__action:hover,
 :root[data-theme="light"] .assistant-scope__option:hover,
@@ -291,6 +298,7 @@
 
 /* focus rings */
 :root[data-theme="light"] .nav__btn:focus-visible,
+:root[data-theme="light"] .assistant-thinkToggle:focus-visible,
 :root[data-theme="light"] .assistant-scope__trigger:focus-visible,
 :root[data-theme="light"] .assistant-scope__action:focus-visible,
 :root[data-theme="light"] .assistant-scope__option:has(.assistant-scope__checkbox:focus-visible),
@@ -326,6 +334,36 @@
 :root[data-theme="light"] .cards-suggest__item:focus-visible,
 :root[data-theme="light"] .cards-modal__close:focus-visible{
     outline-color: var(--c-focus);
+}
+
+:root[data-theme="light"] .assistant-thinkToggle[data-enabled="true"]{
+    border-color: rgba(37,99,235,0.52);
+    background: rgba(37,99,235,0.05);
+}
+
+:root[data-theme="light"] .assistant-thinkToggle[data-enabled="true"] .assistant-thinkToggle__track{
+    border-color: rgba(37,99,235,0.58);
+    background-color: rgba(37,99,235,0.14);
+}
+
+:root[data-theme="light"] .assistant-thinkToggle[data-enabled="true"] .assistant-thinkToggle__knob{
+    border-color: #1d4ed8;
+    background-color: #2563eb;
+}
+
+:root[data-theme="light"] .assistant-thinkToggle:not([data-enabled="true"]){
+    border-color: rgba(30,41,59,0.18);
+    background: transparent;
+}
+
+:root[data-theme="light"] .assistant-thinkToggle:not([data-enabled="true"]) .assistant-thinkToggle__track{
+    border-color: rgba(30,41,59,0.18);
+    background-color: rgba(15,23,42,0.04);
+}
+
+:root[data-theme="light"] .assistant-thinkToggle:not([data-enabled="true"]) .assistant-thinkToggle__knob{
+    border-color: rgba(30,41,59,0.22);
+    background-color: #ffffff;
 }
 
 :root[data-theme="light"] .assistant-scope__option:has(.assistant-scope__checkbox:checked){

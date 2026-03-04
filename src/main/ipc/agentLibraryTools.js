@@ -11,11 +11,13 @@ const {
     isoNow,
     summarizeText,
     tokenizeSearchText,
+    buildSearchVariants,
     buildSearchIndex,
     buildFileCategory,
     buildFileSignature,
     buildTextChunks,
     scoreSearchMatch,
+    scoreSearchVariants,
 } = require("./agentShared");
 
 // Library indexing and retrieval helpers for the agent.
@@ -196,12 +198,15 @@ function searchLibrary(service, query) {
     const value = String(query || "").trim();
     const normalized = value.toLowerCase();
     const tokens = tokenizeSearchText(value);
+    const variants = buildSearchVariants(value);
     const ranked = service.libraryIndex.items.map((item) => {
-        const baseScore = scoreSearchMatch(normalized, item.searchIndex || "", tokens, 1.8);
+        const baseScore = scoreSearchMatch(normalized, item.searchIndex || "", tokens, 1.8)
+            + scoreSearchVariants(item.searchIndex || "", variants, 1.15);
         const matches = (item.chunks || []).map((chunk) => ({
             chunkId: chunk.id,
             preview: chunk.preview,
-            score: scoreSearchMatch(normalized, chunk.searchIndex || "", tokens, 1.2),
+            score: scoreSearchMatch(normalized, chunk.searchIndex || "", tokens, 1.2)
+                + scoreSearchVariants(chunk.searchIndex || "", variants, 1),
         })).filter((chunk) => chunk.score > 0)
             .sort((a, b) => b.score - a.score)
             .slice(0, 3);
@@ -224,7 +229,13 @@ function searchLibrary(service, query) {
             chunkCount: item.chunkCount || 0,
             matches,
         }));
-    return {updatedAt: service.libraryIndex.updatedAt, query: value, queryTokens: tokens, items: ranked};
+    return {
+        updatedAt: service.libraryIndex.updatedAt,
+        query: value,
+        queryTokens: tokens,
+        queryVariants: variants.map((item) => item.text),
+        items: ranked,
+    };
 }
 
 function getLibraryOverview(service) {

@@ -22,6 +22,8 @@ const {buildAssistantFinalAnswerMessages} = require("./assistantPrompt");
 const {
     buildAgentPrefetchPlannerPrompt,
     getAgentToolSpecs,
+    buildAgentDirectToolPlannerPrompt,
+    buildAgentDirectFinalPrompt,
 } = require("./promptRegistry");
 
 // AgentService keeps orchestration state here and delegates tool-heavy domains to helper modules.
@@ -104,6 +106,7 @@ class AgentService {
         const response = await aiChatWithContent(conversation, {
             temperature: options.temperature ?? 0.2,
             maxTokens: options.maxTokens ?? 2048,
+            model: options.model || undefined,
             signal: hooks.signal,
             enableThinking: options.enableThinking !== false,
         });
@@ -121,6 +124,7 @@ class AgentService {
             const response = await aiChatWithContent(conversation, {
                 temperature: 0.4,
                 maxTokens: 2048,
+                model: hooks.model || undefined,
                 signal: hooks.signal,
                 enableThinking: false,
             });
@@ -131,6 +135,7 @@ class AgentService {
         const response = await aiChatWithContentStream(conversation, {
             temperature: 0.4,
             maxTokens: 2048,
+            model: hooks.model || undefined,
             signal: hooks.signal,
             enableThinking: false,
         }, {
@@ -318,7 +323,7 @@ class AgentService {
         });
     }
 
-    async finalizeAgentResponse({userMessage, context, traces, hooks, plannerDraft = ""}) {
+    async finalizeAgentResponse({userMessage, context, traces, hooks, plannerDraft = "", thinkingMode = true}) {
         await this.emitHook(hooks.onStatus, {
             phase: "thinking",
             message: "Composing final answer",
@@ -341,7 +346,112 @@ class AgentService {
         return {
             mode: "agent",
             content: finalContent || plannerDraft || "I do not have a usable result yet.",
-            traces,
+            traces: thinkingMode ? traces : [],
+        };
+    }
+
+    buildDirectContextText(context = []) {
+        return context.length
+            ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n")
+            : "没有最近对话上下文。";
+    }
+
+    buildDirectMemoryText(memories = []) {
+        return memories.length
+            ? memories.map((item, index) => `${index + 1}. ${item.title}: ${item.content}`).join("\n")
+            : "没有长期记忆。";
+    }
+
+    async streamDirectAnswer({userMessage, context, memories, toolName = "", toolArgs = {}, toolResult = null}, hooks = {}) {
+        const toolResultText = toolName
+            ? `工具 ${toolName} 参数：${JSON.stringify(toolArgs)}\n工具 ${toolName} 结果：${JSON.stringify(toolResult)}`
+            : "本次未调用工具。";
+        const conversation = [
+            {
+                role: "system",
+                content: [{
+                    type: "text",
+                    text: buildAgentDirectFinalPrompt({
+                        contextText: this.buildDirectContextText(context),
+                        memoryText: this.buildDirectMemoryText(memories),
+                        toolResultText,
+                    }),
+                }],
+            },
+            {
+                role: "user",
+                content: [{
+                    type: "text",
+                    text: userMessage,
+                }],
+            },
+        ];
+        return await this.streamFinalAnswer(conversation, hooks);
+    }
+
+    async chatDirect(userMessage, hooks = {}, options = {}) {
+        this.ensureNotAborted(hooks.signal);
+        const context = this.getAssistantContext().slice(-8);
+        const allowedTools = this.normalizeAllowedTools(options.allowedTools);
+        const memories = this.getLongTermMemory().slice(-10).map((item) => ({
+            title: item.title,
+            content: summarizeText(item.content, 160),
+        }));
+        const plannerConversation = [
+            {
+                role: "system",
+                content: [
+                    {
+                        type: "text",
+                        text: buildAgentDirectToolPlannerPrompt({
+                            userMessage,
+                            contextText: this.buildDirectContextText(context),
+                            memoryText: this.buildDirectMemoryText(memories),
+                            allowedTools,
+                        }),
+                    },
+                ],
+            },
+            {
+                role: "user",
+                content: [{type: "text", text: userMessage}],
+            },
+        ];
+        const plannerModel = ENV_CONFIG.AI_SUMMARY_MODEL || ENV_CONFIG.AI_MODEL;
+        const plannerTurn = await this.requestAgentTurn(plannerConversation, hooks, {
+            enableThinking: false,
+            temperature: 0,
+            maxTokens: 512,
+            model: plannerModel,
+        });
+        const plannerAction = this.parseAgentResponse(plannerTurn.content) || {type: "none"};
+        let toolName = "";
+        let toolArgs = {};
+        let toolResult = null;
+
+        if (plannerAction.type === "tool" && plannerAction.tool) {
+            toolName = plannerAction.tool;
+            toolArgs = normalizeToolArgs(plannerAction.args);
+            try {
+                toolResult = await this.runTool(toolName, toolArgs, allowedTools);
+            } catch (error) {
+                toolResult = {error: error?.message || String(error)};
+            }
+        }
+
+        const finalContent = await this.streamDirectAnswer({
+            userMessage,
+            context,
+            memories,
+            toolName,
+            toolArgs,
+            toolResult,
+        }, hooks);
+
+        return {
+            mode: "agent",
+            content: String(finalContent || "").trim() || "我暂时没有生成可用回复。",
+            traces: [],
         };
     }
 
@@ -351,6 +461,10 @@ class AgentService {
         const planningConversation = [];
         const context = this.getAssistantContext().slice(-8);
         const allowedTools = this.normalizeAllowedTools(options.allowedTools);
+        const directMode = options.directMode === true;
+        if (directMode) {
+            return await this.chatDirect(userMessage, hooks, options);
+        }
         const memories = this.getLongTermMemory().slice(-10).map((item) => ({
             title: item.title,
             content: summarizeText(item.content, 160),
@@ -398,6 +512,7 @@ class AgentService {
                     traces,
                     hooks,
                     plannerDraft: content || "",
+                    thinkingMode: true,
                 });
             }
             if (action.type === "final") {
@@ -407,6 +522,7 @@ class AgentService {
                     traces,
                     hooks,
                     plannerDraft: action.content || content || "",
+                    thinkingMode: true,
                 });
             }
             if (action.type !== "tool") {
@@ -416,6 +532,7 @@ class AgentService {
                     traces,
                     hooks,
                     plannerDraft: content || "",
+                    thinkingMode: true,
                 });
             }
 
@@ -468,6 +585,7 @@ class AgentService {
             traces,
             hooks,
             plannerDraft: "",
+            thinkingMode: true,
         });
     }
 
@@ -647,8 +765,8 @@ class AgentService {
         return visionTools.analyzeClipboardImage(this, args);
     }
 
-    buildAgentPlanningSystemPrompt(memories, context, allowedTools = null) {
-        return searchTools.buildAgentPlanningSystemPrompt(memories, context, allowedTools);
+    buildAgentPlanningSystemPrompt(memories, context, allowedTools = null, options = {}) {
+        return searchTools.buildAgentPlanningSystemPrompt(memories, context, allowedTools, options);
     }
 
     async runTool(toolName, args, allowedTools = null) {

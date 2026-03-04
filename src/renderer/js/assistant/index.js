@@ -21,6 +21,7 @@ const dom = {
     scopeList: $('[data-role="assistant-scope-list"]'),
     scopeSelectAll: $('[data-role="assistant-scope-select-all"]'),
     scopeClear: $('[data-role="assistant-scope-clear"]'),
+    thinkToggle: $('[data-role="assistant-think-toggle"]'),
     input: $('[data-role="assistant-input"]'),
     send: $('[data-role="assistant-send"]'),
     cancel: $('[data-role="assistant-cancel"]'),
@@ -57,6 +58,7 @@ const assistantState = {
     availableTools: [],
     selectedTools: [],
     scopeOpen: false,
+    directMode: false,
 };
 
 const TIMEOUT_MS = CONFIG.LIVE2D_CONFIG.TIMEOUT_MS;
@@ -92,6 +94,7 @@ const SPECIAL_AGENT_CATEGORY_LABELS = {
     vision: "视觉",
 };
 const AGENT_SCOPE_STORAGE_KEY = "assistant.agentScope.specialTools.v1";
+const ASSISTANT_DIRECT_MODE_STORAGE_KEY = "assistant.directMode.v1";
 
 function dispatchNavigate(viewKey) {
     window.dispatchEvent(new CustomEvent("shell:navigate", { detail: { viewKey } }));
@@ -477,10 +480,34 @@ function syncRequestControls() {
     if (dom.scopeClear) {
         dom.scopeClear.disabled = busy;
     }
+    if (dom.thinkToggle) {
+        dom.thinkToggle.disabled = busy;
+    }
 }
 
 function getAllowedToolsForRequest() {
     return [...assistantState.alwaysAllowedTools, ...assistantState.selectedTools];
+}
+
+function loadDirectModePreference() {
+    try {
+        const raw = window.localStorage.getItem(ASSISTANT_DIRECT_MODE_STORAGE_KEY);
+        if (raw == null) {
+            return false;
+        }
+        return raw === "true";
+    } catch (error) {
+        console.error(error);
+        return false;
+    }
+}
+
+function saveDirectModePreference() {
+    try {
+        window.localStorage.setItem(ASSISTANT_DIRECT_MODE_STORAGE_KEY, String(assistantState.directMode));
+    } catch (error) {
+        console.error(error);
+    }
 }
 
 function saveScopeSelection() {
@@ -513,6 +540,14 @@ function setScopeOpen(open) {
     if (dom.scopeTrigger) {
         dom.scopeTrigger.setAttribute("aria-expanded", assistantState.scopeOpen ? "true" : "false");
     }
+}
+
+function syncThinkingToggle() {
+    if (!dom.thinkToggle) {
+        return;
+    }
+    dom.thinkToggle.dataset.enabled = assistantState.directMode ? "true" : "false";
+    dom.thinkToggle.setAttribute("aria-pressed", assistantState.directMode ? "true" : "false");
 }
 
 function buildScopeSummary() {
@@ -609,9 +644,9 @@ async function loadAgentCapabilities() {
     }
 }
 
-async function getResponse(text, allowedTools = null) {
+async function getResponse(text, allowedTools = null, directMode = false) {
     if (window.api.agentChat) {
-        return await window.api.agentChat(text, {allowedTools});
+        return await window.api.agentChat(text, {allowedTools, directMode});
     }
     return {
         content: (await window.api.chat(text)).choices[0].message.content,
@@ -660,6 +695,7 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
     let hasLiveContent = false;
     let timedOut = false;
     let canceled = false;
+    const directMode = assistantState.directMode;
 
     const updateAssistantContent = (nextText) => {
         responseText = nextText || "";
@@ -685,10 +721,12 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
             const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
             const request = window.api.agentChatStream(text, {
                 onStatus(status) {
+                    if (directMode) return;
                     setRuntimeStatus(status);
                     setChatStatus(assistantEntry, formatRuntimeStatus(status));
                 },
                 onTrace(trace, traces) {
+                    if (directMode) return;
                     setRuntimeTraces(traces);
                     if (!assistantState.expanded && shouldExpandForChat(responseText, traces)) {
                         setLayout(true);
@@ -705,7 +743,7 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
                 onCancel() {
                     canceled = true;
                 },
-            }, requestId, {allowedTools});
+            }, requestId, {allowedTools, directMode});
             assistantState.activeRequest = {requestId};
             syncRequestControls();
             scheduleRequestTimeout(async () => {
@@ -714,16 +752,20 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
             });
             response = await request;
         } else {
-            response = await getResponse(text, allowedTools);
+            response = await getResponse(text, allowedTools, directMode);
         }
 
         if (!hasLiveContent) {
             updateAssistantContent(response?.content || "");
         }
-        if ((!assistantState.runtimeTraces || !assistantState.runtimeTraces.length) && Array.isArray(response?.traces) && response.traces.length) {
+        if (!directMode && (!assistantState.runtimeTraces || !assistantState.runtimeTraces.length) && Array.isArray(response?.traces) && response.traces.length) {
             setRuntimeTraces(response.traces);
         }
-        setRuntimeStatus({message: CONFIG.ASSISTANT_CONFIG.STATUS_DONE});
+        if (!directMode) {
+            setRuntimeStatus({message: CONFIG.ASSISTANT_CONFIG.STATUS_DONE});
+        } else {
+            resetRuntimeState();
+        }
         setChatStatus(assistantEntry, CONFIG.ASSISTANT_CONFIG.STATUS_DONE);
         assistantState.lastRetryText = "";
         assistantState.lastRetryAllowedTools = null;
@@ -741,7 +783,11 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
         if (!responseText) {
             updateAssistantContent(fallbackMessage);
         }
-        setRuntimeStatus({message: statusText});
+        if (!directMode) {
+            setRuntimeStatus({message: statusText});
+        } else {
+            resetRuntimeState();
+        }
         setChatStatus(assistantEntry, statusText);
         assistantState.lastRetryText = text;
         assistantState.lastRetryAllowedTools = [...allowedTools];
@@ -822,6 +868,14 @@ function wireInput() {
             setScopeOpen(!assistantState.scopeOpen);
         });
     }
+    if (dom.thinkToggle) {
+        dom.thinkToggle.addEventListener("click", () => {
+            assistantState.directMode = !assistantState.directMode;
+            saveDirectModePreference();
+            syncThinkingToggle();
+            resetRuntimeState();
+        });
+    }
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && assistantState.scopeOpen) {
             setScopeOpen(false);
@@ -898,6 +952,8 @@ function wireChatLayout() {
 
 async function initAssistant() {
     mountAssistant();
+    assistantState.directMode = loadDirectModePreference();
+    syncThinkingToggle();
     await loadAgentCapabilities();
     if (!dom.stage) return;
     initPixiApp();

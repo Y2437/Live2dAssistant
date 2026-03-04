@@ -59,6 +59,9 @@
 :root[data-theme="dark"] .shell__main,
 :root[data-theme="dark"] .assistant-live2d,
 :root[data-theme="dark"] .placeholder-slot,
+:root[data-theme="dark"] .assistant-thinkToggle,
+:root[data-theme="dark"] .assistant-thinkToggle__track,
+:root[data-theme="dark"] .assistant-thinkToggle__knob,
 :root[data-theme="dark"] .assistant-scope__trigger,
 :root[data-theme="dark"] .assistant-scope__action,
 :root[data-theme="dark"] .assistant-scope__option,
@@ -112,6 +115,9 @@
 :root[data-theme="dark"] .shell__nav,
 :root[data-theme="dark"] .nav__btn,
 :root[data-theme="dark"] .nav__footer,
+:root[data-theme="dark"] .assistant-thinkToggle,
+:root[data-theme="dark"] .assistant-thinkToggle__track,
+:root[data-theme="dark"] .assistant-thinkToggle__knob,
 :root[data-theme="dark"] .assistant-scope__trigger,
 :root[data-theme="dark"] .assistant-scope__menu,
 :root[data-theme="dark"] .assistant-scope__action,
@@ -194,6 +200,7 @@
 
 /* hover borders */
 :root[data-theme="dark"] .nav__btn:hover,
+:root[data-theme="dark"] .assistant-thinkToggle:hover,
 :root[data-theme="dark"] .assistant-scope__trigger:hover,
 :root[data-theme="dark"] .assistant-scope__action:hover,
 :root[data-theme="dark"] .assistant-scope__option:hover,
@@ -292,6 +299,7 @@
 
 /* focus rings */
 :root[data-theme="dark"] .nav__btn:focus-visible,
+:root[data-theme="dark"] .assistant-thinkToggle:focus-visible,
 :root[data-theme="dark"] .assistant-scope__trigger:focus-visible,
 :root[data-theme="dark"] .assistant-scope__action:focus-visible,
 :root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:focus-visible),
@@ -327,6 +335,36 @@
 :root[data-theme="dark"] .cards-suggest__item:focus-visible,
 :root[data-theme="dark"] .cards-modal__close:focus-visible{
     outline-color: var(--c-focus);
+}
+
+:root[data-theme="dark"] .assistant-thinkToggle[data-enabled="true"]{
+    border-color: rgba(210,132,58,0.58);
+    background: rgba(183,95,21,0.12);
+}
+
+:root[data-theme="dark"] .assistant-thinkToggle[data-enabled="true"] .assistant-thinkToggle__track{
+    border-color: rgba(244,195,143,0.62);
+    background-color: rgba(183,95,21,0.2);
+}
+
+:root[data-theme="dark"] .assistant-thinkToggle[data-enabled="true"] .assistant-thinkToggle__knob{
+    border-color: #f4c38f;
+    background-color: #b75f15;
+}
+
+:root[data-theme="dark"] .assistant-thinkToggle:not([data-enabled="true"]){
+    border-color: rgba(232,236,241,0.14);
+    background: transparent;
+}
+
+:root[data-theme="dark"] .assistant-thinkToggle:not([data-enabled="true"]) .assistant-thinkToggle__track{
+    border-color: rgba(232,236,241,0.16);
+    background-color: rgba(232,236,241,0.05);
+}
+
+:root[data-theme="dark"] .assistant-thinkToggle:not([data-enabled="true"]) .assistant-thinkToggle__knob{
+    border-color: rgba(232,236,241,0.18);
+    background-color: #f3f4f6;
 }
 
 :root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:checked){

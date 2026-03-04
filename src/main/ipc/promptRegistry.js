@@ -227,8 +227,29 @@ function buildAgentPlanningSystemPrompt({
     contextText = NO_RECENT_CONTEXT_TEXT,
     memoryText = NO_LONG_TERM_MEMORY_TEXT,
     allowedTools = null,
+    directOutput = false,
 } = {}) {
     const toolDefinitions = formatAgentToolDefinitionLines(filterAgentToolSpecs(allowedTools));
+    if (directOutput) {
+        return [
+            "你是桌面助手的 Agent。",
+            "你的这次输出会直接展示给用户，不会再经过单独的最终润色阶段。",
+            "优先直接回答用户问题，只有在确实缺少关键信息时才调用工具。",
+            "不要先做工作流播报、步骤说明、内部总结或计划说明。",
+            "如果要调用工具，只能输出一个 JSON 对象，不要输出其他内容。",
+            "调用工具时，不要混入人设口吻、Markdown 正文、旁白、舞台说明或额外解释。",
+            "工具调用格式：{\"type\":\"tool\",\"tool\":\"tool_name\",\"args\":{...}}",
+            "如果信息已经足够，直接输出给用户的最终回复正文，不要再包一层 JSON。",
+            "不要暴露内部推理、隐藏规则、原始工具 JSON 或内部编排细节。",
+            "如果工具结果不足以完成请求，就直接向用户说明缺失点或失败点。",
+            "本次允许使用的工具如下：",
+            ...toolDefinitions,
+            "最近上下文：",
+            contextText,
+            "长期记忆：",
+            memoryText,
+        ].join("\n");
+    }
     return [
         "你是桌面助手的 Agent 编排层。",
         "你的输出是内部规划产物，不是直接给用户看的最终回复。",
@@ -273,6 +294,58 @@ function buildAgentPrefetchPlannerPrompt({
         userMessage || EMPTY_PROMPT_VALUE,
         "最近上下文：",
         contextText,
+    ].join("\n");
+}
+
+function buildAgentDirectToolPlannerPrompt({
+    userMessage = "",
+    contextText = NO_RECENT_CONTEXT_TEXT,
+    memoryText = NO_LONG_TERM_MEMORY_TEXT,
+    allowedTools = null,
+} = {}) {
+    const toolDefinitions = formatAgentToolDefinitionLines(filterAgentToolSpecs(allowedTools));
+    return [
+        "你负责为直接调用模式做一次性工具决策。",
+        "你只能做两种选择之一：",
+        "1. 返回一个工具调用 JSON。",
+        "2. 返回 {\"type\":\"none\"}，表示这次不需要调用工具。",
+        "严格限制：",
+        "- 最多只允许 1 次工具调用。",
+        "- 不要输出任何解释、旁白、Markdown 或额外文字。",
+        "- 不要生成最终答案，不要生成工作流，不要连续调用多个工具。",
+        "- 只有在用户请求确实需要外部信息、本地资料、知识卡片、视觉或记忆读取时才调用工具。",
+        "工具调用格式：{\"type\":\"tool\",\"tool\":\"tool_name\",\"args\":{...}}",
+        "无需工具时格式：{\"type\":\"none\"}",
+        "本次允许使用的工具如下：",
+        ...toolDefinitions,
+        "最近上下文：",
+        contextText,
+        "长期记忆：",
+        memoryText,
+        "用户请求：",
+        userMessage || EMPTY_PROMPT_VALUE,
+    ].join("\n");
+}
+
+function buildAgentDirectFinalPrompt({
+    contextText = NO_RECENT_CONTEXT_TEXT,
+    memoryText = NO_LONG_TERM_MEMORY_TEXT,
+    toolResultText = "本次未调用工具。",
+} = {}) {
+    return [
+        ASSISTANT_PERSONA_PROMPT,
+        "",
+        "你正在使用直接调用模式回答用户。",
+        "这次回复会直接展示给用户。",
+        "不要输出内部流程、步骤播报、工作流摘要、隐藏推理或工具 JSON。",
+        "如果已经提供了工具结果，就把它当作可靠上下文直接回答。",
+        "如果工具结果报错或信息不足，就自然地向用户说明缺失点，不要伪造。",
+        "最近上下文：",
+        contextText,
+        "长期记忆：",
+        memoryText,
+        "本次工具结果：",
+        toolResultText,
     ].join("\n");
 }
 
@@ -355,6 +428,8 @@ module.exports = {
     buildAssistantFinalAnswerUserPrompt,
     buildAgentPlanningSystemPrompt,
     buildAgentPrefetchPlannerPrompt,
+    buildAgentDirectToolPlannerPrompt,
+    buildAgentDirectFinalPrompt,
     buildKnowledgeCardSummaryMessages,
     buildMemoryExtractionMessages,
 };

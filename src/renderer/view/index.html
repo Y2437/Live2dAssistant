@@ -119,6 +119,12 @@
                                     <label for="assistant-input">
                                         <input id="assistant-input" class="assistant-input" data-role="assistant-input" type="text" placeholder="输入内容，例如让看板娘总结今天的对话" autocomplete="off" spellcheck="false" />
                                     </label>
+                                    <button type="button" class="assistant-thinkToggle" data-role="assistant-think-toggle" aria-pressed="false">
+                                        <span class="assistant-thinkToggle__label">直接调用</span>
+                                        <span class="assistant-thinkToggle__track">
+                                            <span class="assistant-thinkToggle__knob"></span>
+                                        </span>
+                                    </button>
                                     <button type="button" class="assistant-send assistant-send--ghost" data-role="assistant-retry" hidden>重试</button>
                                     <button type="button" class="assistant-send assistant-send--ghost" data-role="assistant-cancel" hidden>取消</button>
                                     <button type="submit" class="assistant-send" data-role="assistant-send">发送</button>
@@ -282,7 +288,6 @@
                                 </article>
                             </div>
                         </header>
-
                         <section class="cards-screen cards-screen--list" data-role="cards-list-page">
                             <div class="cards-browser">
                                 <div class="cards-browser__main">
