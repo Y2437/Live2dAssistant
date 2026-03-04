@@ -9,6 +9,7 @@ const dom = {
     bubbleLabel: $('[data-role="assistant-bubble-label"]'),
     bubbleBody: $('[data-role="assistant-bubble-body"]'),
     bubbleExpand: $('[data-role="assistant-expand"]'),
+    chatCard: $('[data-role="assistant-chat-card"]'),
     chatLog: $('[data-role="assistant-chat-log"]'),
     chatMode: $('[data-role="assistant-chat-mode"]'),
     scrollBottom: $('[data-role="assistant-scroll-bottom"]'),
@@ -421,6 +422,9 @@ function syncRunPanel() {
     const hasStatus = Boolean(assistantState.runtimeStatus);
     const traces = assistantState.runtimeTraces || [];
     const hasData = hasStatus || traces.length > 0;
+    if (dom.chatCard) {
+        dom.chatCard.dataset.runPanelVisible = hasData ? "true" : "false";
+    }
     dom.runPanel.hidden = !hasData;
     dom.runStatus.textContent = hasStatus
         ? formatRuntimeStatus(assistantState.runtimeStatus)

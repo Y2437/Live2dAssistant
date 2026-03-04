@@ -206,10 +206,19 @@
 }
 
 .assistant-root[data-assistant-layout="expanded"] .assistant-chatCard{
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     animation: assistant-panel-drop 220ms var(--ease-out);
     position: relative;
     overflow: hidden;
+}
+
+.assistant-root[data-assistant-layout="expanded"] .assistant-chatCard[data-run-panel-visible="true"]{
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.assistant-root[data-assistant-layout="expanded"] .assistant-chatLog{
+    padding-bottom: 26px;
+    scroll-padding-bottom: 26px;
 }
 
 .assistant-root[data-assistant-layout="expanded"] .assistant-chatCard::before{
@@ -272,6 +281,12 @@
     align-content: start;
     gap: 12px;
     padding-right: 4px;
+    padding-bottom: 18px;
+    scroll-padding-bottom: 18px;
+}
+
+.assistant-chatLog > :last-child{
+    margin-bottom: 2px;
 }
 
 .assistant-chatLog:empty::before{
@@ -625,6 +640,7 @@
     display: flex;
     gap: 8px;
     align-items: center;
+    min-width: 0;
 }
 
 .assistant-inputRow--dock{
@@ -632,6 +648,7 @@
 }
 
 .assistant-form{
+    min-width: 0;
     width: 100%;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto auto;
