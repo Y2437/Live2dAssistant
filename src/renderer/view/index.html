@@ -95,26 +95,26 @@
                                 </div>
                             </section>
                             <div class="assistant-chatLog" data-role="assistant-chat-log"></div>
-                            <div class="assistant-chatTools">
-                                <button type="button" class="assistant-scrollToBottom" data-role="assistant-scroll-bottom" hidden>回到底部</button>
-                            </div>
                             <div class="assistant-inputRow assistant-inputRow--dock">
                                 <form class="assistant-form">
-                                    <div class="assistant-scope" data-role="assistant-scope">
-                                        <button type="button" class="assistant-scope__trigger" data-role="assistant-scope-trigger" aria-haspopup="true" aria-expanded="false">
-                                            <span class="assistant-scope__label">本次扩展能力</span>
-                                            <span class="assistant-scope__summary" data-role="assistant-scope-summary">全部扩展能力</span>
-                                        </button>
-                                        <div class="assistant-scope__menu" data-role="assistant-scope-menu" hidden>
-                                            <div class="assistant-scope__menuHead">
-                                                <strong class="assistant-scope__menuTitle">只控制特殊能力，基础能力默认常开</strong>
-                                                <div class="assistant-scope__menuActions">
-                                                    <button type="button" class="assistant-scope__action" data-role="assistant-scope-select-all">全部开启</button>
-                                                    <button type="button" class="assistant-scope__action" data-role="assistant-scope-clear">全部关闭</button>
+                                    <div class="assistant-form__topRow">
+                                        <div class="assistant-scope" data-role="assistant-scope">
+                                            <button type="button" class="assistant-scope__trigger" data-role="assistant-scope-trigger" aria-haspopup="true" aria-expanded="false">
+                                                <span class="assistant-scope__label">本次扩展能力</span>
+                                                <span class="assistant-scope__summary" data-role="assistant-scope-summary">全部扩展能力</span>
+                                            </button>
+                                            <div class="assistant-scope__menu" data-role="assistant-scope-menu" hidden>
+                                                <div class="assistant-scope__menuHead">
+                                                    <strong class="assistant-scope__menuTitle">只控制特殊能力，基础能力默认常开</strong>
+                                                    <div class="assistant-scope__menuActions">
+                                                        <button type="button" class="assistant-scope__action" data-role="assistant-scope-select-all">全部开启</button>
+                                                        <button type="button" class="assistant-scope__action" data-role="assistant-scope-clear">全部关闭</button>
+                                                    </div>
                                                 </div>
+                                                <div class="assistant-scope__list" data-role="assistant-scope-list"></div>
                                             </div>
-                                            <div class="assistant-scope__list" data-role="assistant-scope-list"></div>
                                         </div>
+                                        <button type="button" class="assistant-scrollToBottom" data-role="assistant-scroll-bottom" hidden>回到底部</button>
                                     </div>
                                     <label for="assistant-input">
                                         <input id="assistant-input" class="assistant-input" data-role="assistant-input" type="text" placeholder="输入内容，例如让看板娘总结今天的对话" autocomplete="off" spellcheck="false" />

@@ -639,9 +639,16 @@
     align-items: center;
 }
 
+.assistant-form__topRow{
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: stretch;
+}
+
 .assistant-scope{
     position: relative;
-    grid-column: 1 / -1;
 }
 
 .assistant-scope__trigger{
@@ -1012,8 +1019,13 @@
         grid-template-columns: minmax(0, 1fr) auto;
     }
 
+    .assistant-form__topRow,
     .assistant-form > label{
         grid-column: 1 / -1;
+    }
+
+    .assistant-form__topRow{
+        grid-template-columns: minmax(0, 1fr);
     }
 
 }
