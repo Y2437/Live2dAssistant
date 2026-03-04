@@ -1,7 +1,6 @@
-import { CONFIG } from "./config.js";
-import { marked } from "../vendor/marked/lib/marked.esm.js";
-
-const $ = (selector, root = document) => root.querySelector(selector);
+import { CONFIG } from "../core/config.js";
+import { marked } from "../../vendor/marked/lib/marked.esm.js";
+import { $ } from "../shared/dom.js";
 
 const dom = {
     root: $(".assistant-root"),
@@ -36,6 +35,10 @@ const assistantState = {
 const TIMEOUT_MS = CONFIG.LIVE2D_CONFIG.TIMEOUT_MS;
 const WIDTH_FALLBACK = CONFIG.LIVE2D_CONFIG.WIDTH;
 const HEIGHT_FALLBACK = CONFIG.LIVE2D_CONFIG.HEIGHT;
+const AUTO_EXPAND_LENGTH = CONFIG.LIVE2D_CONFIG.AUTO_EXPAND_LENGTH;
+const AUTO_EXPAND_LINES = CONFIG.LIVE2D_CONFIG.AUTO_EXPAND_LINES;
+const STREAM_DELAY_MS = CONFIG.ASSISTANT_CONFIG.STREAM_DELAY_MS;
+const NEAR_BOTTOM_OFFSET = CONFIG.ASSISTANT_CONFIG.NEAR_BOTTOM_OFFSET;
 
 function dispatchNavigate(viewKey) {
     window.dispatchEvent(new CustomEvent("shell:navigate", { detail: { viewKey } }));
@@ -45,8 +48,8 @@ function ensureBubbleMarkup() {
     if (!dom.bubble || dom.bubbleBody) return;
     dom.bubble.innerHTML = `
         <div class="assistant-bubble__head">
-            <span class="assistant-bubble__label" data-role="assistant-bubble-label">Response</span>
-            <button type="button" class="assistant-bubble__expand" data-role="assistant-expand" aria-label="Expand chat panel" hidden>
+            <span class="assistant-bubble__label" data-role="assistant-bubble-label">${CONFIG.ASSISTANT_CONFIG.BUBBLE_LABEL_RESPONSE}</span>
+            <button type="button" class="assistant-bubble__expand" data-role="assistant-expand" aria-label="${CONFIG.ASSISTANT_CONFIG.BUBBLE_EXPAND_ARIA_LABEL}" hidden>
                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                     <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/>
                 </svg>
@@ -65,7 +68,7 @@ function setLayout(expanded) {
         dom.root.dataset.assistantLayout = expanded ? "expanded" : "compact";
     }
     if (dom.chatMode) {
-        dom.chatMode.textContent = expanded ? "Right Panel" : "Bubble";
+        dom.chatMode.textContent = expanded ? CONFIG.ASSISTANT_CONFIG.CHAT_MODE_EXPANDED : CONFIG.ASSISTANT_CONFIG.CHAT_MODE_COMPACT;
     }
     if (expanded && assistantState.lastBubbleType === "chat") {
         toggleBubbleVisibility(false);
@@ -151,7 +154,7 @@ function renderMarkdown(target, text) {
 function isNearBottom() {
     if (!dom.chatLog) return true;
     const distance = dom.chatLog.scrollHeight - dom.chatLog.scrollTop - dom.chatLog.clientHeight;
-    return distance < 48;
+    return distance < NEAR_BOTTOM_OFFSET;
 }
 
 function updateScrollBottomButton() {
@@ -171,15 +174,23 @@ function scrollChatToBottom(force = false) {
 
 function updateBubbleExpandButton(type, text = "") {
     if (!dom.bubbleExpand) return;
-    const shouldShow = !assistantState.expanded && type === "chat" && text.trim().length > 120;
+    const shouldShow = !assistantState.expanded && type === "chat" && shouldExpandForChat(text);
     dom.bubbleExpand.hidden = !shouldShow;
+}
+
+function shouldExpandForChat(text = "", traces = []) {
+    const value = String(text || "");
+    const lineCount = value.split(/\r?\n/).length;
+    return value.trim().length >= AUTO_EXPAND_LENGTH || lineCount >= AUTO_EXPAND_LINES || (Array.isArray(traces) && traces.length >= 2);
 }
 
 function renderBubble(text, type = "chat") {
     if (!dom.bubble) return;
     assistantState.lastBubbleType = type;
     if (dom.bubbleLabel) {
-        dom.bubbleLabel.textContent = type === "touch" ? "Touch" : "Response";
+        dom.bubbleLabel.textContent = type === "touch"
+            ? CONFIG.ASSISTANT_CONFIG.BUBBLE_LABEL_TOUCH
+            : CONFIG.ASSISTANT_CONFIG.BUBBLE_LABEL_RESPONSE;
     }
     dom.bubble.classList.remove("is-updating");
     void dom.bubble.offsetWidth;
@@ -220,7 +231,8 @@ function makeChatEntry(role, initialText = "", status = "") {
 
 function formatTrace(trace, index) {
     const output = trace?.outputPreview ? `\n\n\`\`\`text\n${trace.outputPreview}\n\`\`\`` : "";
-    return `### Step ${index + 1}: ${trace?.tool || "tool"}\nStatus: ${trace?.status || "unknown"}${output}`;
+    const phase = trace?.phase ? `\n${CONFIG.ASSISTANT_CONFIG.TRACE_PHASE_LABEL}: ${trace.phase}` : "";
+    return `### ${CONFIG.ASSISTANT_CONFIG.TRACE_STEP_LABEL} ${index + 1}: ${trace?.tool || CONFIG.ASSISTANT_CONFIG.TRACE_DEFAULT_TOOL}\n${CONFIG.ASSISTANT_CONFIG.TRACE_STATUS_LABEL}: ${trace?.status || CONFIG.ASSISTANT_CONFIG.TRACE_DEFAULT_STATUS}${phase}${output}`;
 }
 
 function setChatStatus(entryHandle, statusText) {
@@ -245,7 +257,7 @@ async function streamMarkdown(text, onUpdate) {
     for (const char of source) {
         current += char;
         onUpdate(current);
-        await wait(14);
+        await wait(STREAM_DELAY_MS);
     }
 }
 
@@ -277,12 +289,23 @@ async function handleTouch(hitName) {
 }
 
 async function handleChat(text) {
-    makeChatEntry("user", text, "sent");
-    const assistantEntry = makeChatEntry("assistant", "Thinking...", "preparing");
+    makeChatEntry(CONFIG.ASSISTANT_CONFIG.ROLE_USER, text, CONFIG.ASSISTANT_CONFIG.STATUS_SENT);
+    const assistantEntry = makeChatEntry(
+        CONFIG.ASSISTANT_CONFIG.ROLE_ASSISTANT,
+        CONFIG.ASSISTANT_CONFIG.THINKING_TEXT,
+        CONFIG.ASSISTANT_CONFIG.STATUS_PREPARING,
+    );
     const response = await getResponse(text);
     const responseText = response?.content || "";
+    const expandForResponse = shouldExpandForChat(responseText, response?.traces);
 
-    setChatStatus(assistantEntry, "streaming");
+    if (!assistantState.expanded && expandForResponse) {
+        setLayout(true);
+        assistantState.shouldStickToBottom = true;
+        scrollChatToBottom(true);
+    }
+
+    setChatStatus(assistantEntry, CONFIG.ASSISTANT_CONFIG.STATUS_STREAMING);
     await streamMarkdown(responseText, (partialText) => {
         renderMarkdown(assistantEntry.content, partialText);
         scrollChatToBottom();
@@ -292,7 +315,11 @@ async function handleChat(text) {
     });
 
     if (Array.isArray(response?.traces) && response.traces.length) {
-        const traceEntry = makeChatEntry("agent", "", `${response.traces.length} steps`);
+        const traceEntry = makeChatEntry(
+            CONFIG.ASSISTANT_CONFIG.ROLE_AGENT,
+            "",
+            `${response.traces.length} ${CONFIG.ASSISTANT_CONFIG.TRACE_STEPS_SUFFIX}`,
+        );
         renderMarkdown(
             traceEntry.content,
             response.traces.map((trace, index) => formatTrace(trace, index)).join("\n\n"),
@@ -300,7 +327,7 @@ async function handleChat(text) {
         scrollChatToBottom(true);
     }
 
-    setChatStatus(assistantEntry, "done");
+    setChatStatus(assistantEntry, CONFIG.ASSISTANT_CONFIG.STATUS_DONE);
 
     if (assistantState.expanded) {
         updateBubbleExpandButton("touch");
@@ -312,9 +339,9 @@ async function handleChat(text) {
 function enqueue(task) {
     assistantState.queue = assistantState.queue.then(task).catch((error) => {
         console.error(error);
-        const message = "Request failed. Please retry.";
+        const message = CONFIG.ASSISTANT_CONFIG.REQUEST_FAILED_TEXT;
         renderBubble(message, "chat");
-        makeChatEntry("assistant", message, "error");
+        makeChatEntry(CONFIG.ASSISTANT_CONFIG.ROLE_ASSISTANT, message, CONFIG.ASSISTANT_CONFIG.STATUS_ERROR);
     });
     return assistantState.queue;
 }

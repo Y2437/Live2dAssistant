@@ -1,6 +1,13 @@
-const $ = (selector, root = document) => root.querySelector(selector);
-const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
-const DEFAULT_VIEW = "assistant";
+import { $, $$ } from "../shared/dom.js";
+import { CONFIG } from "../core/config.js";
+import {
+    renderAgentCapabilityList,
+    renderAgentToolList,
+    renderContextList,
+    renderMemoryList,
+} from "../settings/view.js";
+
+const DEFAULT_VIEW = CONFIG.DEFAULT_VIEW;
 
 const settingsDom = {
     root: $(".settings-root"),
@@ -16,6 +23,7 @@ const settingsDom = {
     rebuildLibraryBtn: $('[data-role="settings-rebuild-library"]'),
     extractMemoryBtn: null,
     memoryStatus: null,
+    memoryRoutineMeta: null,
 };
 
 function ensureAgentSettingsCard() {
@@ -78,6 +86,15 @@ function ensureMemoryControls() {
         settingsDom.memoryList.parentElement?.appendChild(status);
         settingsDom.memoryStatus = status;
     }
+
+    if (settingsDom.memoryList && !settingsDom.memoryRoutineMeta) {
+        const meta = document.createElement("p");
+        meta.className = "settings-inlineMeta";
+        meta.dataset.role = "settings-memory-routine-meta";
+        meta.textContent = "Daily memory routine status unavailable.";
+        settingsDom.memoryList.parentElement?.appendChild(meta);
+        settingsDom.memoryRoutineMeta = meta;
+    }
 }
 
 function setNavBtnActive(viewKey) {
@@ -139,106 +156,26 @@ function wireCustomNavigation() {
     });
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
-}
-
-function renderEmptyRecord(text) {
-    return `
-        <article class="settings-record settings-record--empty">
-            <p class="settings-record__body">${escapeHtml(text)}</p>
-        </article>
-    `;
-}
-
-function renderContextList(items) {
-    if (!settingsDom.contextList) return;
-    if (!items.length) {
-        settingsDom.contextList.innerHTML = renderEmptyRecord("No short-term context yet.");
-        return;
-    }
-
-    settingsDom.contextList.innerHTML = items.map((item, index) => `
-        <article class="settings-record">
-            <div class="settings-record__head">
-                <h5 class="settings-record__title">${item.role === "assistant" ? "Assistant" : "User"} #${index + 1}</h5>
-                <span class="settings-record__meta">${escapeHtml(item.role)}</span>
-            </div>
-            <p class="settings-record__body">${escapeHtml(item.message)}</p>
-        </article>
-    `).join("");
-}
-
-function renderMemoryList(items) {
-    if (!settingsDom.memoryList) return;
-    if (!items.length) {
-        settingsDom.memoryList.innerHTML = renderEmptyRecord("No long-term memory yet.");
-        return;
-    }
-
-    settingsDom.memoryList.innerHTML = items.map((item) => `
-        <article class="settings-record">
-            <div class="settings-record__head">
-                <div>
-                    <h5 class="settings-record__title">${escapeHtml(item.title)}</h5>
-                    <span class="settings-record__meta">${escapeHtml(item.source || "manual")}</span>
-                </div>
-                <button type="button" class="settings-record__action" data-action="delete-memory" data-memory-id="${escapeHtml(item.id)}">Delete</button>
-            </div>
-            <p class="settings-record__body">${escapeHtml(item.content)}</p>
-        </article>
-    `).join("");
-}
-
-function renderAgentCapabilityList(capabilities) {
-    if (!settingsDom.agentCapabilityList) return;
-    if (!capabilities) {
-        settingsDom.agentCapabilityList.innerHTML = renderEmptyRecord("Agent capability data is unavailable.");
-        return;
-    }
-
-    const items = [
-        ["Vision model", capabilities.visionEnabled ? "enabled" : "disabled"],
-        ["Library roots", String(capabilities.libraryRootCount ?? 0)],
-        ["Indexed files", String(capabilities.libraryFileCount ?? 0)],
-        ["Last index update", capabilities.libraryUpdatedAt || "not indexed"],
-    ];
-
-    settingsDom.agentCapabilityList.innerHTML = items.map(([title, value]) => `
-        <article class="settings-record">
-            <div class="settings-record__head">
-                <h5 class="settings-record__title">${escapeHtml(title)}</h5>
-            </div>
-            <p class="settings-record__body">${escapeHtml(value)}</p>
-        </article>
-    `).join("");
-}
-
-function renderAgentToolList(tools) {
-    if (!settingsDom.agentToolsList) return;
-    if (!Array.isArray(tools) || !tools.length) {
-        settingsDom.agentToolsList.innerHTML = renderEmptyRecord("No tools exposed.");
-        return;
-    }
-
-    settingsDom.agentToolsList.innerHTML = tools.map((toolName) => `
-        <article class="settings-record">
-            <div class="settings-record__head">
-                <h5 class="settings-record__title">${escapeHtml(toolName)}</h5>
-            </div>
-        </article>
-    `).join("");
-}
-
 function setMemoryStatus(text) {
     if (settingsDom.memoryStatus) {
         settingsDom.memoryStatus.textContent = text;
     }
+}
+
+function setMemoryRoutineMeta(meta) {
+    if (!settingsDom.memoryRoutineMeta) return;
+    if (!meta) {
+        settingsDom.memoryRoutineMeta.textContent = "Daily memory routine status unavailable.";
+        return;
+    }
+    const parts = [
+        `Daily routine: ${meta.lastStatus || "idle"}`,
+        meta.lastRunAt ? `last run ${meta.lastRunAt}` : "",
+        Number.isFinite(meta.lastAddedCount) ? `added ${meta.lastAddedCount}` : "",
+        Number.isFinite(meta.lastSkippedCount) ? `skipped ${meta.lastSkippedCount}` : "",
+        meta.lastError ? `error ${meta.lastError}` : "",
+    ].filter(Boolean);
+    settingsDom.memoryRoutineMeta.textContent = parts.join(" · ");
 }
 
 async function syncSettingsData() {
@@ -248,12 +185,15 @@ async function syncSettingsData() {
         window.api.getAiContextData(),
         window.api.getLongTermMemoryData(),
     ];
+    if (window.api.getMemoryRoutineMeta) {
+        jobs.push(window.api.getMemoryRoutineMeta());
+    }
 
     if (window.api.getAgentCapabilities) {
         jobs.push(window.api.getAgentCapabilities());
     }
 
-    const [contextData, memoryData, agentCapabilities] = await Promise.all(jobs);
+    const [contextData, memoryData, memoryRoutineMeta, agentCapabilities] = await Promise.all(jobs);
 
     if (settingsDom.contextMeta) {
         settingsDom.contextMeta.textContent = `Saved context: ${contextData.messageCount}`;
@@ -262,18 +202,31 @@ async function syncSettingsData() {
         settingsDom.contextCount.textContent = `${contextData.messageCount} messages`;
     }
     if (settingsDom.memoryCount) {
-        settingsDom.memoryCount.textContent = `${memoryData.memoryCount} memories`;
+        const activeCount = memoryData?.stats?.activeCount ?? memoryData.memoryCount;
+        const categorySummary = Object.entries(memoryData?.stats?.categoryCounts || {})
+            .slice(0, 4)
+            .map(([name, count]) => `${name}:${count}`)
+            .join(" · ");
+        settingsDom.memoryCount.textContent = `${activeCount}/${memoryData.memoryCount} active${categorySummary ? ` · ${categorySummary}` : ""}`;
     }
     if (settingsDom.agentMeta) {
         settingsDom.agentMeta.textContent = agentCapabilities
             ? `Indexed ${agentCapabilities.libraryFileCount} files`
             : "Agent unavailable";
     }
-
-    renderContextList(contextData.items || []);
-    renderMemoryList(memoryData.items || []);
-    renderAgentCapabilityList(agentCapabilities);
-    renderAgentToolList(agentCapabilities?.tools || []);
+    if (settingsDom.contextList) {
+        settingsDom.contextList.innerHTML = renderContextList(contextData.items || []);
+    }
+    if (settingsDom.memoryList) {
+        settingsDom.memoryList.innerHTML = renderMemoryList(memoryData.items || []);
+    }
+    setMemoryRoutineMeta(memoryRoutineMeta);
+    if (settingsDom.agentCapabilityList) {
+        settingsDom.agentCapabilityList.innerHTML = renderAgentCapabilityList(agentCapabilities);
+    }
+    if (settingsDom.agentToolsList) {
+        settingsDom.agentToolsList.innerHTML = renderAgentToolList(agentCapabilities?.tools || []);
+    }
 }
 
 async function handleExtractMemory() {

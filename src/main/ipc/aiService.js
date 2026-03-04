@@ -1,9 +1,9 @@
-async function chatCompletionsBigModel(message, options = {}) {
-    require("dotenv").config();
+const {ENV_CONFIG} = require("../config");
 
-    const model = options.model || process.env.AI_MODEL;
-    const baseUrl = process.env.BASE_URL;
-    const apiKey = process.env.API_KEY;
+async function chatCompletionsBigModel(message, options = {}) {
+    const model = options.model || ENV_CONFIG.AI_MODEL;
+    const baseUrl = ENV_CONFIG.BASE_URL;
+    const apiKey = ENV_CONFIG.API_KEY;
     const temperature = options.temperature ?? 0;
     const maxTokens = options.maxTokens ?? 65536;
 

@@ -1,4 +1,4 @@
-const {WIDTH, HEIGHT, WINDOW_KEYS, WINDOW_FILE_MAP, WINDOW_MODE} = require('./config');
+const {WIDTH, HEIGHT, WINDOW_KEYS, WINDOW_FILE_MAP, WINDOW_MODE} = require('../config');
 const path = require('path');
 const {app,BrowserWindow,ipcMain} = require('electron');
 class WindowManager{
@@ -13,7 +13,7 @@ class WindowManager{
                 webPreferences: {
                     nodeIntegration: false,
                     contextIsolation:true,
-                    preload: path.join(__dirname, 'preload.js'),
+                    preload: path.join(__dirname, '../preload.js'),
                 }
             },
             filePath: WINDOW_FILE_MAP[key]

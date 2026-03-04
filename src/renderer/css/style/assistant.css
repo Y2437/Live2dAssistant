@@ -61,7 +61,8 @@
     width: min(100%, 460px);
     height: 100%;
     min-height: 0;
-    transform: translateX(-12px);
+    margin-inline: auto;
+    transform: none;
 }
 
 .assistant-live2d__stage{
@@ -71,6 +72,7 @@
 }
 
 .assistant-bubble{
+    --assistant-bubble-shift-x: 0px;
     position: absolute;
     left: 12px;
     right: 12px;
@@ -90,12 +92,23 @@
     -webkit-backdrop-filter: blur(10px);
     opacity: 0;
     visibility: hidden;
-    transform: translateY(20px) scale(0.95);
+    transform: translate(var(--assistant-bubble-shift-x), 20px) scale(0.95);
     transition: opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
         transform 400ms cubic-bezier(0.16, 1, 0.3, 1),
         filter 400ms cubic-bezier(0.16, 1, 0.3, 1),
         visibility 0ms linear 400ms;
     max-height: min(52%, 260px);
+}
+
+.assistant-root[data-assistant-layout="expanded"] .assistant-bubble{
+    top: 12px;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: min(320px, calc(100% - 24px));
+    max-height: min(36%, 220px);
+    --assistant-bubble-shift-x: -50%;
+    transform-origin: left top;
 }
 
 .assistant-bubble__head{
@@ -145,14 +158,14 @@
 }
 
 @keyframes bubble-float {
-    0%, 100% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-2px) scale(1); }
+    0%, 100% { transform: translate(var(--assistant-bubble-shift-x), 0) scale(1); }
+    50% { transform: translate(var(--assistant-bubble-shift-x), -2px) scale(1); }
 }
 
 .assistant-bubble.is-visible{
     opacity: 1;
     visibility: visible;
-    transform: translateY(0) scale(1);
+    transform: translate(var(--assistant-bubble-shift-x), 0) scale(1);
     animation: bubble-float 6s ease-in-out infinite, bubble-glow 4s ease-in-out infinite;
     transition: opacity 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
         transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -161,9 +174,9 @@
 }
 
 @keyframes content-update {
-    0% { opacity: 0.7; transform: scale(0.98); }
-    50% { opacity: 1; transform: scale(1.02); }
-    100% { opacity: 1; transform: scale(1); }
+    0% { opacity: 0.7; transform: translate(var(--assistant-bubble-shift-x), 0) scale(0.98); }
+    50% { opacity: 1; transform: translate(var(--assistant-bubble-shift-x), 0) scale(1.02); }
+    100% { opacity: 1; transform: translate(var(--assistant-bubble-shift-x), 0) scale(1); }
 }
 
 .assistant-bubble.is-updating{
@@ -172,7 +185,7 @@
 
 .assistant-bubble.is-hiding{
     opacity: 0;
-    transform: translateY(-10px) scale(0.98);
+    transform: translate(var(--assistant-bubble-shift-x), -10px) scale(0.98);
     transition: opacity 300ms cubic-bezier(0.4, 0, 1, 1),
         transform 300ms cubic-bezier(0.4, 0, 1, 1),
         filter 300ms cubic-bezier(0.4, 0, 1, 1);
@@ -194,6 +207,17 @@
 .assistant-root[data-assistant-layout="expanded"] .assistant-chatCard{
     grid-template-rows: auto minmax(0, 1fr) auto auto auto;
     animation: assistant-panel-drop 220ms var(--ease-out);
+    position: relative;
+    overflow: hidden;
+}
+
+.assistant-root[data-assistant-layout="expanded"] .assistant-chatCard::before{
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 5px;
+    background: linear-gradient(90deg, transparent, currentColor, transparent);
+    opacity: 0.16;
 }
 
 @keyframes assistant-panel-drop {
@@ -249,12 +273,31 @@
     padding-right: 4px;
 }
 
+.assistant-chatLog:empty::before{
+    content: "Long replies and agent traces will appear here.";
+    font-size: 12px;
+    line-height: 1.6;
+    opacity: 0.72;
+}
+
 .assistant-chatEntry{
     display: grid;
     gap: 8px;
     padding: 12px;
     border-style: solid;
     border-width: 1px;
+    animation: assistant-message-rise 180ms var(--ease-out);
+}
+
+@keyframes assistant-message-rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .assistant-chatEntry__meta{

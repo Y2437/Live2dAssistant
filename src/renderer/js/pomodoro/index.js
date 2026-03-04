@@ -1,5 +1,4 @@
-const $ = (sel, el = document) => el.querySelector(sel);
-const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+import { $, $$ } from "../shared/dom.js";
 
 const dom = {
     root: $('[data-pomo="root"]'),

@@ -1,62 +1,9 @@
-const PAGE_SIZE = 6;
+import { marked } from "../../vendor/marked/lib/marked.esm.js";
+import { CONFIG } from "../core/config.js";
+import { formatDate, stripMarkdown } from "./markdown.js";
+import { escapeHtml } from "../shared/dom.js";
 
-const COPY = {
-    cardsTotal: "\u5361\u7247\u603b\u6570",
-    categoryTotal: "\u5206\u7c7b\u6570",
-    title: "\u77e5\u8bc6\u5361\u7247\u7bb1",
-    desc: "\u9ed8\u8ba4\u663e\u793a\u5361\u7247\u5217\u8868\u3002\u5355\u51fb\u9009\u4e2d\uff0c\u53cc\u51fb\u6253\u5f00\uff1b\u65b0\u5efa\u548c\u7f16\u8f91\u5728\u72ec\u7acb\u5de5\u4f5c\u533a\u5185\u5b8c\u6210\u3002",
-    searchLabel: "\u641c\u7d22",
-    searchPlaceholder: "\u6309\u6807\u9898\u3001\u5206\u7c7b\u6216\u6b63\u6587\u5185\u5bb9\u641c\u7d22",
-    create: "\u65b0\u5efa",
-    edit: "\u7f16\u8f91",
-    remove: "\u5220\u9664",
-    category: "\u5206\u7c7b",
-    allCategories: "\u5168\u90e8\u5206\u7c7b",
-    backToList: "\u8fd4\u56de\u5361\u7247\u5217\u8868",
-    createMode: "\u65b0\u5efa\u5361\u7247",
-    editMode: "\u7f16\u8f91\u5361\u7247",
-    createTitle: "\u6574\u7406\u4e00\u5f20\u65b0\u7684\u77e5\u8bc6\u5361\u7247",
-    editTitle: "\u8c03\u6574\u8fd9\u5f20\u77e5\u8bc6\u5361\u7247",
-    editorDesc: "\u6807\u9898\u3001\u5206\u7c7b\u4e0e\u6458\u8981\u96c6\u4e2d\u5728\u4e0a\u65b9\uff0c\u6b63\u6587\u652f\u6301 Markdown\uff0c\u53f3\u4fa7\u53ef\u5b9e\u65f6\u68c0\u67e5\u6392\u7248\u6548\u679c\u3002",
-    save: "\u4fdd\u5b58\u5361\u7247",
-    cancel: "\u53d6\u6d88",
-    titleField: "\u6807\u9898",
-    categoryField: "\u5206\u7c7b",
-    editorField: "\u7f16\u8f91\u533a",
-    previewField: "\u9884\u89c8\u533a",
-    summaryField: "\u5361\u7247\u6458\u8981",
-    summaryPlaceholder: "\u5728\u8fd9\u91cc\u67e5\u770b\u6216\u624b\u52a8\u8c03\u6574\u5361\u7247\u6458\u8981",
-    summaryGenerate: "\u667a\u80fd\u751f\u6210\u6458\u8981",
-    summaryGenerating: "\u6b63\u5728\u751f\u6210\u6458\u8981...",
-    titlePlaceholder: "\u4f8b\u5982\uff1a\u4e09\u6708\u9879\u76ee\u5207\u6362\u7b56\u7565",
-    categoryPlaceholder: "\u4f8b\u5982\uff1a\u9879\u76ee\u3001\u7075\u611f\u3001\u8bbe\u5b9a",
-    contentPlaceholder: "\u8f93\u5165 Markdown \u5185\u5bb9",
-    localStatus: "\u5185\u5bb9\u4f1a\u76f4\u63a5\u5199\u5165\u672c\u5730 JSON\u3002",
-    editingCreate: "\u7f16\u8f91\u4e2d\uff0c\u53ef\u968f\u65f6\u4fdd\u5b58\u5361\u7247\u3002",
-    editingUpdate: "\u7f16\u8f91\u4e2d\uff0c\u53ef\u968f\u65f6\u4fdd\u5b58\u66f4\u65b0\u3002",
-    savingCreate: "\u6b63\u5728\u4fdd\u5b58\u5361\u7247...",
-    savingUpdate: "\u6b63\u5728\u66f4\u65b0\u5361\u7247...",
-    savedCreate: "\u5df2\u4fdd\u5b58\uff1a",
-    savedUpdate: "\u5df2\u66f4\u65b0\uff1a",
-    untitled: "\u672a\u547d\u540d\u5361\u7247",
-    uncategorized: "\u672a\u5206\u7c7b",
-    previewEmpty: "\u5c1a\u672a\u586b\u5199\u5185\u5bb9\u3002",
-    noTime: "\u672a\u8bb0\u5f55\u65f6\u95f4",
-    pagePrev: "\u4e0a\u4e00\u9875",
-    pageNext: "\u4e0b\u4e00\u9875",
-    pageMeta: (page, totalPages, totalItems) => `\u7b2c ${page} / ${totalPages} \u9875\uff0c\u5171 ${totalItems} \u6761`,
-    categoriesInline: (count) => `${count} \u7c7b`,
-    creatorPrefix: "\u521b\u5efa\u8005",
-    createdPrefix: "\u521b\u5efa\u65f6\u95f4",
-    editHint: (title) => `\u6b63\u5728\u7f16\u8f91\uff1a${title}`,
-    emptyTitle: "\u6ca1\u6709\u5339\u914d\u7684\u77e5\u8bc6\u5361\u7247",
-    emptyDesc: "\u53ef\u4ee5\u8c03\u6574\u641c\u7d22\u6216\u5207\u6362\u5206\u7c7b\uff0c\u4e5f\u53ef\u4ee5\u76f4\u63a5\u65b0\u5efa\u5361\u7247\u3002",
-    modalLabel: "\u77e5\u8bc6\u5361\u7247\u8be6\u60c5",
-    confirmCreateAbandon: "\u5f53\u524d\u6709\u672a\u4fdd\u5b58\u5185\u5bb9\uff0c\u786e\u5b9a\u653e\u5f03\u5e76\u65b0\u5efa\u5361\u7247\u5417\uff1f",
-    confirmEditAbandon: "\u5f53\u524d\u6709\u672a\u4fdd\u5b58\u5185\u5bb9\uff0c\u786e\u5b9a\u653e\u5f03\u5e76\u5207\u6362\u5230\u5176\u4ed6\u5361\u7247\u5417\uff1f",
-    confirmBackAbandon: "\u5f53\u524d\u6709\u672a\u4fdd\u5b58\u5185\u5bb9\uff0c\u786e\u5b9a\u8fd4\u56de\u5217\u8868\u5417\uff1f",
-    confirmDelete: (title) => `\u786e\u5b9a\u5220\u9664\u5361\u7247\u201c${title}\u201d\u5417\uff1f`,
-};
+const { COPY, PAGE_SIZE } = CONFIG.CARDS_CONFIG;
 
 const cardsState = {
     items: [],
@@ -107,170 +54,6 @@ const cardsDom = {
     modalTime: document.querySelector('[data-role="cards-modal-time"]'),
     modalContent: document.querySelector('[data-role="cards-modal-content"]'),
 };
-
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
-}
-
-function stripMarkdown(value) {
-    return String(value || "")
-        .replace(/```[\s\S]*?```/g, " ")
-        .replace(/`([^`]+)`/g, "$1")
-        .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
-        .replace(/^(#{1,6}\s+)/gm, "")
-        .replace(/^>\s?/gm, "")
-        .replace(/^[-*]\s+/gm, "")
-        .replace(/^\d+\.\s+/gm, "")
-        .replace(/[*_~]/g, "")
-        .replace(/\n+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
-function renderInlineMarkdown(value) {
-    return escapeHtml(value)
-        .replace(/`([^`]+)`/g, "<code>$1</code>")
-        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-        .replace(/__([^_]+)__/g, "<strong>$1</strong>")
-        .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>")
-        .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>")
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer noopener">$1</a>');
-}
-
-function renderMarkdown(value) {
-    const source = String(value || "").replace(/\r\n/g, "\n");
-    if (!source.trim()) {
-        return `<div class="cards-markdown__empty">${COPY.previewEmpty}</div>`;
-    }
-
-    const codeBlocks = [];
-    const placeholderSource = source.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_, language, code) => {
-        const token = `@@CODEBLOCK_${codeBlocks.length}@@`;
-        codeBlocks.push({language: language || "", code});
-        return token;
-    });
-
-    const html = [];
-    const lines = placeholderSource.split("\n");
-    let paragraph = [];
-    let listType = "";
-    let listItems = [];
-    let quoteLines = [];
-
-    const flushParagraph = () => {
-        if (!paragraph.length) return;
-        html.push(`<p>${renderInlineMarkdown(paragraph.join("<br>"))}</p>`);
-        paragraph = [];
-    };
-
-    const flushList = () => {
-        if (!listItems.length) return;
-        html.push(`<${listType}>${listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</${listType}>`);
-        listItems = [];
-        listType = "";
-    };
-
-    const flushQuote = () => {
-        if (!quoteLines.length) return;
-        html.push(`<blockquote>${quoteLines.map((line) => `<p>${renderInlineMarkdown(line)}</p>`).join("")}</blockquote>`);
-        quoteLines = [];
-    };
-
-    lines.forEach((rawLine) => {
-        const trimmed = rawLine.trim();
-        if (!trimmed) {
-            flushParagraph();
-            flushList();
-            flushQuote();
-            return;
-        }
-
-        if (/^@@CODEBLOCK_\d+@@$/.test(trimmed)) {
-            flushParagraph();
-            flushList();
-            flushQuote();
-            const block = codeBlocks[Number(trimmed.match(/\d+/)?.[0] || 0)];
-            const language = block?.language ? `<span class="cards-markdown__lang">${escapeHtml(block.language)}</span>` : "";
-            html.push(`<pre class="cards-markdown__pre">${language}<code>${escapeHtml(block?.code || "").trimEnd()}</code></pre>`);
-            return;
-        }
-
-        const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
-        if (heading) {
-            flushParagraph();
-            flushList();
-            flushQuote();
-            const level = Math.min(6, heading[1].length);
-            html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
-            return;
-        }
-
-        const quote = trimmed.match(/^>\s?(.*)$/);
-        if (quote) {
-            flushParagraph();
-            flushList();
-            quoteLines.push(quote[1] || "");
-            return;
-        }
-
-        const ordered = trimmed.match(/^\d+\.\s+(.+)$/);
-        if (ordered) {
-            flushParagraph();
-            flushQuote();
-            if (listType && listType !== "ol") {
-                flushList();
-            }
-            listType = "ol";
-            listItems.push(ordered[1]);
-            return;
-        }
-
-        const unordered = trimmed.match(/^[-*]\s+(.+)$/);
-        if (unordered) {
-            flushParagraph();
-            flushQuote();
-            if (listType && listType !== "ul") {
-                flushList();
-            }
-            listType = "ul";
-            listItems.push(unordered[1]);
-            return;
-        }
-
-        flushList();
-        flushQuote();
-        paragraph.push(trimmed);
-    });
-
-    flushParagraph();
-    flushList();
-    flushQuote();
-
-    return html.join("");
-}
-
-function formatDate(value) {
-    if (!value) {
-        return COPY.noTime;
-    }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
-    return new Intl.DateTimeFormat("zh-CN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-    }).format(date);
-}
 
 function getCategories() {
     return Array.from(new Set(cardsState.items.map((item) => item.category).filter(Boolean)))
@@ -482,9 +265,17 @@ function renderEditorPreview() {
             </div>
             <h3>${escapeHtml(title)}</h3>
             ${summary ? `<p class="cards-markdown__lead">${escapeHtml(summary)}</p>` : ""}
-            ${renderMarkdown(content)}
+            ${renderCardMarkdown(content)}
         </article>
     `;
+}
+
+function renderCardMarkdown(value) {
+    const source = String(value || "");
+    if (!source.trim()) {
+        return `<div class="cards-markdown__empty">${COPY.previewEmpty}</div>`;
+    }
+    return marked.parse(source);
 }
 
 function syncSelection() {
@@ -625,8 +416,8 @@ function openCardDetail(cardId) {
     }
     cardsDom.modalTitle.textContent = card.title;
     cardsDom.modalCategory.textContent = card.category;
-    cardsDom.modalTime.textContent = formatDate(card.updatedAt || card.createdAt);
-    cardsDom.modalContent.innerHTML = `<article class="cards-markdown">${renderMarkdown(card.content)}</article>`;
+    cardsDom.modalTime.textContent = formatDate(card.updatedAt || card.createdAt, COPY.noTime);
+    cardsDom.modalContent.innerHTML = `<article class="cards-markdown">${renderCardMarkdown(card.content)}</article>`;
     cardsDom.modal.hidden = false;
 }
 
@@ -749,7 +540,7 @@ function renderGrid() {
             <article class="cards-card${selected ? " is-selected" : ""}" data-role="cards-card" data-card-id="${escapeHtml(item.id)}" tabindex="0">
                 <div class="cards-card__meta">
                     <span class="cards-card__tag">${escapeHtml(item.category || COPY.uncategorized)}</span>
-                    <span class="cards-card__time">${escapeHtml(`${COPY.createdPrefix} ${formatDate(item.createdAt)}`)}</span>
+                    <span class="cards-card__time">${escapeHtml(`${COPY.createdPrefix} ${formatDate(item.createdAt, COPY.noTime)}`)}</span>
                 </div>
                 <h4 class="cards-card__title">${escapeHtml(item.title || COPY.untitled)}</h4>
                 <p class="cards-card__excerpt">${escapeHtml(summary)}</p>

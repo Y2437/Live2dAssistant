@@ -1,8 +1,32 @@
-const {ipcMain} = require('electron');
+﻿const {ipcMain} = require('electron');
 const {aiChat, aiChatWithModel} = require('./aiService.js');
 const {AgentService} = require("./agentService");
+const {
+    normalizeAssistantContext,
+    normalizeLongTermMemory,
+    normalizeMemoryCategory,
+    normalizeMemoryTags,
+    normalizeMemoryConfidence,
+    normalizeMemoryStatus,
+    buildMemoryFingerprint,
+    isMemoryNoise,
+    normalizeMemoryRoutineMeta,
+    stripMarkdownForSummary,
+    buildKnowledgeCardFallbackSummary,
+    validateKnowledgeCardPayload,
+    normalizeKnowledgeCards,
+    buildKnowledgeCardSummaryMessages,
+} = require("./ipcDataUtils");
+const {
+    registerCoreHandlers,
+    registerAiChatHandlers,
+    registerContextHandlers,
+    registerAgentHandlers,
+    registerPomodoroHandlers,
+    registerKnowledgeCardHandlers,
+} = require("./ipcRegisterHandlers");
 const fs = require("fs/promises");
-const {wm} = require("../WindowManager");
+const {wm} = require("../window/WindowManager");
 const {
     WIDTH,
     HEIGHT,
@@ -13,13 +37,24 @@ const {
     AI_CONTEXT_JSON_PATH,
     AI_LONG_TERM_MEMORY_JSON_PATH,
     KNOWLEDGE_CARDS_JSON_PATH,
+    AI_MEMORY_ROUTINE_JSON_PATH,
+    ENV_CONFIG,
 } = require('../config');
+// Main-process IPC orchestration for chat, memory, cards, and agent wiring.
 class ipcRegister{
     static assistantContext = [];
     static assistantLongTermMemory = [];
     static knowledgeCards = [];
     static MAX_CONTEXT_MESSAGES = 32;
     static agentService = null;
+    static memoryRoutineMeta = {
+        lastExtractionDate: "",
+        lastRunAt: "",
+        lastStatus: "idle",
+        lastAddedCount: 0,
+        lastSkippedCount: 0,
+        lastError: "",
+    };
     constructor(ipc){
     }
     static buildAiChatMessages(message){
@@ -36,15 +71,7 @@ class ipcRegister{
         this.assistantContext = this.assistantContext.slice(-this.MAX_CONTEXT_MESSAGES);
     }
     static normalizeAssistantContext(data){
-        if(!Array.isArray(data)){
-            return [];
-        }
-        return data.filter((item)=>{
-            return item
-                && (item.role === "user" || item.role === "assistant")
-                && typeof item.message === "string"
-                && item.message.trim() !== "";
-        }).map((item)=>({role:item.role,message:item.message}));
+        return normalizeAssistantContext(data);
     }
     static async saveAssistantContext(){
         await fs.writeFile(AI_CONTEXT_JSON_PATH, JSON.stringify(this.assistantContext, null, 2), "utf-8");
@@ -64,21 +91,54 @@ class ipcRegister{
         }
     }
     static normalizeLongTermMemory(data){
-        if(!Array.isArray(data)){
-            return [];
+        return normalizeLongTermMemory(data);
+    }
+    static normalizeMemoryCategory(value, title = "", content = ""){
+        return normalizeMemoryCategory(value, title, content);
+    }
+    static normalizeMemoryTags(value, title = "", content = ""){
+        return normalizeMemoryTags(value, title, content);
+    }
+    static normalizeMemoryConfidence(value){
+        return normalizeMemoryConfidence(value);
+    }
+    static normalizeMemoryStatus(value){
+        return normalizeMemoryStatus(value);
+    }
+    static buildMemoryFingerprint(title, content){
+        return buildMemoryFingerprint(title, content);
+    }
+    static isMemoryNoise(title, content){
+        return isMemoryNoise(title, content);
+    }
+    static findDuplicateMemoryIndex(title, content){
+        const fingerprint = this.buildMemoryFingerprint(title, content);
+        return this.assistantLongTermMemory.findIndex((item)=>{
+            if(item.fingerprint === fingerprint){
+                return true;
+            }
+            const titleValue = item.title.trim().toLowerCase();
+            const contentValue = item.content.trim().toLowerCase();
+            return titleValue === title.trim().toLowerCase()
+                || contentValue === content.trim().toLowerCase()
+                || contentValue.includes(content.trim().toLowerCase())
+                || content.trim().toLowerCase().includes(contentValue);
+        });
+    }
+    static buildLongTermMemoryStats(items = this.assistantLongTermMemory){
+        const categoryCounts = {};
+        let activeCount = 0;
+        for(const item of items){
+            categoryCounts[item.category] = (categoryCounts[item.category] || 0) + 1;
+            if(item.status !== "archived"){
+                activeCount += 1;
+            }
         }
-        return data.filter((item)=>{
-            return item
-                && typeof item.title === "string"
-                && item.title.trim() !== ""
-                && typeof item.content === "string";
-        }).map((item)=>({
-            id: item.id ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            title: item.title,
-            content: item.content,
-            source: typeof item.source === "string" ? item.source : "manual",
-            updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : "",
-        }));
+        return {
+            totalCount: items.length,
+            activeCount,
+            categoryCounts,
+        };
     }
     static async saveLongTermMemory(){
         await fs.writeFile(AI_LONG_TERM_MEMORY_JSON_PATH, JSON.stringify(this.assistantLongTermMemory, null, 2), "utf-8");
@@ -111,7 +171,30 @@ class ipcRegister{
         return {
             memoryCount: this.assistantLongTermMemory.length,
             items: this.assistantLongTermMemory,
+            stats: this.buildLongTermMemoryStats(),
         };
+    }
+    static normalizeMemoryRoutineMeta(data){
+        return normalizeMemoryRoutineMeta(this.memoryRoutineMeta, data);
+    }
+    static async saveMemoryRoutineMeta(){
+        await fs.writeFile(AI_MEMORY_ROUTINE_JSON_PATH, JSON.stringify(this.memoryRoutineMeta, null, 2), "utf-8");
+    }
+    static async loadMemoryRoutineMeta(){
+        try{
+            const raw = await fs.readFile(AI_MEMORY_ROUTINE_JSON_PATH, "utf8");
+            this.memoryRoutineMeta = this.normalizeMemoryRoutineMeta(JSON.parse(raw));
+        }catch(err){
+            if(err.code === "ENOENT"){
+                this.memoryRoutineMeta = this.normalizeMemoryRoutineMeta({});
+                await this.saveMemoryRoutineMeta();
+                return;
+            }
+            throw err;
+        }
+    }
+    static getMemoryRoutineMeta(){
+        return {...this.memoryRoutineMeta};
     }
     static async addLongTermMemory(data){
         const title = typeof data?.title === "string" ? data.title.trim() : "";
@@ -122,14 +205,42 @@ class ipcRegister{
         if(!content){
             throw new Error("Memory content is required.");
         }
+        if(this.isMemoryNoise(title, content)){
+            throw new Error("Memory content is too noisy to store.");
+        }
         const now = new Date().toISOString();
         const record = {
             id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
             title,
             content,
             source: typeof data?.source === "string" && data.source.trim() ? data.source.trim() : "agent",
+            category: this.normalizeMemoryCategory(data?.category, title, content),
+            tags: this.normalizeMemoryTags(data?.tags, title, content),
+            confidence: this.normalizeMemoryConfidence(data?.confidence),
+            status: this.normalizeMemoryStatus(data?.status),
+            fingerprint: this.buildMemoryFingerprint(title, content),
             updatedAt: now,
         };
+        const duplicateIndex = this.findDuplicateMemoryIndex(title, content);
+        if(duplicateIndex !== -1){
+            const existing = this.assistantLongTermMemory[duplicateIndex];
+            this.assistantLongTermMemory[duplicateIndex] = {
+                ...existing,
+                ...record,
+                id: existing.id,
+                createdAt: existing.createdAt || now,
+                updatedAt: now,
+                source: existing.source || record.source,
+                status: existing.status === "archived" ? "active" : record.status,
+                confidence: Math.max(existing.confidence || 0, record.confidence || 0),
+                tags: Array.from(new Set([...(existing.tags || []), ...(record.tags || [])])).slice(0, 8),
+            };
+            const merged = this.assistantLongTermMemory.splice(duplicateIndex, 1)[0];
+            this.assistantLongTermMemory.unshift(merged);
+            await this.saveLongTermMemory();
+            return merged;
+        }
+        record.createdAt = now;
         this.assistantLongTermMemory.unshift(record);
         await this.saveLongTermMemory();
         return record;
@@ -153,12 +264,15 @@ class ipcRegister{
                 message: [
                     "You extract durable user memory from chat history.",
                     "Return valid JSON only.",
-                    "Schema: {\"memories\":[{\"title\":\"...\",\"content\":\"...\",\"source\":\"daily-extract\"}]}",
+                    "Schema: {\"memories\":[{\"title\":\"...\",\"content\":\"...\",\"source\":\"daily-extract\",\"category\":\"project\",\"tags\":[\"tag\"],\"confidence\":0.82}]}",
                     "Rules:",
                     "- Keep only stable, reusable facts, preferences, projects, constraints, or long-running goals.",
                     "- Ignore one-off small talk.",
                     "- At most 6 memories.",
                     "- Each memory should be concise and deduplicated.",
+                    "- Add category from: identity, preference, project, constraint, plan, relationship, workflow, reference, other.",
+                    "- Add tags as short lowercase keywords.",
+                    "- Add confidence from 0 to 1.",
                 ].join("\n"),
             },
             {
@@ -195,13 +309,23 @@ class ipcRegister{
     static async extractLongTermMemoriesFromContext(){
         const contextItems = this.assistantContext.slice(-16);
         if(!contextItems.length){
+            this.memoryRoutineMeta = {
+                ...this.memoryRoutineMeta,
+                lastRunAt: new Date().toISOString(),
+                lastStatus: "idle",
+                lastError: "",
+                lastAddedCount: 0,
+                lastSkippedCount: 0,
+            };
+            await this.saveMemoryRoutineMeta();
             return {
                 added: [],
                 skipped: [],
                 data: this.getLongTermMemoryData(),
+                meta: this.getMemoryRoutineMeta(),
             };
         }
-        const model = process.env.AI_SUMMARY_MODEL || process.env.AI_MODEL;
+        const model = ENV_CONFIG.AI_SUMMARY_MODEL || ENV_CONFIG.AI_MODEL;
         if(!model){
             throw new Error("Missing memory extraction model configuration.");
         }
@@ -221,11 +345,11 @@ class ipcRegister{
             if(!title || !content){
                 continue;
             }
-            const duplicate = this.assistantLongTermMemory.find((memory)=>{
-                return memory.title.trim().toLowerCase() === title.toLowerCase()
-                    || memory.content.trim().toLowerCase() === content.toLowerCase();
-            });
-            if(duplicate){
+            if(this.isMemoryNoise(title, content)){
+                skipped.push({title, reason: "noise"});
+                continue;
+            }
+            if(this.findDuplicateMemoryIndex(title, content) !== -1){
                 skipped.push({title, reason: "duplicate"});
                 continue;
             }
@@ -233,48 +357,47 @@ class ipcRegister{
                 title,
                 content,
                 source: typeof item?.source === "string" && item.source.trim() ? item.source.trim() : "daily-extract",
+                category: item?.category,
+                tags: item?.tags,
+                confidence: item?.confidence,
             }));
         }
+        this.memoryRoutineMeta = {
+            ...this.memoryRoutineMeta,
+            lastExtractionDate: new Date().toISOString().slice(0, 10),
+            lastRunAt: new Date().toISOString(),
+            lastStatus: "success",
+            lastAddedCount: added.length,
+            lastSkippedCount: skipped.length,
+            lastError: "",
+        };
+        await this.saveMemoryRoutineMeta();
         return {
             added,
             skipped,
             data: this.getLongTermMemoryData(),
+            meta: this.getMemoryRoutineMeta(),
         };
     }
-    static normalizeKnowledgeCards(data){
-        if(!Array.isArray(data)){
-            return [];
+    static async maybeRunDailyMemoryExtraction(){
+        const today = new Date().toISOString().slice(0, 10);
+        if(this.memoryRoutineMeta.lastExtractionDate === today){
+            return this.getMemoryRoutineMeta();
         }
-        return data.filter((item)=>{
-            return item
-                && typeof item.title === "string"
-                && item.title.trim() !== ""
-                && typeof item.content === "string";
-        }).map((item)=>({
-            id: typeof item.id === "string" && item.id ? item.id : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            title: item.title.trim(),
-            content: item.content,
-            category: typeof item.category === "string" && item.category.trim() ? item.category.trim() : "未分类",
-            source: typeof item.source === "string" && item.source.trim() ? item.source.trim() : "user",
-            createdAt: typeof item.createdAt === "string" ? item.createdAt : "",
-            updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : "",
-        }));
-    }
-    static async saveKnowledgeCards(){
-        await fs.writeFile(KNOWLEDGE_CARDS_JSON_PATH, JSON.stringify(this.knowledgeCards, null, 2), "utf-8");
-    }
-    static async loadKnowledgeCards(){
         try{
-            const raw = await fs.readFile(KNOWLEDGE_CARDS_JSON_PATH, "utf8");
-            this.knowledgeCards = this.normalizeKnowledgeCards(JSON.parse(raw));
+            await this.extractLongTermMemoriesFromContext();
         }catch(err){
-            if(err.code === "ENOENT"){
-                this.knowledgeCards = [];
-                await this.saveKnowledgeCards();
-                return;
-            }
-            throw err;
+            this.memoryRoutineMeta = {
+                ...this.memoryRoutineMeta,
+                lastExtractionDate: today,
+                lastRunAt: new Date().toISOString(),
+                lastStatus: "error",
+                lastError: err?.message || String(err),
+            };
+            await this.saveMemoryRoutineMeta();
+            console.warn("[memory-routine] daily extraction failed:", err?.message || err);
         }
+        return this.getMemoryRoutineMeta();
     }
     static getKnowledgeCardsData(){
         return {
@@ -292,62 +415,41 @@ class ipcRegister{
                 })),
         };
     }
+    static async saveKnowledgeCards(){
+        await fs.writeFile(KNOWLEDGE_CARDS_JSON_PATH, JSON.stringify(this.knowledgeCards, null, 2), "utf-8");
+    }
     static validateKnowledgeCardPayload(data, options = {}){
-        const title = typeof data?.title === "string" ? data.title.trim() : "";
-        const content = typeof data?.content === "string" ? data.content.trim() : "";
-        if(!title){
-            throw new Error("Card title is required.");
-        }
-        if(!content){
-            throw new Error("Card content is required.");
-        }
-        return {
-            id: options.requireId ? (typeof data?.id === "string" ? data.id.trim() : "") : "",
-            title,
-            content,
-            summary: typeof data?.summary === "string" ? data.summary.trim() : "",
-            category: typeof data?.category === "string" && data.category.trim() ? data.category.trim() : "未分类",
-            source: typeof data?.source === "string" && data.source.trim() ? data.source.trim() : "user",
-        };
+        return validateKnowledgeCardPayload(data, options);
     }
     static getAssistantReplyContent(response){
         return response?.choices?.[0]?.message?.content ?? "";
     }
+    static async recordAssistantExchange(userMessage, assistantMessage){
+        this.assistantContext.push({role: "user", message: userMessage});
+        if(assistantMessage){
+            this.assistantContext.push({role: "assistant", message: assistantMessage});
+        }
+        this.trimAssistantContext();
+        await this.saveAssistantContext();
+    }
+    static async runAiChat(message){
+        const aiChatMessage = this.buildAiChatMessages(message);
+        const response = await aiChat(aiChatMessage);
+        const assistantReply = this.getAssistantReplyContent(response);
+        await this.recordAssistantExchange(message, assistantReply);
+        return response;
+    }
     static stripMarkdownForSummary(content){
-        return String(content || "")
-            .replace(/```[\s\S]*?```/g, " ")
-            .replace(/`([^`]+)`/g, "$1")
-            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
-            .replace(/^(#{1,6}\s+)/gm, "")
-            .replace(/^>\s?/gm, "")
-            .replace(/^[-*]\s+/gm, "")
-            .replace(/^\d+\.\s+/gm, "")
-            .replace(/[*_~]/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
+        return stripMarkdownForSummary(content);
     }
     static buildKnowledgeCardFallbackSummary(data){
-        const plain = this.stripMarkdownForSummary(data?.content || "");
-        if(!plain){
-            return typeof data?.title === "string" ? data.title.trim() : "";
-        }
-        return plain.length > 84 ? `${plain.slice(0, 84).trim()}...` : plain;
+        return buildKnowledgeCardFallbackSummary(data);
     }
     static buildKnowledgeCardSummaryMessages(data){
-        return [
-            {
-                role: "system",
-                message: "你是知识卡片摘要助手。请基于标题、分类和正文，生成一条简洁客观的中文摘要。要求：1. 18到48字；2. 不使用Markdown；3. 不使用项目符号；4. 不重复标题；5. 只输出摘要正文。",
-            },
-            {
-                role: "user",
-                message: `标题：${data.title}\n分类：${data.category}\n正文：${data.content}`,
-            },
-        ];
+        return buildKnowledgeCardSummaryMessages(data);
     }
     static async generateKnowledgeCardSummary(data){
-        const model = process.env.AI_SUMMARY_MODEL || process.env.AI_MODEL;
+        const model = ENV_CONFIG.AI_SUMMARY_MODEL || ENV_CONFIG.AI_MODEL;
         if(!model){
             console.log("[cards-summary] fallback summary model missing");
             return this.buildKnowledgeCardFallbackSummary(data);
@@ -365,7 +467,7 @@ class ipcRegister{
             });
             const summary = this.getAssistantReplyContent(response)
                 .replace(/\s+/g, " ")
-                .replace(/^["'“”]+|["'“”]+$/g, "")
+                .replace(/^["']+|["']+$/g, "")
                 .trim();
             if(summary){
                 console.log("[cards-summary] success", {model, summary});
@@ -380,109 +482,62 @@ class ipcRegister{
         });
         return this.buildKnowledgeCardFallbackSummary(data);
     }
-    static registerPing(){
-        ipcMain.handle('app:ping',()=>{return "pong"})
+    static normalizeKnowledgeCards(data){
+        return normalizeKnowledgeCards(data);
     }
-    static registerOpenWindow(){
-        ipcMain.handle("app:openWindow",async (event,windowKey)=>{
-            if(!windowKey){
-                throw new Error("Window key is missing!");
-            }else if(typeof windowKey !== "string"){
-                throw new Error("Window key is not a string!");
-            }else if(!WINDOW_KEYS.includes(windowKey)){
-                throw new Error("Invalid Window key!");
+    static async loadKnowledgeCards(){
+        try{
+            const raw = await fs.readFile(KNOWLEDGE_CARDS_JSON_PATH, "utf8");
+            const parsed = JSON.parse(raw);
+            this.knowledgeCards = this.normalizeKnowledgeCards(parsed);
+            if(JSON.stringify(parsed) !== JSON.stringify(this.knowledgeCards)){
+                await this.saveKnowledgeCards();
             }
-            await wm.open(windowKey);
-        });
+        }catch(err){
+            if(err.code === "ENOENT"){
+                this.knowledgeCards = [];
+                await this.saveKnowledgeCards();
+                return;
+            }
+            throw err;
+        }
+    }
+    static async resolveKnowledgeCardSummary(data){
+        if(typeof data?.summary === "string" && data.summary.trim()){
+            return data.summary.trim();
+        }
+        return await this.generateKnowledgeCardSummary(data);
+    }
+    static async createKnowledgeCardRecord(data){
+        const payload = this.validateKnowledgeCardPayload(data);
+        const now = new Date().toISOString();
+        const summary = await this.resolveKnowledgeCardSummary(payload);
+        const card = {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            title: payload.title,
+            content: payload.content,
+            summary,
+            category: payload.category,
+            source: payload.source,
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.knowledgeCards.push(card);
+        await this.saveKnowledgeCards();
+        return card;
+    }
+    static registerPing(){
+        // Core one-off handlers are grouped here to avoid scattering tiny IPC registrations.
+        registerCoreHandlers(this, {wm, WINDOW_KEYS, AI_TOUCH_RESPONSE});
     }
     static registerAiChat(){
-        ipcMain.handle("app:aiChat",async (event,message)=>{
-            const aiChatMessage = this.buildAiChatMessages(message);
-            const response = await aiChat(aiChatMessage);
-            const assistantReply = this.getAssistantReplyContent(response);
-
-            this.assistantContext.push({role:"user",message});
-            if(assistantReply){
-                this.assistantContext.push({role:"assistant",message:assistantReply});
-            }
-            this.trimAssistantContext();
-            await this.saveAssistantContext();
-            return response;
-        })
+        registerAiChatHandlers(this);
     }
     static registerAiContextManager(){
-        ipcMain.handle("app:getAiContextMeta",async ()=>{
-            return this.getAssistantContextMeta();
-        });
-        ipcMain.handle("app:getAiContextData",async ()=>{
-            return this.getAssistantContextData();
-        });
-        ipcMain.handle("app:clearAiContext",async ()=>{
-            this.assistantContext = [];
-            await this.saveAssistantContext();
-            return this.getAssistantContextMeta();
-        });
-        ipcMain.handle("app:getLongTermMemoryData",async ()=>{
-            return this.getLongTermMemoryData();
-        });
-        ipcMain.handle("app:extractLongTermMemories", async ()=>{
-            return await this.extractLongTermMemoriesFromContext();
-        });
-        ipcMain.handle("app:deleteLongTermMemory", async (event, memoryId)=>{
-            return await this.deleteLongTermMemory(memoryId);
-        });
+        registerContextHandlers(this);
     }
     static registerAgent(){
-        ipcMain.handle("app:getAgentCapabilities", async ()=>{
-            if(!this.agentService){
-                throw new Error("Agent service is not ready.");
-            }
-            return this.agentService.getCapabilities();
-        });
-        ipcMain.handle("app:getAgentLibraryIndex", async ()=>{
-            if(!this.agentService){
-                throw new Error("Agent service is not ready.");
-            }
-            return this.agentService.getLibraryIndexData();
-        });
-        ipcMain.handle("app:readAgentLibraryFile", async (event, filePath)=>{
-            if(!this.agentService){
-                throw new Error("Agent service is not ready.");
-            }
-            return await this.agentService.readLibraryFile(filePath);
-        });
-        ipcMain.handle("app:rebuildAgentLibraryIndex", async ()=>{
-            if(!this.agentService){
-                throw new Error("Agent service is not ready.");
-            }
-            await this.agentService.rebuildLibraryIndex();
-            return this.agentService.getCapabilities();
-        });
-        ipcMain.handle("app:agentChat", async (event, message)=>{
-            if(typeof message !== "string" || !message.trim()){
-                throw new Error("Message is required.");
-            }
-            if(!this.agentService){
-                throw new Error("Agent service is not ready.");
-            }
-            const result = await this.agentService.chat(message.trim());
-
-            this.assistantContext.push({role:"user", message: message.trim()});
-            if(result?.content){
-                this.assistantContext.push({role:"assistant", message: result.content});
-            }
-            this.trimAssistantContext();
-            await this.saveAssistantContext();
-
-            return result;
-        });
-    }
-    static registerTouchResponse(){
-        ipcMain.handle("app:touch",async (event,name)=>{
-            const totalNum=AI_TOUCH_RESPONSE[name].response.length;
-            const selectedNum=Math.floor(Math.random() * (totalNum));
-            return AI_TOUCH_RESPONSE[name].response[selectedNum].content;
-        })
+        registerAgentHandlers(this);
     }
     static async ensurePomodoroJsonExists(dataPath){
         return JSON.parse(await fs.readFile(dataPath,"utf8"));
@@ -517,117 +572,34 @@ class ipcRegister{
     //
     // })
     static registerPomodoroJson(){
-        ipcMain.handle("app:loadPomodoroJson",async (event)=>{
-            return await this.ensurePomodoroJson(POMODORO_JSON_PATH);
-        })
-        ipcMain.handle("app:savePomodoroJson",async (event,data)=>{
-            return await fs.writeFile(POMODORO_JSON_PATH,JSON.stringify(data,null,2));
-        })
+        registerPomodoroHandlers(this, {POMODORO_JSON_PATH});
     }
     static registerKnowledgeCards(){
-        ipcMain.handle("app:loadKnowledgeCards", async ()=>{
-            return this.getKnowledgeCardsData();
-        });
-        ipcMain.handle("app:generateKnowledgeCardSummary", async (event, data)=>{
-            const payload = this.validateKnowledgeCardPayload(data);
-            return {
-                summary: await this.generateKnowledgeCardSummary(payload),
-            };
-        });
-        ipcMain.handle("app:createKnowledgeCard", async (event, data)=>{
-            const payload = this.validateKnowledgeCardPayload(data);
-            const now = new Date().toISOString();
-            const summary = await this.generateKnowledgeCardSummary(payload);
-            const card = {
-                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                title: payload.title,
-                content: payload.content,
-                summary,
-                category: payload.category,
-                source: payload.source,
-                createdAt: now,
-                updatedAt: now,
-            };
-            this.knowledgeCards.push(card);
-            await this.saveKnowledgeCards();
-            return {
-                card,
-                data: this.getKnowledgeCardsData(),
-            };
-        });
-        ipcMain.handle("app:updateKnowledgeCard", async (event, data)=>{
-            const payload = this.validateKnowledgeCardPayload(data, {requireId: true});
-            if(!payload.id){
-                throw new Error("Card id is required.");
-            }
-            const card = this.knowledgeCards.find((item)=>item.id === payload.id);
-            if(!card){
-                throw new Error("Card not found.");
-            }
-            card.title = payload.title;
-            card.content = payload.content;
-            card.summary = await this.generateKnowledgeCardSummary(payload);
-            card.category = payload.category;
-            card.source = payload.source;
-            card.updatedAt = new Date().toISOString();
-            await this.saveKnowledgeCards();
-            return {
-                card,
-                data: this.getKnowledgeCardsData(),
-            };
-        });
-        ipcMain.handle("app:deleteKnowledgeCard", async (event, cardId)=>{
-            if(typeof cardId !== "string" || !cardId.trim()){
-                throw new Error("Card id is required.");
-            }
-            const nextCards = this.knowledgeCards.filter((item)=>item.id !== cardId);
-            if(nextCards.length === this.knowledgeCards.length){
-                throw new Error("Card not found.");
-            }
-            this.knowledgeCards = nextCards;
-            await this.saveKnowledgeCards();
-            return this.getKnowledgeCardsData();
-        });
+        registerKnowledgeCardHandlers(this);
     }
 
     static async registerAll(){
         await this.loadAssistantContext();
         await this.loadLongTermMemory();
         await this.loadKnowledgeCards();
+        await this.loadMemoryRoutineMeta();
         this.agentService = new AgentService({
             getAssistantContext: ()=>[...this.assistantContext],
             getLongTermMemory: ()=>[...this.assistantLongTermMemory],
             addLongTermMemory: async (data)=>await this.addLongTermMemory(data),
             deleteLongTermMemory: async (memoryId)=>await this.deleteLongTermMemory(memoryId),
             extractLongTermMemories: async ()=>await this.extractLongTermMemoriesFromContext(),
+            getMemoryRoutineMeta: ()=>this.getMemoryRoutineMeta(),
             getKnowledgeCards: ()=>[...this.knowledgeCards],
-            createKnowledgeCard: async (data)=>{
-                const payload = this.validateKnowledgeCardPayload(data);
-                const now = new Date().toISOString();
-                const summary = await this.generateKnowledgeCardSummary(payload);
-                const card = {
-                    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                    title: payload.title,
-                    content: payload.content,
-                    summary,
-                    category: payload.category,
-                    source: payload.source,
-                    createdAt: now,
-                    updatedAt: now,
-                };
-                this.knowledgeCards.push(card);
-                await this.saveKnowledgeCards();
-                return card;
-            },
+            createKnowledgeCard: async (data)=>await this.createKnowledgeCardRecord(data),
             getPomodoroData: async ()=>await this.ensurePomodoroJson(POMODORO_JSON_PATH),
         });
         await this.agentService.ensureReady();
-        this.registerOpenWindow();
+        await this.maybeRunDailyMemoryExtraction();
         this.registerPing();
         this.registerAiChat();
         this.registerAiContextManager();
         this.registerAgent();
-        this.registerTouchResponse();
         this.registerPomodoroJson();
         this.registerKnowledgeCards();
     }

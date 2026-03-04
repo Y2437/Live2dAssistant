@@ -1,5 +1,6 @@
 const path = require('path');
 const app = require('electron').app;
+const {ENV_CONFIG} = require("./env");
 const WIDTH = 800;
 const HEIGHT = 600;
 const WINDOW_MODE = "devShell";
@@ -7,10 +8,11 @@ const POMODORO_JSON_PATH =path.join(app.getPath("userData"), "pomodoro.json");
 const AI_CONTEXT_JSON_PATH = path.join(app.getPath("userData"), "assistant-context.json");
 const AI_LONG_TERM_MEMORY_JSON_PATH = path.join(app.getPath("userData"), "assistant-long-term-memory.json");
 const KNOWLEDGE_CARDS_JSON_PATH = path.join(app.getPath("userData"), "knowledge-cards.json");
+const AI_MEMORY_ROUTINE_JSON_PATH = path.join(app.getPath("userData"), "assistant-memory-routine.json");
 const AGENT_LIBRARY_INDEX_JSON_PATH = path.join(app.getPath("userData"), "agent-library-index.json");
 const AGENT_LIBRARY_ROOTS_JSON_PATH = path.join(app.getPath("userData"), "agent-library-roots.json");
 const AGENT_SCREENSHOT_DIR_PATH = path.join(app.getPath("userData"), "agent-screenshots");
-const PROJECT_ROOT = path.resolve(__dirname, "../..");
+const PROJECT_ROOT = path.resolve(__dirname, "../../..");
 const WINDOW_KEYS = [
     'assistant',
     'pomodoro',
@@ -20,12 +22,12 @@ const WINDOW_KEYS = [
     'devShell',  //作为测试模式的主窗口
 ]
 const WINDOW_FILE_MAP = {
-    assistant: path.join(__dirname, "../renderer/view/assistant.html"),
-    pomodoro: path.join(__dirname, "../renderer/view/pomodoro.html"),
-    organizer: path.join(__dirname, "../renderer/view/organizer.html"),
-    cards: path.join(__dirname, "../renderer/view/cards.html"),
-    clipboard: path.join(__dirname, "../renderer/view/clipboard.html"),
-    devShell: path.join(__dirname, "../renderer/view/index.html"),
+    assistant: path.join(__dirname, "../../renderer/view/assistant.html"),
+    pomodoro: path.join(__dirname, "../../renderer/view/pomodoro.html"),
+    organizer: path.join(__dirname, "../../renderer/view/organizer.html"),
+    cards: path.join(__dirname, "../../renderer/view/cards.html"),
+    clipboard: path.join(__dirname, "../../renderer/view/clipboard.html"),
+    devShell: path.join(__dirname, "../../renderer/view/index.html"),
 };
 const AI_TOUCH_RESPONSE = {
     "Body": {
@@ -275,8 +277,10 @@ module.exports = {
     AI_CONTEXT_JSON_PATH,
     AI_LONG_TERM_MEMORY_JSON_PATH,
     KNOWLEDGE_CARDS_JSON_PATH,
+    AI_MEMORY_ROUTINE_JSON_PATH,
     AGENT_LIBRARY_INDEX_JSON_PATH,
     AGENT_LIBRARY_ROOTS_JSON_PATH,
     AGENT_SCREENSHOT_DIR_PATH,
     PROJECT_ROOT,
+    ENV_CONFIG,
 };
