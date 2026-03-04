@@ -5,6 +5,7 @@ const {
     summarizeText,
     requestText,
     decodeHtmlEntities,
+    htmlToPlainText,
     unwrapDuckDuckGoUrl,
 } = require("./agentShared");
 const {
@@ -14,20 +15,43 @@ const {
 } = require("./promptRegistry");
 // Search, prompt, and tool-planning helpers for the agent loop.
 
+function rankByNeedle(items, buildHaystack, needle, limit = 16) {
+    const value = String(needle || "").trim().toLowerCase();
+    const tokens = value.split(/\s+/).filter(Boolean);
+    return items
+        .map((item) => {
+            const haystack = String(buildHaystack(item) || "").toLowerCase();
+            let score = 0;
+            if (!value) {
+                score = 1;
+            } else {
+                if (haystack.includes(value)) {
+                    score += 10;
+                }
+                for (const token of tokens) {
+                    if (token && haystack.includes(token)) {
+                        score += token.length > 3 ? 3 : 2;
+                    }
+                }
+            }
+            return {item, score};
+        })
+        .filter((entry) => !value || entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+        .map((entry) => entry.item);
+}
+
 function searchMemory(service, query) {
     const needle = String(query || "").trim().toLowerCase();
-    const items = service.getLongTermMemory()
+    const items = rankByNeedle(service.getLongTermMemory()
         .filter((item) => item.status !== "archived")
-        .filter((item) => {
-            if (!needle) return true;
-            const haystack = `${item.title}\n${item.content}\n${item.source || ""}\n${item.category || ""}\n${(item.tags || []).join(" ")}`.toLowerCase();
-            return haystack.includes(needle);
-        })
-        .slice(0, 16)
+    , (item) => `${item.title}\n${item.content}\n${item.source || ""}\n${item.category || ""}\n${(item.tags || []).join(" ")}`, needle, 16)
         .map((item) => ({
             id: item.id,
             title: item.title,
             content: item.content,
+            contentPreview: summarizeText(item.content, 320),
             source: item.source || "manual",
             category: item.category || "reference",
             tags: item.tags || [],
@@ -39,18 +63,16 @@ function searchMemory(service, query) {
 
 function searchCards(service, query) {
     const needle = String(query || "").trim().toLowerCase();
-    const items = service.getKnowledgeCards()
-        .filter((item) => {
-            if (!needle) return true;
-            const haystack = `${item.title}\n${item.category}\n${item.content}`.toLowerCase();
-            return haystack.includes(needle);
-        })
-        .slice(0, 12)
+    const items = rankByNeedle(service.getKnowledgeCards(), (item) => `${item.title}\n${item.category}\n${item.summary || ""}\n${item.content}`, needle, 12)
         .map((item) => ({
             id: item.id,
             title: item.title,
             category: item.category,
             summary: item.summary || summarizeText(item.content, 120),
+            contentPreview: summarizeText(item.content, 320),
+            content: String(item.content || "").length > 2400
+                ? `${String(item.content || "").slice(0, 2400).trim()}...`
+                : String(item.content || ""),
             updatedAt: item.updatedAt || item.createdAt || "",
         }));
     return {items};
@@ -58,14 +80,20 @@ function searchCards(service, query) {
 
 function listCards(service, category) {
     const needle = String(category || "").trim().toLowerCase();
-    const items = service.getKnowledgeCards()
-        .filter((item) => !needle || String(item.category || "").toLowerCase() === needle)
+    const sourceItems = needle
+        ? service.getKnowledgeCards().filter((item) => String(item.category || "").toLowerCase() === needle)
+        : service.getKnowledgeCards();
+    const items = sourceItems
         .slice(0, 20)
         .map((item) => ({
             id: item.id,
             title: item.title,
             category: item.category,
             summary: item.summary || summarizeText(item.content, 120),
+            contentPreview: summarizeText(item.content, 320),
+            content: String(item.content || "").length > 2400
+                ? `${String(item.content || "").slice(0, 2400).trim()}...`
+                : String(item.content || ""),
             updatedAt: item.updatedAt || item.createdAt || "",
         }));
     return {items};
@@ -74,9 +102,14 @@ function listCards(service, category) {
 function getCard(service, args) {
     const id = String(args?.id || "").trim();
     const title = String(args?.title || "").trim().toLowerCase();
-    const card = service.getKnowledgeCards().find((item) => {
+    const cards = service.getKnowledgeCards();
+    const card = cards.find((item) => {
+        const itemTitle = String(item.title || "").trim().toLowerCase();
         return (id && item.id === id)
-            || (title && String(item.title || "").trim().toLowerCase() === title);
+            || (title && itemTitle === title);
+    }) || cards.find((item) => {
+        const itemTitle = String(item.title || "").trim().toLowerCase();
+        return title && (itemTitle.includes(title) || title.includes(itemTitle));
     });
     if (!card) {
         throw new Error("Card not found.");
@@ -141,35 +174,11 @@ function parseAgentResponse(content) {
 }
 
 function buildPrefetchPlan(userMessage) {
-    const text = String(userMessage || "").toLowerCase();
-    const plan = [];
-    if (/(最新|新闻|搜索|搜一下网页|web|news)/.test(text)) plan.push({tool: "web_search", args: {query: userMessage}});
-    if (/(资料|文件|代码|markdown|pdf|仓库|项目|library|repo)/.test(text)) {
-        plan.push({tool: "get_library_overview", args: {}});
-        plan.push({tool: "search_library", args: {query: userMessage}});
-    }
-    if (/(记忆|memory|偏好|长期)/.test(text)) {
-        plan.push({tool: "search_memory", args: {query: userMessage}});
-        plan.push({tool: "get_memory_routine_status", args: {}});
-    }
-    if (/(卡片|cards|知识)/.test(text)) {
-        plan.push({tool: "search_cards", args: {query: userMessage}});
-        plan.push({tool: "list_cards", args: {}});
-    }
-    if (/(番茄钟|pomodoro|计时)/.test(text)) plan.push({tool: "get_pomodoro_status", args: {}});
-    if (/(剪贴板|clipboard)/.test(text)) plan.push({tool: "get_clipboard", args: {}});
-    if (/(截图|screen|屏幕)/.test(text)) plan.push({tool: "list_screenshots", args: {}});
-    const seen = new Set();
-    return plan.filter((item) => {
-        const key = `${item.tool}:${JSON.stringify(item.args)}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    }).slice(0, 4);
+    return [];
 }
 
 async function runPrefetchTools(service, userMessage, traces, conversation, options = {}) {
-    const plan = buildPrefetchPlan(userMessage);
+    const plan = Array.isArray(options.plan) ? options.plan : buildPrefetchPlan(userMessage);
     for (const item of plan) {
         try {
             const result = await service.runTool(item.tool, item.args);
@@ -224,6 +233,7 @@ async function runTool(service, toolName, args) {
     case "search_library": return service.searchLibrary(args?.query);
     case "read_library_file": return service.readLibraryFile(args?.path);
     case "web_search": return service.webSearch(args?.query);
+    case "read_web_page": return service.readWebPage(args?.url);
     case "capture_screen": return service.captureScreen(args?.name);
     case "list_screenshots": return service.listScreenshots();
     case "analyze_image": return service.analyzeImage(args);
@@ -231,19 +241,49 @@ async function runTool(service, toolName, args) {
     }
 }
 
+async function readWebPage(service, url) {
+    const value = String(url || "").trim();
+    if (!value) {
+        throw new Error("Page url is required.");
+    }
+    const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    };
+    const html = await requestText(value, headers);
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const pageText = htmlToPlainText(html);
+    return {
+        url: value,
+        title: stripMarkdown(decodeHtmlEntities(titleMatch?.[1] || "")),
+        contentPreview: summarizeText(pageText, 1200),
+        content: pageText.length > 5000 ? `${pageText.slice(0, 5000).trim()}...` : pageText,
+    };
+}
+
 async function webSearch(service, query) {
     const value = String(query || "").trim();
     if (!value) throw new Error("Search query is required.");
+    const requestHeaders = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    };
     const attempts = [
         {
             name: "bing-rss",
             url: `https://www.bing.com/search?format=rss&q=${encodeURIComponent(value)}`,
             parse(xml) {
                 const results = [];
-                const pattern = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>[\s\S]*?<\/item>/gi;
+                const pattern = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>(?:[\s\S]*?<description>([\s\S]*?)<\/description>)?[\s\S]*?<\/item>/gi;
                 let match;
                 while ((match = pattern.exec(xml)) && results.length < 8) {
-                    results.push({title: stripMarkdown(decodeHtmlEntities(match[1])), url: decodeHtmlEntities(match[2].trim())});
+                    results.push({
+                        title: stripMarkdown(decodeHtmlEntities(match[1])),
+                        url: decodeHtmlEntities(match[2].trim()),
+                        snippet: summarizeText(decodeHtmlEntities(match[3] || ""), 220),
+                    });
                 }
                 return results;
             },
@@ -253,10 +293,16 @@ async function webSearch(service, query) {
             url: `https://www.bing.com/search?q=${encodeURIComponent(value)}`,
             parse(html) {
                 const results = [];
-                const pattern = /<li class="b_algo"[\s\S]*?<h2><a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a><\/h2>/gi;
+                const pattern = /<li class="b_algo"[\s\S]*?<h2><a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a><\/h2>([\s\S]*?)(?=<li class="b_algo"|$)/gi;
                 let match;
                 while ((match = pattern.exec(html)) && results.length < 8) {
-                    results.push({title: stripMarkdown(decodeHtmlEntities(match[2].replace(/<[^>]+>/g, " "))), url: decodeHtmlEntities(match[1])});
+                    const block = match[3] || "";
+                    const snippetMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i) || block.match(/class="b_caption"[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i);
+                    results.push({
+                        title: stripMarkdown(decodeHtmlEntities(match[2].replace(/<[^>]+>/g, " "))),
+                        url: decodeHtmlEntities(match[1]),
+                        snippet: summarizeText(decodeHtmlEntities((snippetMatch?.[1] || "").replace(/<[^>]+>/g, " ")), 220),
+                    });
                 }
                 return results;
             },
@@ -266,25 +312,71 @@ async function webSearch(service, query) {
             url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(value)}`,
             parse(html) {
                 const results = [];
-                const pattern = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+                const pattern = /<div[^>]*class="[^"]*result[^"]*"[\s\S]*?<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>([\s\S]*?)(?=<div[^>]*class="[^"]*result[^"]*"|$)/gi;
                 let match;
                 while ((match = pattern.exec(html)) && results.length < 8) {
-                    results.push({title: stripMarkdown(decodeHtmlEntities(match[2].replace(/<[^>]+>/g, " "))), url: unwrapDuckDuckGoUrl(decodeHtmlEntities(match[1]))});
+                    const block = match[3] || "";
+                    const snippetMatch = block.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+                        || block.match(/<div[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+                    results.push({
+                        title: stripMarkdown(decodeHtmlEntities(match[2].replace(/<[^>]+>/g, " "))),
+                        url: unwrapDuckDuckGoUrl(decodeHtmlEntities(match[1])),
+                        snippet: summarizeText(decodeHtmlEntities((snippetMatch?.[1] || "").replace(/<[^>]+>/g, " ")), 220),
+                    });
                 }
                 return results;
             },
         },
     ];
+
+    async function fetchResultContent(result) {
+        try {
+            const html = await requestText(result.url, requestHeaders);
+            const pageText = htmlToPlainText(html);
+            if (!pageText) {
+                return {
+                    ...result,
+                    contentPreview: "",
+                    contentStatus: "empty",
+                };
+            }
+            return {
+                ...result,
+                contentPreview: summarizeText(pageText, 1200),
+                content: pageText.length > 4000 ? `${pageText.slice(0, 4000).trim()}...` : pageText,
+                contentStatus: "ok",
+            };
+        } catch (error) {
+            return {
+                ...result,
+                contentPreview: result.snippet || "",
+                contentStatus: "error",
+                contentError: error?.message || String(error),
+            };
+        }
+    }
+
     let lastError = "";
     for (const attempt of attempts) {
         try {
-            const html = await requestText(attempt.url, {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
-                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-            });
+            const html = await requestText(attempt.url, requestHeaders);
             const results = attempt.parse(html).filter((item) => item.title && item.url);
-            if (results.length) return {query: value, provider: attempt.name, results};
+            if (results.length) {
+                const enrichedResults = [];
+                for (let index = 0; index < results.length; index += 1) {
+                    const result = results[index];
+                    if (index < 3) {
+                        enrichedResults.push(await fetchResultContent(result));
+                    } else {
+                        enrichedResults.push({
+                            ...result,
+                            contentPreview: result.snippet || "",
+                            contentStatus: "skipped",
+                        });
+                    }
+                }
+                return {query: value, provider: attempt.name, results: enrichedResults};
+            }
             lastError = `${attempt.name} returned no parsable results`;
         } catch (error) {
             lastError = error?.message || String(error);
@@ -293,4 +385,4 @@ async function webSearch(service, query) {
     return {query: value, provider: "unavailable", results: [], error: lastError || "Web search is temporarily unavailable."};
 }
 
-module.exports = {searchMemory, searchCards, listCards, getCard, parseAgentResponse, buildPrefetchPlan, runPrefetchTools, buildAgentPlanningSystemPrompt, runTool, webSearch};
+module.exports = {searchMemory, searchCards, listCards, getCard, parseAgentResponse, buildPrefetchPlan, runPrefetchTools, buildAgentPlanningSystemPrompt, runTool, webSearch, readWebPage};

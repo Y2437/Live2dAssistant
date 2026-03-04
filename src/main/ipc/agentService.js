@@ -19,6 +19,7 @@ const libraryTools = require("./agentLibraryTools");
 const searchTools = require("./agentSearchTools");
 const visionTools = require("./agentVisionTools");
 const {buildAssistantFinalAnswerMessages} = require("./assistantPrompt");
+const {buildAgentPrefetchPlannerPrompt} = require("./promptRegistry");
 
 // AgentService keeps orchestration state here and delegates tool-heavy domains to helper modules.
 class AgentService {
@@ -98,8 +99,8 @@ class AgentService {
     async requestAgentTurn(conversation, hooks = {}, options = {}) {
         this.ensureNotAborted(hooks.signal);
         const response = await aiChatWithContent(conversation, {
-            temperature: 0.2,
-            maxTokens: 2048,
+            temperature: options.temperature ?? 0.2,
+            maxTokens: options.maxTokens ?? 2048,
             signal: hooks.signal,
             enableThinking: options.enableThinking !== false,
         });
@@ -149,6 +150,72 @@ class AgentService {
             .slice(0, 2)
             .map(([key, value]) => `${key}=${summarizeText(typeof value === "string" ? value : JSON.stringify(value), 48)}`);
         return parts.length ? ` (${parts.join(", ")})` : "";
+    }
+
+    normalizePrefetchPlan(rawPlan = []) {
+        const allowedTools = new Set([
+            "get_context",
+            "search_memory",
+            "get_memory_routine_status",
+            "search_cards",
+            "list_cards",
+            "get_library_overview",
+            "search_library",
+            "get_clipboard",
+            "list_screenshots",
+            "get_pomodoro_status",
+            "web_search",
+        ]);
+        const items = Array.isArray(rawPlan) ? rawPlan : (Array.isArray(rawPlan?.plan) ? rawPlan.plan : []);
+        const seen = new Set();
+        return items
+            .map((item) => ({
+                tool: String(item?.tool || "").trim(),
+                args: normalizeToolArgs(item?.args),
+            }))
+            .filter((item) => item.tool && allowedTools.has(item.tool))
+            .filter((item) => {
+                const key = `${item.tool}:${JSON.stringify(item.args)}`;
+                if (seen.has(key)) {
+                    return false;
+                }
+                seen.add(key);
+                return true;
+            })
+            .slice(0, 3);
+    }
+
+    async planPrefetchTools(userMessage, context, hooks = {}) {
+        const conversation = [
+            {
+                role: "system",
+                content: [{
+                    type: "text",
+                    text: buildAgentPrefetchPlannerPrompt({
+                        userMessage,
+                        contextText: context.length
+                            ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n")
+                            : "没有最近对话上下文。",
+                    }),
+                }],
+            },
+            {
+                role: "user",
+                content: [{type: "text", text: userMessage}],
+            },
+        ];
+        try {
+            const turn = await this.requestAgentTurn(conversation, hooks, {
+                enableThinking: false,
+                temperature: 0,
+                maxTokens: 512,
+            });
+            const parsed = safeJsonParse(turn.content)
+                || safeJsonParse(String(turn.content || "").replace(/```json|```/gi, "").trim());
+            return this.normalizePrefetchPlan(parsed?.plan || []);
+        } catch (error) {
+            return [];
+        }
     }
 
     async pushWorkflowTrace(traces, hooks, trace) {
@@ -273,7 +340,9 @@ class AgentService {
             content: [{type: "text", text: userMessage}],
         });
         await this.emitHook(hooks.onStatus, {phase: "prefetch", message: "Preparing context"});
+        const prefetchPlan = await this.planPrefetchTools(userMessage, context, hooks);
         await this.runPrefetchTools(userMessage, traces, planningConversation, {
+            plan: prefetchPlan,
             onTrace: async (trace, nextTraces) => {
                 await this.emitHook(hooks.onTrace, trace, [...nextTraces]);
             },
@@ -387,6 +456,7 @@ class AgentService {
             {tool: "list_screenshots", args: {}},
             {tool: "get_pomodoro_status", args: {}},
             {tool: "web_search", args: {query: userMessage}},
+            {tool: "read_web_page", args: {url: "https://www.example.com"}},
         ];
 
         for (const item of suite) {
@@ -504,6 +574,7 @@ class AgentService {
                 "search_library",
                 "read_library_file",
                 "web_search",
+                "read_web_page",
                 "capture_screen",
                 "list_screenshots",
                 "analyze_image",
@@ -525,6 +596,10 @@ class AgentService {
 
     async readLibraryFile(requestedPath) {
         return libraryTools.readLibraryFile(this, requestedPath);
+    }
+
+    async readWebPage(url) {
+        return searchTools.readWebPage(this, url);
     }
 
 

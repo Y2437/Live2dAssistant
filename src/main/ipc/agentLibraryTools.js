@@ -218,6 +218,8 @@ function searchLibrary(service, query) {
             category: item.category || buildFileCategory(item.ext),
             status: item.status,
             excerpt: matches[0]?.preview || item.excerpt,
+            contentPreview: matches[0]?.preview || item.excerpt,
+            matchedText: matches[0]?.preview || "",
             score: Number(totalScore.toFixed(2)),
             chunkCount: item.chunkCount || 0,
             matches,
@@ -248,13 +250,26 @@ function getLibraryOverview(service) {
 async function readLibraryFile(service, requestedPath) {
     const value = String(requestedPath || "").trim().replace(/\\/g, "/");
     if (!value) throw new Error("File path is required.");
-    const file = service.libraryIndex.items.find((item) => {
-        return item.relativePath === value
-            || item.name === value
-            || item.relativePath.toLowerCase() === value.toLowerCase()
-            || item.name.toLowerCase() === value.toLowerCase()
-            || item.relativePath.toLowerCase().includes(value.toLowerCase());
-    });
+    const normalized = value.toLowerCase();
+    const files = service.libraryIndex.items
+        .map((item) => {
+            const relative = String(item.relativePath || "").toLowerCase();
+            const name = String(item.name || "").toLowerCase();
+            let score = 0;
+            if (relative === normalized || name === normalized) {
+                score += 20;
+            }
+            if (relative.includes(normalized)) {
+                score += 8;
+            }
+            if (name.includes(normalized)) {
+                score += 10;
+            }
+            return {item, score};
+        })
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score || b.item.mtimeMs - a.item.mtimeMs);
+    const file = files[0]?.item;
     if (!file) throw new Error(`File not found: ${value}`);
     if (file.ext === ".pdf") {
         let content = "";

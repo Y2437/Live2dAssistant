@@ -138,6 +138,24 @@ function decodeHtmlEntities(text) {
         .replace(/&#39;/g, "'");
 }
 
+function htmlToPlainText(html) {
+    return decodeHtmlEntities(String(html || ""))
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+        .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+        .replace(/<img[^>]*alt="([^"]*)"[^>]*>/gi, " $1 ")
+        .replace(/<img[^>]*>/gi, " ")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>|<\/div>|<\/section>|<\/article>|<\/li>|<\/h[1-6]>/gi, "\n")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\u00a0/g, " ")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/[^\S\n]{2,}/g, " ")
+        .trim();
+}
+
 function tokenizeSearchText(text) {
     return String(text || "")
         .toLowerCase()
@@ -244,6 +262,7 @@ module.exports = {
     unwrapDuckDuckGoUrl,
     requestText,
     decodeHtmlEntities,
+    htmlToPlainText,
     tokenizeSearchText,
     buildSearchIndex,
     buildFileCategory,

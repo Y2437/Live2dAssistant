@@ -108,27 +108,42 @@ const ASSISTANT_FINAL_ANSWER_RULES = [
 ];
 
 const AGENT_TOOL_DEFINITIONS = [
-    "- get_context {}",
-    "- get_memory {}",
-    "- search_memory {\"query\":\"keyword\"}",
-    "- get_memory_routine_status {}",
-    "- add_memory {\"title\":\"title\",\"content\":\"content\",\"source\":\"agent\"}",
-    "- delete_memory {\"id\":\"memory-id\"}",
-    "- extract_memory {}",
-    "- list_cards {\"category\":\"optional\"}",
-    "- search_cards {\"query\":\"keyword\"}",
-    "- get_card {\"id\":\"card-id\",\"title\":\"optional\"}",
-    "- create_card {\"title\":\"title\",\"content\":\"content\",\"category\":\"category\",\"source\":\"agent\"}",
-    "- get_pomodoro_status {}",
-    "- get_clipboard {}",
-    "- analyze_clipboard_image {\"prompt\":\"optional\"}",
-    "- get_library_overview {}",
-    "- search_library {\"query\":\"keyword\"}",
-    "- read_library_file {\"path\":\"relative path or file name\"}",
-    "- web_search {\"query\":\"keyword\"}",
-    "- capture_screen {\"name\":\"optional name\"}",
-    "- list_screenshots {}",
-    "- analyze_image {\"imagePath\":\"path\",\"prompt\":\"analysis request\"}",
+    "- get_context {}：读取最近对话上下文。",
+    "- get_memory {}：读取全部长期记忆。",
+    "- search_memory {\"query\":\"keyword\"}：搜索长期记忆，返回匹配内容与片段。",
+    "- get_memory_routine_status {}：读取记忆提炼任务状态。",
+    "- add_memory {\"title\":\"title\",\"content\":\"content\",\"source\":\"agent\"}：新增长期记忆。",
+    "- delete_memory {\"id\":\"memory-id\"}：删除长期记忆。",
+    "- extract_memory {}：从最近对话中提炼长期记忆。",
+    "- list_cards {\"category\":\"optional\"}：列出知识卡片，返回摘要与正文片段。",
+    "- search_cards {\"query\":\"keyword\"}：搜索知识卡片，返回摘要与正文内容片段。",
+    "- get_card {\"id\":\"card-id\",\"title\":\"optional\"}：读取单张知识卡片完整内容。",
+    "- create_card {\"title\":\"title\",\"content\":\"content\",\"category\":\"category\",\"source\":\"agent\"}：创建知识卡片。",
+    "- get_pomodoro_status {}：读取番茄钟任务状态。",
+    "- get_clipboard {}：读取剪贴板文字与图片状态。",
+    "- analyze_clipboard_image {\"prompt\":\"optional\"}：分析剪贴板中的图片。",
+    "- get_library_overview {}：读取资料库概览。",
+    "- search_library {\"query\":\"keyword\"}：搜索资料库，返回命中文件与片段。",
+    "- read_library_file {\"path\":\"relative path or file name\"}：读取资料文件正文。",
+    "- web_search {\"query\":\"keyword\"}：搜索网页并返回结果页标题、摘要和正文摘录。",
+    "- read_web_page {\"url\":\"https://...\"}：深度读取指定网页正文。",
+    "- capture_screen {\"name\":\"optional name\"}：截图并保存。",
+    "- list_screenshots {}：列出历史截图。",
+    "- analyze_image {\"imagePath\":\"path\",\"prompt\":\"analysis request\"}：分析指定图片。",
+];
+
+const PREFETCHABLE_TOOL_DEFINITIONS = [
+    "- get_context {}：当需要最近聊天上下文时使用。",
+    "- search_memory {\"query\":\"keyword\"}：当问题明显依赖既有偏好、事实、长期计划时使用。",
+    "- get_memory_routine_status {}：当问题涉及记忆提炼或记忆状态时使用。",
+    "- search_cards {\"query\":\"keyword\"}：当问题可能涉及知识卡片时使用。",
+    "- list_cards {\"category\":\"optional\"}：当问题要先了解卡片全集或某分类卡片时使用。",
+    "- get_library_overview {}：当问题先需要知道资料库结构时使用。",
+    "- search_library {\"query\":\"keyword\"}：当问题明显依赖本地资料、代码、文档、PDF 时使用。",
+    "- get_clipboard {}：当问题明确涉及剪贴板时使用。",
+    "- list_screenshots {}：当问题明确涉及已有截图时使用。",
+    "- get_pomodoro_status {}：当问题明确涉及番茄钟时使用。",
+    "- web_search {\"query\":\"keyword\"}：当问题需要联网事实或最新网页信息时使用。",
 ];
 
 const VISION_ANALYSIS_SYSTEM_PROMPT = "你是图像分析工具。请只输出简洁、客观、准确的中文观察结果，不要编造。";
@@ -219,6 +234,25 @@ function buildAgentPlanningSystemPrompt({contextText = NO_RECENT_CONTEXT_TEXT, m
     ].join("\n");
 }
 
+function buildAgentPrefetchPlannerPrompt({userMessage = "", contextText = NO_RECENT_CONTEXT_TEXT} = {}) {
+    return [
+        "你负责给 Agent 做只读型前置取数规划。",
+        "目标是在正式规划前，判断是否值得先执行少量低风险工具，以便减少后续回合数。",
+        "不要依赖表面关键词机械匹配，而是根据用户真实意图、问题类型和上下文来判断。",
+        "只允许选择只读、低风险工具，禁止选择会写入状态或产生副作用的工具。",
+        "如果不需要前置取数，就返回空数组。",
+        "最多选择 8 个工具。",
+        "只返回合法 JSON，格式必须是：",
+        "{\"plan\":[{\"tool\":\"tool_name\",\"args\":{}}]}",
+        "允许的前置工具如下：",
+        ...PREFETCHABLE_TOOL_DEFINITIONS,
+        "用户请求：",
+        userMessage || EMPTY_PROMPT_VALUE,
+        "最近上下文：",
+        contextText,
+    ].join("\n");
+}
+
 function buildKnowledgeCardSummaryMessages(data = {}) {
     return [
         {
@@ -292,6 +326,7 @@ module.exports = {
     formatAssistantContextItems,
     buildAssistantFinalAnswerUserPrompt,
     buildAgentPlanningSystemPrompt,
+    buildAgentPrefetchPlannerPrompt,
     buildKnowledgeCardSummaryMessages,
     buildMemoryExtractionMessages,
 };
