@@ -7,7 +7,11 @@ const {
     decodeHtmlEntities,
     unwrapDuckDuckGoUrl,
 } = require("./agentShared");
-
+const {
+    buildAgentPlanningSystemPrompt: buildPlanningPromptTemplate,
+    NO_RECENT_CONTEXT_TEXT,
+    NO_LONG_TERM_MEMORY_TEXT,
+} = require("./promptRegistry");
 // Search, prompt, and tool-planning helpers for the agent loop.
 
 function searchMemory(service, query) {
@@ -164,66 +168,40 @@ function buildPrefetchPlan(userMessage) {
     }).slice(0, 4);
 }
 
-async function runPrefetchTools(service, userMessage, traces, conversation) {
+async function runPrefetchTools(service, userMessage, traces, conversation, options = {}) {
     const plan = buildPrefetchPlan(userMessage);
     for (const item of plan) {
         try {
             const result = await service.runTool(item.tool, item.args);
-            traces.push({tool: item.tool, status: "success", input: item.args, outputPreview: clampTraceOutput(result), phase: "prefetch"});
+            const trace = {tool: item.tool, status: "success", input: item.args, outputPreview: clampTraceOutput(result), phase: "prefetch"};
+            traces.push(trace);
+            if (options.onTrace) {
+                await options.onTrace(trace, traces);
+            }
             conversation.push({
                 role: "user",
                 content: [{type: "text", text: `Prefetched tool result for ${item.tool}: ${JSON.stringify(result)}`}],
             });
         } catch (error) {
-            traces.push({
+            const trace = {
                 tool: item.tool,
                 status: "error",
                 input: item.args,
                 outputPreview: clampTraceOutput({error: error?.message || String(error)}),
                 phase: "prefetch",
-            });
+            };
+            traces.push(trace);
+            if (options.onTrace) {
+                await options.onTrace(trace, traces);
+            }
         }
     }
 }
 
-function buildAgentSystemPrompt(memories, context) {
-    const memoryText = memories.length ? memories.map((item, index) => `${index + 1}. ${item.title}: ${item.content}`).join("\n") : "No long-term memory.";
-    const contextText = context.length ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n") : "No recent context.";
-    return [
-        "You are the desktop agent orchestration layer.",
-        "Use tools when needed, but always produce the final answer yourself.",
-        "If calling a tool, output only one JSON object and nothing else.",
-        "Tool call format: {\"type\":\"tool\",\"tool\":\"tool_name\",\"args\":{...}}",
-        "Final answer format: {\"type\":\"final\",\"content\":\"reply for the user\"}",
-        "Available tools:",
-        "- get_context {}",
-        "- get_memory {}",
-        "- search_memory {\"query\":\"keyword\"}",
-        "- get_memory_routine_status {}",
-        "- add_memory {\"title\":\"title\",\"content\":\"content\",\"source\":\"agent\"}",
-        "- delete_memory {\"id\":\"memory-id\"}",
-        "- extract_memory {}",
-        "- list_cards {\"category\":\"optional\"}",
-        "- search_cards {\"query\":\"keyword\"}",
-        "- get_card {\"id\":\"card-id\",\"title\":\"optional\"}",
-        "- create_card {\"title\":\"title\",\"content\":\"content\",\"category\":\"category\",\"source\":\"agent\"}",
-        "- get_pomodoro_status {}",
-        "- get_clipboard {}",
-        "- analyze_clipboard_image {\"prompt\":\"optional\"}",
-        "- get_library_overview {}",
-        "- search_library {\"query\":\"keyword\"}",
-        "- read_library_file {\"path\":\"relative path or file name\"}",
-        "- web_search {\"query\":\"keyword\"}",
-        "- capture_screen {\"name\":\"optional name\"}",
-        "- list_screenshots {}",
-        "- analyze_image {\"imagePath\":\"path\",\"prompt\":\"analysis request\"}",
-        "Never fabricate tool output.",
-        "If a task cannot be completed, say so clearly.",
-        "Recent context:",
-        contextText,
-        "Long-term memory:",
-        memoryText,
-    ].join("\n");
+function buildAgentPlanningSystemPrompt(memories, context) {
+    const memoryText = memories.length ? memories.map((item, index) => `${index + 1}. ${item.title}: ${item.content}`).join("\n") : NO_LONG_TERM_MEMORY_TEXT;
+    const contextText = context.length ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n") : NO_RECENT_CONTEXT_TEXT;
+    return buildPlanningPromptTemplate({contextText, memoryText});
 }
 
 async function runTool(service, toolName, args) {
@@ -315,4 +293,4 @@ async function webSearch(service, query) {
     return {query: value, provider: "unavailable", results: [], error: lastError || "Web search is temporarily unavailable."};
 }
 
-module.exports = {searchMemory, searchCards, listCards, getCard, parseAgentResponse, buildPrefetchPlan, runPrefetchTools, buildAgentSystemPrompt, runTool, webSearch};
+module.exports = {searchMemory, searchCards, listCards, getCard, parseAgentResponse, buildPrefetchPlan, runPrefetchTools, buildAgentPlanningSystemPrompt, runTool, webSearch};

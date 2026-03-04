@@ -108,6 +108,11 @@
     gap: 10px;
 }
 
+.settings-record__headBlock{
+    display: grid;
+    gap: 4px;
+}
+
 .settings-record__title{
     margin: 0;
     font-size: 12px;
@@ -173,6 +178,21 @@
 .settings-inlineMeta{
     font-size: 12px;
     line-height: 1.55;
+}
+
+.settings-statusPill{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    padding: 5px 8px;
+    border-style: solid;
+    border-width: 1px;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: 0.24px;
+    text-transform: uppercase;
 }
 
 .settings-list__item{

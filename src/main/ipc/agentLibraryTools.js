@@ -1,5 +1,6 @@
 const fs = require("fs/promises");
 const path = require("path");
+const {PDFParse} = require("pdf-parse");
 const {AGENT_LIBRARY_INDEX_JSON_PATH} = require("../config");
 const {
     MAX_FILE_SIZE,
@@ -18,6 +19,24 @@ const {
 } = require("./agentShared");
 
 // Library indexing and retrieval helpers for the agent.
+
+async function extractPdfText(fullPath) {
+    const data = await fs.readFile(fullPath);
+    const parser = new PDFParse({data});
+    try {
+        const result = await parser.getText({
+            pageSeparator: "\n\n",
+        });
+        return String(result?.text || "")
+            .replace(/\u0000/g, " ")
+            .replace(/[ \t]+\n/g, "\n")
+            .replace(/\n{3,}/g, "\n\n")
+            .replace(/[^\S\n]{2,}/g, " ")
+            .trim();
+    } finally {
+        await parser.destroy().catch(() => {});
+    }
+}
 
 async function rebuildLibraryIndex(service) {
     const previousItems = Array.isArray(service.libraryIndex.items) ? service.libraryIndex.items : [];
@@ -126,7 +145,14 @@ async function walkLibraryRoot(service, root, items, currentDir = root, previous
                 searchableText = content.slice(0, 24000);
                 chunks = buildTextChunks(content);
             } else if (ext === ".pdf") {
-                excerpt = "PDF document indexed by filename and metadata only.";
+                const content = await extractPdfText(fullPath);
+                if (content) {
+                    excerpt = summarizeText(content, 320);
+                    searchableText = content.slice(0, 24000);
+                    chunks = buildTextChunks(content);
+                } else {
+                    excerpt = "PDF text extraction returned no readable text.";
+                }
             }
             items.push(buildLibraryItem(service, root, fullPath, stat, ext, excerpt, "ready", {searchableText, chunks, signature}));
             if (stats) {
@@ -231,6 +257,13 @@ async function readLibraryFile(service, requestedPath) {
     });
     if (!file) throw new Error(`File not found: ${value}`);
     if (file.ext === ".pdf") {
+        let content = "";
+        let textError = "";
+        try {
+            content = await extractPdfText(file.fullPath);
+        } catch (error) {
+            textError = error?.message || String(error);
+        }
         return {
             path: file.relativePath,
             fullPath: file.fullPath,
@@ -240,8 +273,9 @@ async function readLibraryFile(service, requestedPath) {
             size: file.size,
             chunkCount: file.chunkCount || 0,
             mode: "pdf",
-            content: "",
-            matches: [],
+            content: content.length > MAX_FILE_RESULT_CHARS ? `${content.slice(0, MAX_FILE_RESULT_CHARS)}\n...` : content,
+            textError,
+            matches: (file.chunks || []).slice(0, 3).map((chunk) => ({chunkId: chunk.id, preview: chunk.preview})),
         };
     }
     if (!TEXT_EXTENSIONS.has(file.ext)) {

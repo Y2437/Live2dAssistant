@@ -75,3 +75,39 @@ export function renderAgentToolList(tools) {
         </article>
     `).join("");
 }
+
+function stringifyPreview(value) {
+    if (value == null) {
+        return "";
+    }
+    if (typeof value === "string") {
+        return value;
+    }
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch (error) {
+        return String(value);
+    }
+}
+
+export function renderAgentSelfTestList(result) {
+    if (!result?.traces?.length) {
+        return renderEmptyRecord("No self-test result yet.");
+    }
+    return result.traces.map((trace) => {
+        const preview = stringifyPreview(trace.outputPreview);
+        return `
+            <article class="settings-record">
+                <div class="settings-record__head">
+                    <div class="settings-record__headBlock">
+                        <h5 class="settings-record__title">${escapeHtml(trace.tool || "unknown")}</h5>
+                        <span class="settings-record__meta">${escapeHtml(trace.phase || "self-test")}</span>
+                    </div>
+                    <span class="settings-statusPill" data-status="${escapeHtml(trace.status || "idle")}">${escapeHtml(trace.status || "idle")}</span>
+                </div>
+                <p class="settings-record__meta">input: ${escapeHtml(stringifyPreview(trace.input || {}))}</p>
+                <p class="settings-record__body">${escapeHtml(preview || "No output preview.")}</p>
+            </article>
+        `;
+    }).join("");
+}

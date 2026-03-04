@@ -8,6 +8,15 @@ const {WINDOW_MODE} = require('./config');
 
 let maintenanceTimer = null;
 
+function configureElectronStoragePaths() {
+    const localAppData = process.env.LOCALAPPDATA || app.getPath("appData");
+    const sessionDataPath = path.join(localAppData, "live2dassistant", "SessionData");
+    fs.mkdirSync(sessionDataPath, {recursive: true});
+    app.setPath("sessionData", sessionDataPath);
+}
+
+configureElectronStoragePaths();
+
 async function runBackgroundMaintenance() {
     try {
         await ipcRegister.maybeRunDailyMemoryExtraction();

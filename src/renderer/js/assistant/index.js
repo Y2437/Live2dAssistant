@@ -1,4 +1,4 @@
-import { CONFIG } from "../core/config.js";
+﻿import { CONFIG } from "../core/config.js";
 import { marked } from "../../vendor/marked/lib/marked.esm.js";
 import { $ } from "../shared/dom.js";
 
@@ -15,7 +15,16 @@ const dom = {
     collapse: $('[data-role="assistant-collapse"]'),
     inputForm: $("form.assistant-form"),
     input: $('[data-role="assistant-input"]'),
+    send: $('[data-role="assistant-send"]'),
+    cancel: $('[data-role="assistant-cancel"]'),
+    retry: $('[data-role="assistant-retry"]'),
     navPanel: $('[data-role="assistant-actions"]'),
+    runPanel: $('[data-role="assistant-run-panel"]'),
+    runStatus: $('[data-role="assistant-run-status"]'),
+    runSummary: $('[data-role="assistant-run-summary"]'),
+    runToggle: $('[data-role="assistant-run-toggle"]'),
+    runBody: $('[data-role="assistant-run-body"]'),
+    runTimeline: $('[data-role="assistant-run-timeline"]'),
 };
 
 const assistantState = {
@@ -30,6 +39,12 @@ const assistantState = {
     lastBubbleType: "chat",
     touchTimer: null,
     shouldStickToBottom: true,
+    activeRequest: null,
+    requestTimeoutId: null,
+    lastRetryText: "",
+    runtimeStatus: null,
+    runtimeTraces: [],
+    runPanelExpanded: false,
 };
 
 const TIMEOUT_MS = CONFIG.LIVE2D_CONFIG.TIMEOUT_MS;
@@ -37,7 +52,7 @@ const WIDTH_FALLBACK = CONFIG.LIVE2D_CONFIG.WIDTH;
 const HEIGHT_FALLBACK = CONFIG.LIVE2D_CONFIG.HEIGHT;
 const AUTO_EXPAND_LENGTH = CONFIG.LIVE2D_CONFIG.AUTO_EXPAND_LENGTH;
 const AUTO_EXPAND_LINES = CONFIG.LIVE2D_CONFIG.AUTO_EXPAND_LINES;
-const STREAM_DELAY_MS = CONFIG.ASSISTANT_CONFIG.STREAM_DELAY_MS;
+const REQUEST_TIMEOUT_MS = CONFIG.ASSISTANT_CONFIG.REQUEST_TIMEOUT_MS;
 const NEAR_BOTTOM_OFFSET = CONFIG.ASSISTANT_CONFIG.NEAR_BOTTOM_OFFSET;
 
 function dispatchNavigate(viewKey) {
@@ -85,6 +100,8 @@ function mountAssistant() {
     assistantState.mounted = true;
     ensureBubbleMarkup();
     setLayout(false);
+    syncRequestControls();
+    syncRunPanel();
 }
 
 function initPixiApp() {
@@ -229,35 +246,189 @@ function makeChatEntry(role, initialText = "", status = "") {
     };
 }
 
-function formatTrace(trace, index) {
-    const output = trace?.outputPreview ? `\n\n\`\`\`text\n${trace.outputPreview}\n\`\`\`` : "";
-    const phase = trace?.phase ? `\n${CONFIG.ASSISTANT_CONFIG.TRACE_PHASE_LABEL}: ${trace.phase}` : "";
-    return `### ${CONFIG.ASSISTANT_CONFIG.TRACE_STEP_LABEL} ${index + 1}: ${trace?.tool || CONFIG.ASSISTANT_CONFIG.TRACE_DEFAULT_TOOL}\n${CONFIG.ASSISTANT_CONFIG.TRACE_STATUS_LABEL}: ${trace?.status || CONFIG.ASSISTANT_CONFIG.TRACE_DEFAULT_STATUS}${phase}${output}`;
-}
-
 function setChatStatus(entryHandle, statusText) {
     if (entryHandle?.status) {
         entryHandle.status.textContent = statusText;
     }
 }
 
-function wait(ms) {
-    return new Promise((resolve) => {
-        setTimeout(resolve, ms);
+function formatRuntimeStatus(status) {
+    if (!status || typeof status !== "object") {
+        return CONFIG.ASSISTANT_CONFIG.STATUS_STREAMING;
+    }
+    const stepText = status.step ? ` ${CONFIG.ASSISTANT_CONFIG.STATUS_STEP_SUFFIX} ${status.step}` : "";
+    if (status.phase === "prefetch") {
+        return CONFIG.ASSISTANT_CONFIG.STATUS_PHASE_PREFETCH;
+    }
+    if (status.phase === "thinking") {
+        return `${CONFIG.ASSISTANT_CONFIG.STATUS_PHASE_THINKING}${stepText}`;
+    }
+    if (status.phase === "tool") {
+        const toolName = status.tool || status.message || CONFIG.ASSISTANT_CONFIG.STATUS_PHASE_TOOL;
+        return `${CONFIG.ASSISTANT_CONFIG.STATUS_TOOL_PREFIX}: ${toolName}`;
+    }
+    return status.message || CONFIG.ASSISTANT_CONFIG.STATUS_STREAMING;
+}
+
+function buildRunSummary() {
+    const status = assistantState.runtimeStatus;
+    const traces = assistantState.runtimeTraces || [];
+    if (!status && !traces.length) {
+        return CONFIG.ASSISTANT_CONFIG.RUN_PANEL_SUMMARY_IDLE;
+    }
+    if (status?.phase === "prefetch") {
+        return "正在整理上下文和现有信息。";
+    }
+    if (status?.phase === "thinking") {
+        const stepText = status.step ? `第 ${status.step} 步` : "当前";
+        return `${stepText}正在思考如何回答。已记录 ${traces.length} 个过程节点。`;
+    }
+    if (status?.phase === "tool") {
+        const toolName = status.tool || "工具";
+        return `正在调用 ${toolName}。已完成 ${traces.length} 个过程节点。`;
+    }
+    if (status?.message === CONFIG.ASSISTANT_CONFIG.STATUS_DONE) {
+        return traces.length ? `回答已完成，共记录 ${traces.length} 个过程节点。` : "回答已完成，没有额外工具调用。";
+    }
+    if (status?.message === CONFIG.ASSISTANT_CONFIG.STATUS_CANCELED) {
+        return `本次请求已取消，保留了 ${traces.length} 个已完成节点。`;
+    }
+    if (status?.message === CONFIG.ASSISTANT_CONFIG.STATUS_TIMEOUT) {
+        return `本次请求已超时，保留了 ${traces.length} 个已完成节点。`;
+    }
+    if (status?.message === CONFIG.ASSISTANT_CONFIG.STATUS_ERROR) {
+        return `本次请求失败，保留了 ${traces.length} 个已完成节点。`;
+    }
+    if (traces.length) {
+        const lastTrace = traces[traces.length - 1];
+        return `最近一步是 ${lastTrace.tool || CONFIG.ASSISTANT_CONFIG.TRACE_DEFAULT_TOOL}，共 ${traces.length} 步。`;
+    }
+    return CONFIG.ASSISTANT_CONFIG.RUN_PANEL_SUMMARY_IDLE;
+}
+
+function clearRequestTimeout() {
+    if (assistantState.requestTimeoutId) {
+        clearTimeout(assistantState.requestTimeoutId);
+        assistantState.requestTimeoutId = null;
+    }
+}
+
+function scheduleRequestTimeout(onTimeout) {
+    clearRequestTimeout();
+    assistantState.requestTimeoutId = setTimeout(() => {
+        onTimeout();
+    }, REQUEST_TIMEOUT_MS);
+}
+
+function resetRuntimeState() {
+    assistantState.runtimeStatus = null;
+    assistantState.runtimeTraces = [];
+    assistantState.runPanelExpanded = false;
+    syncRunPanel();
+}
+
+function setRuntimeStatus(status) {
+    assistantState.runtimeStatus = status || null;
+    syncRunPanel();
+}
+
+function setRuntimeTraces(traces) {
+    assistantState.runtimeTraces = Array.isArray(traces) ? traces : [];
+    syncRunPanel();
+}
+
+function createRunStepCard({title, badge, pills = [], preview = ""}) {
+    const article = document.createElement("article");
+    article.className = "assistant-runStep";
+
+    const head = document.createElement("div");
+    head.className = "assistant-runStep__head";
+
+    const titleNode = document.createElement("span");
+    titleNode.className = "assistant-runStep__title";
+    titleNode.textContent = title;
+    head.appendChild(titleNode);
+
+    const badgeNode = document.createElement("span");
+    badgeNode.className = "assistant-runStep__badge";
+    badgeNode.textContent = badge;
+    head.appendChild(badgeNode);
+
+    article.appendChild(head);
+
+    if (pills.length) {
+        const meta = document.createElement("div");
+        meta.className = "assistant-runStep__meta";
+        for (const pill of pills) {
+            const pillNode = document.createElement("span");
+            pillNode.className = "assistant-runStep__pill";
+            pillNode.textContent = pill;
+            meta.appendChild(pillNode);
+        }
+        article.appendChild(meta);
+    }
+
+    const previewNode = document.createElement("p");
+    previewNode.className = "assistant-runStep__preview";
+    previewNode.textContent = preview || CONFIG.ASSISTANT_CONFIG.RUN_PANEL_EMPTY;
+    article.appendChild(previewNode);
+    return article;
+}
+
+function syncRunPanel() {
+    if (!dom.runPanel || !dom.runTimeline || !dom.runStatus || !dom.runSummary || !dom.runToggle || !dom.runBody) return;
+    const hasStatus = Boolean(assistantState.runtimeStatus);
+    const traces = assistantState.runtimeTraces || [];
+    const hasData = hasStatus || traces.length > 0;
+    dom.runPanel.hidden = !hasData;
+    dom.runStatus.textContent = hasStatus
+        ? formatRuntimeStatus(assistantState.runtimeStatus)
+        : CONFIG.ASSISTANT_CONFIG.RUN_PANEL_IDLE;
+    dom.runSummary.textContent = buildRunSummary();
+    dom.runToggle.hidden = traces.length === 0;
+    dom.runToggle.textContent = assistantState.runPanelExpanded
+        ? CONFIG.ASSISTANT_CONFIG.RUN_PANEL_TOGGLE_COLLAPSE
+        : CONFIG.ASSISTANT_CONFIG.RUN_PANEL_TOGGLE_EXPAND;
+    dom.runBody.hidden = !assistantState.runPanelExpanded;
+    dom.runTimeline.innerHTML = "";
+
+    if (!assistantState.runPanelExpanded) {
+        return;
+    }
+
+    traces.forEach((trace, index) => {
+        const pills = [];
+        if (trace.kind) pills.push(`kind: ${trace.kind}`);
+        if (trace.phase) pills.push(`phase: ${trace.phase}`);
+        if (trace.status) pills.push(`status: ${trace.status}`);
+        dom.runTimeline.appendChild(createRunStepCard({
+            title: trace.title || `${CONFIG.ASSISTANT_CONFIG.TRACE_STEP_LABEL} ${index + 1}`,
+            badge: trace.label || trace.tool || CONFIG.ASSISTANT_CONFIG.TRACE_DEFAULT_TOOL,
+            pills,
+            preview: trace.outputPreview || CONFIG.ASSISTANT_CONFIG.RUN_PANEL_EMPTY,
+        }));
     });
 }
 
-async function streamMarkdown(text, onUpdate) {
-    const source = String(text || "");
-    if (!source) {
-        onUpdate("");
-        return;
+function syncRequestControls() {
+    const busy = Boolean(assistantState.activeRequest);
+    const retryable = Boolean(assistantState.lastRetryText);
+    if (dom.send) {
+        dom.send.disabled = busy;
+        dom.send.textContent = CONFIG.ASSISTANT_CONFIG.REQUEST_SEND_LABEL;
     }
-    let current = "";
-    for (const char of source) {
-        current += char;
-        onUpdate(current);
-        await wait(STREAM_DELAY_MS);
+    if (dom.cancel) {
+        dom.cancel.hidden = !busy;
+        dom.cancel.disabled = !busy;
+        dom.cancel.textContent = CONFIG.ASSISTANT_CONFIG.REQUEST_CANCEL_LABEL;
+    }
+    if (dom.retry) {
+        dom.retry.hidden = busy || !retryable;
+        dom.retry.disabled = busy || !retryable;
+        dom.retry.textContent = CONFIG.ASSISTANT_CONFIG.REQUEST_RETRY_LABEL;
+    }
+    if (dom.input) {
+        dom.input.disabled = busy;
     }
 }
 
@@ -288,51 +459,125 @@ async function handleTouch(hitName) {
     await showTouchResponse(response);
 }
 
+async function cancelActiveRequest() {
+    if (!assistantState.activeRequest?.requestId) {
+        return;
+    }
+    await window.api.cancelAgentChat(assistantState.activeRequest.requestId);
+}
+
 async function handleChat(text) {
+    assistantState.lastRetryText = "";
+    syncRequestControls();
+    resetRuntimeState();
+
     makeChatEntry(CONFIG.ASSISTANT_CONFIG.ROLE_USER, text, CONFIG.ASSISTANT_CONFIG.STATUS_SENT);
     const assistantEntry = makeChatEntry(
         CONFIG.ASSISTANT_CONFIG.ROLE_ASSISTANT,
         CONFIG.ASSISTANT_CONFIG.THINKING_TEXT,
         CONFIG.ASSISTANT_CONFIG.STATUS_PREPARING,
     );
-    const response = await getResponse(text);
-    const responseText = response?.content || "";
-    const expandForResponse = shouldExpandForChat(responseText, response?.traces);
 
-    if (!assistantState.expanded && expandForResponse) {
-        setLayout(true);
-        assistantState.shouldStickToBottom = true;
-        scrollChatToBottom(true);
-    }
+    let responseText = "";
+    let hasLiveContent = false;
+    let timedOut = false;
+    let canceled = false;
+
+    const updateAssistantContent = (nextText) => {
+        responseText = nextText || "";
+        renderMarkdown(assistantEntry.content, responseText || CONFIG.ASSISTANT_CONFIG.THINKING_TEXT);
+        const expandForResponse = shouldExpandForChat(responseText, assistantState.runtimeTraces);
+        if (!assistantState.expanded && expandForResponse) {
+            setLayout(true);
+            assistantState.shouldStickToBottom = true;
+            scrollChatToBottom(true);
+        } else {
+            scrollChatToBottom();
+        }
+        if (!assistantState.expanded && responseText) {
+            renderBubble(responseText, "chat");
+        }
+    };
 
     setChatStatus(assistantEntry, CONFIG.ASSISTANT_CONFIG.STATUS_STREAMING);
-    await streamMarkdown(responseText, (partialText) => {
-        renderMarkdown(assistantEntry.content, partialText);
-        scrollChatToBottom();
-        if (!assistantState.expanded) {
-            renderBubble(partialText, "chat");
+
+    try {
+        let response;
+        if (window.api.agentChatStream) {
+            const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            const request = window.api.agentChatStream(text, {
+                onStatus(status) {
+                    setRuntimeStatus(status);
+                    setChatStatus(assistantEntry, formatRuntimeStatus(status));
+                },
+                onTrace(trace, traces) {
+                    setRuntimeTraces(traces);
+                    if (!assistantState.expanded && shouldExpandForChat(responseText, traces)) {
+                        setLayout(true);
+                    }
+                    scrollChatToBottom(true);
+                },
+                onContent(content) {
+                    hasLiveContent = true;
+                    updateAssistantContent(content);
+                },
+                onError() {
+                    // Final error handling happens in the catch block below.
+                },
+                onCancel() {
+                    canceled = true;
+                },
+            }, requestId);
+            assistantState.activeRequest = {requestId};
+            syncRequestControls();
+            scheduleRequestTimeout(async () => {
+                timedOut = true;
+                await cancelActiveRequest();
+            });
+            response = await request;
+        } else {
+            response = await getResponse(text);
         }
-    });
 
-    if (Array.isArray(response?.traces) && response.traces.length) {
-        const traceEntry = makeChatEntry(
-            CONFIG.ASSISTANT_CONFIG.ROLE_AGENT,
-            "",
-            `${response.traces.length} ${CONFIG.ASSISTANT_CONFIG.TRACE_STEPS_SUFFIX}`,
-        );
-        renderMarkdown(
-            traceEntry.content,
-            response.traces.map((trace, index) => formatTrace(trace, index)).join("\n\n"),
-        );
-        scrollChatToBottom(true);
+        if (!hasLiveContent) {
+            updateAssistantContent(response?.content || "");
+        }
+        if ((!assistantState.runtimeTraces || !assistantState.runtimeTraces.length) && Array.isArray(response?.traces) && response.traces.length) {
+            setRuntimeTraces(response.traces);
+        }
+        setRuntimeStatus({message: CONFIG.ASSISTANT_CONFIG.STATUS_DONE});
+        setChatStatus(assistantEntry, CONFIG.ASSISTANT_CONFIG.STATUS_DONE);
+        assistantState.lastRetryText = "";
+    } catch (error) {
+        const isAbort = canceled || timedOut || error?.name === "AbortError";
+        let fallbackMessage = CONFIG.ASSISTANT_CONFIG.REQUEST_FAILED_TEXT;
+        let statusText = CONFIG.ASSISTANT_CONFIG.STATUS_ERROR;
+        if (timedOut) {
+            fallbackMessage = CONFIG.ASSISTANT_CONFIG.REQUEST_TIMEOUT_TEXT;
+            statusText = CONFIG.ASSISTANT_CONFIG.STATUS_TIMEOUT;
+        } else if (isAbort) {
+            fallbackMessage = CONFIG.ASSISTANT_CONFIG.REQUEST_CANCELED_TEXT;
+            statusText = CONFIG.ASSISTANT_CONFIG.STATUS_CANCELED;
+        }
+        if (!responseText) {
+            updateAssistantContent(fallbackMessage);
+        }
+        setRuntimeStatus({message: statusText});
+        setChatStatus(assistantEntry, statusText);
+        assistantState.lastRetryText = text;
+        if (!isAbort) {
+            console.error(error);
+        }
+    } finally {
+        clearRequestTimeout();
+        assistantState.activeRequest = null;
+        syncRequestControls();
     }
-
-    setChatStatus(assistantEntry, CONFIG.ASSISTANT_CONFIG.STATUS_DONE);
 
     if (assistantState.expanded) {
         updateBubbleExpandButton("touch");
     } else {
-        renderBubble(responseText, "chat");
+        renderBubble(responseText || CONFIG.ASSISTANT_CONFIG.REQUEST_FAILED_TEXT, "chat");
     }
 }
 
@@ -342,6 +587,9 @@ function enqueue(task) {
         const message = CONFIG.ASSISTANT_CONFIG.REQUEST_FAILED_TEXT;
         renderBubble(message, "chat");
         makeChatEntry(CONFIG.ASSISTANT_CONFIG.ROLE_ASSISTANT, message, CONFIG.ASSISTANT_CONFIG.STATUS_ERROR);
+        assistantState.activeRequest = null;
+        clearRequestTimeout();
+        syncRequestControls();
     });
     return assistantState.queue;
 }
@@ -360,11 +608,30 @@ function wireInput() {
     if (!dom.inputForm || !dom.input) return;
     dom.inputForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        if (assistantState.activeRequest) return;
         const text = dom.input.value.trim();
         if (!text) return;
         dom.input.value = "";
         await enqueue(() => handleChat(text));
     });
+    if (dom.cancel) {
+        dom.cancel.addEventListener("click", async () => {
+            if (!assistantState.activeRequest) return;
+            await cancelActiveRequest();
+        });
+    }
+    if (dom.retry) {
+        dom.retry.addEventListener("click", async () => {
+            if (!assistantState.lastRetryText || assistantState.activeRequest) return;
+            await enqueue(() => handleChat(assistantState.lastRetryText));
+        });
+    }
+    if (dom.runToggle) {
+        dom.runToggle.addEventListener("click", () => {
+            assistantState.runPanelExpanded = !assistantState.runPanelExpanded;
+            syncRunPanel();
+        });
+    }
 }
 
 function wireNavBtn() {

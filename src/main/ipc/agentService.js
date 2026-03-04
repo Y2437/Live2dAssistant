@@ -1,6 +1,6 @@
-﻿const fs = require("fs/promises");
+const fs = require("fs/promises");
 const path = require("path");
-const {aiChatWithContent} = require("./aiService");
+const {aiChatWithContent, aiChatWithContentStream} = require("./aiService");
 const {
     AGENT_LIBRARY_INDEX_JSON_PATH,
     AGENT_LIBRARY_ROOTS_JSON_PATH,
@@ -18,6 +18,7 @@ const {
 const libraryTools = require("./agentLibraryTools");
 const searchTools = require("./agentSearchTools");
 const visionTools = require("./agentVisionTools");
+const {buildAssistantFinalAnswerMessages} = require("./assistantPrompt");
 
 // AgentService keeps orchestration state here and delegates tool-heavy domains to helper modules.
 class AgentService {
@@ -80,67 +81,256 @@ class AgentService {
         return roots;
     }
 
-    async chat(userMessage) {
-        if (this.shouldRunCapabilitySelfTest(userMessage)) {
-            return await this.runCapabilitySelfTest(userMessage);
+    async emitHook(hook, ...args) {
+        if (typeof hook === "function") {
+            await hook(...args);
         }
+    }
+
+    ensureNotAborted(signal) {
+        if (signal?.aborted) {
+            const error = new Error("Request canceled.");
+            error.name = "AbortError";
+            throw error;
+        }
+    }
+
+    async requestAgentTurn(conversation, hooks = {}, options = {}) {
+        this.ensureNotAborted(hooks.signal);
+        const response = await aiChatWithContent(conversation, {
+            temperature: 0.2,
+            maxTokens: 2048,
+            signal: hooks.signal,
+            enableThinking: options.enableThinking !== false,
+        });
+        return {
+            response,
+            content: response?.choices?.[0]?.message?.content ?? "",
+            streamMode: "internal",
+        };
+    }
+
+    async streamFinalAnswer(conversation, hooks = {}) {
+        this.ensureNotAborted(hooks.signal);
+
+        if (typeof hooks.onText !== "function") {
+            const response = await aiChatWithContent(conversation, {
+                temperature: 0.4,
+                maxTokens: 2048,
+                signal: hooks.signal,
+                enableThinking: false,
+            });
+            return response?.choices?.[0]?.message?.content ?? "";
+        }
+
+        let content = "";
+        const response = await aiChatWithContentStream(conversation, {
+            temperature: 0.4,
+            maxTokens: 2048,
+            signal: hooks.signal,
+            enableThinking: false,
+        }, {
+            onChunk: async ({content: fullContent}) => {
+                this.ensureNotAborted(hooks.signal);
+                content = fullContent || content;
+                await this.emitHook(hooks.onText, content);
+            },
+        });
+
+        return response?.choices?.[0]?.message?.content ?? content ?? "";
+    }
+
+    formatTraceArgs(args = {}) {
+        if (!args || typeof args !== "object") {
+            return "";
+        }
+        const parts = Object.entries(args)
+            .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "")
+            .slice(0, 2)
+            .map(([key, value]) => `${key}=${summarizeText(typeof value === "string" ? value : JSON.stringify(value), 48)}`);
+        return parts.length ? ` (${parts.join(", ")})` : "";
+    }
+
+    async pushWorkflowTrace(traces, hooks, trace) {
+        traces.push(trace);
+        await this.emitHook(hooks.onTrace, trace, [...traces]);
+    }
+
+    createThinkingTrace(step, action) {
+        const stepNumber = Number(step) + 1;
+        if (!action) {
+            return {
+                kind: "thinking",
+                phase: "thinking",
+                status: "draft",
+                title: `Thinking ${stepNumber}`,
+                label: "draft",
+                outputPreview: "Planner produced a direct answer draft without another tool call.",
+            };
+        }
+        if (action.type === "tool") {
+            return {
+                kind: "thinking",
+                phase: "thinking",
+                status: "planned",
+                title: `Thinking ${stepNumber}`,
+                label: action.tool || "tool",
+                outputPreview: `Selected ${action.tool}${this.formatTraceArgs(action.args)} to gather the next piece of information.`,
+            };
+        }
+        if (action.type === "final") {
+            return {
+                kind: "thinking",
+                phase: "thinking",
+                status: "ready",
+                title: `Thinking ${stepNumber}`,
+                label: "final",
+                outputPreview: "Planner determined that enough information is available for the final reply.",
+            };
+        }
+        return {
+            kind: "thinking",
+            phase: "thinking",
+            status: action.type || "update",
+            title: `Thinking ${stepNumber}`,
+            label: action.type || "update",
+            outputPreview: "Planner updated the internal execution state.",
+        };
+    }
+
+    buildWorkflowDigest(traces = []) {
+        if (!Array.isArray(traces) || !traces.length) {
+            return "No workflow notes.";
+        }
+        return traces.slice(-10).map((trace, index) => {
+            if (trace.kind === "thinking") {
+                return `- Thought ${index + 1}: ${trace.outputPreview || "Planner updated the execution state."}`;
+            }
+            const label = trace.tool || "tool";
+            const status = trace.status || "done";
+            const preview = trace.outputPreview || "No additional details.";
+            return `- Tool ${label} (${status}): ${preview}`;
+        }).join("\n");
+    }
+
+    buildFinalAnswerConversation({userMessage, context, traces, plannerDraft}) {
+        return buildAssistantFinalAnswerMessages({
+            contextItems: context,
+            userMessage,
+            workflowSummary: this.buildWorkflowDigest(traces),
+            plannerDraft,
+        });
+    }
+
+    async finalizeAgentResponse({userMessage, context, traces, hooks, plannerDraft = ""}) {
+        await this.emitHook(hooks.onStatus, {
+            phase: "thinking",
+            message: "Composing final answer",
+        });
+        await this.pushWorkflowTrace(traces, hooks, {
+            kind: "thinking",
+            phase: "final",
+            status: "composing",
+            title: "Final response",
+            label: "compose",
+            outputPreview: "Converting collected notes and tool results into the assistant's final reply.",
+        });
+        const finalConversation = this.buildFinalAnswerConversation({
+            userMessage,
+            context,
+            traces,
+            plannerDraft,
+        });
+        const finalContent = await this.streamFinalAnswer(finalConversation, hooks);
+        return {
+            mode: "agent",
+            content: finalContent || plannerDraft || "I do not have a usable result yet.",
+            traces,
+        };
+    }
+
+    async chat(userMessage, hooks = {}) {
+        this.ensureNotAborted(hooks.signal);
         const traces = [];
-        const conversation = [];
+        const planningConversation = [];
         const context = this.getAssistantContext().slice(-8);
         const memories = this.getLongTermMemory().slice(-10).map((item) => ({
             title: item.title,
             content: summarizeText(item.content, 160),
         }));
 
-        conversation.push({
+        planningConversation.push({
             role: "system",
             content: [
                 {
                     type: "text",
-                    text: this.buildAgentSystemPrompt(memories, context),
+                    text: this.buildAgentPlanningSystemPrompt(memories, context),
                 },
             ],
         });
-        conversation.push({
+        planningConversation.push({
             role: "user",
             content: [{type: "text", text: userMessage}],
         });
-        await this.runPrefetchTools(userMessage, traces, conversation);
+        await this.emitHook(hooks.onStatus, {phase: "prefetch", message: "Preparing context"});
+        await this.runPrefetchTools(userMessage, traces, planningConversation, {
+            onTrace: async (trace, nextTraces) => {
+                await this.emitHook(hooks.onTrace, trace, [...nextTraces]);
+            },
+        });
+        this.ensureNotAborted(hooks.signal);
 
         for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
-            const response = await aiChatWithContent(conversation, {
-                temperature: 0.2,
-                maxTokens: 2048,
+            this.ensureNotAborted(hooks.signal);
+            await this.emitHook(hooks.onStatus, {
+                phase: "thinking",
+                step: step + 1,
+                message: `Thinking step ${step + 1}`,
             });
-            const content = response?.choices?.[0]?.message?.content ?? "";
+            const turn = await this.requestAgentTurn(planningConversation, hooks, {enableThinking: true});
+            const content = turn.content;
             const action = this.parseAgentResponse(content);
+            await this.pushWorkflowTrace(traces, hooks, this.createThinkingTrace(step, action));
             if (!action) {
-                return {
-                    mode: "agent",
-                    content: content || "I do not have a usable result yet.",
+                return await this.finalizeAgentResponse({
+                    userMessage,
+                    context,
                     traces,
-                };
+                    hooks,
+                    plannerDraft: content || "",
+                });
             }
             if (action.type === "final") {
-                return {
-                    mode: "agent",
-                    content: action.content || content || "I do not have a usable result yet.",
+                return await this.finalizeAgentResponse({
+                    userMessage,
+                    context,
                     traces,
-                };
+                    hooks,
+                    plannerDraft: action.content || content || "",
+                });
             }
             if (action.type !== "tool") {
-                return {
-                    mode: "agent",
-                    content: content || "The tool chain did not return a usable result.",
+                return await this.finalizeAgentResponse({
+                    userMessage,
+                    context,
                     traces,
-                };
+                    hooks,
+                    plannerDraft: content || "",
+                });
             }
 
             const args = normalizeToolArgs(action.args);
             let toolResult;
             try {
+                this.ensureNotAborted(hooks.signal);
+                await this.emitHook(hooks.onStatus, {
+                    phase: "tool",
+                    step: step + 1,
+                    tool: action.tool,
+                    message: `Running ${action.tool}`,
+                });
                 toolResult = await this.runTool(action.tool, args);
-                traces.push({
+                await this.pushWorkflowTrace(traces, hooks, {
                     tool: action.tool,
                     status: "success",
                     input: args,
@@ -150,19 +340,20 @@ class AgentService {
                 toolResult = {
                     error: error?.message || String(error),
                 };
-                traces.push({
+                await this.pushWorkflowTrace(traces, hooks, {
                     tool: action.tool,
                     status: "error",
                     input: args,
                     outputPreview: clampTraceOutput(toolResult),
                 });
             }
+            this.ensureNotAborted(hooks.signal);
 
-            conversation.push({
+            planningConversation.push({
                 role: "assistant",
                 content: [{type: "text", text: JSON.stringify(action)}],
             });
-            conversation.push({
+            planningConversation.push({
                 role: "user",
                 content: [{
                     type: "text",
@@ -171,21 +362,16 @@ class AgentService {
             });
         }
 
-        return {
-            mode: "agent",
-            content: "The agent reached the step limit. Ask me to continue with a narrower direction.",
+        return await this.finalizeAgentResponse({
+            userMessage,
+            context,
             traces,
-        };
+            hooks,
+            plannerDraft: "",
+        });
     }
 
-    shouldRunCapabilitySelfTest(userMessage) {
-        const text = String(userMessage || "").toLowerCase();
-        return /(测试|测一下|自测|检查).*(agent|能力|工具)/.test(text)
-            || /(agent|工具).*(测试|自测|检查)/.test(text)
-            || /test.*(agent|tool|capability)/.test(text);
-    }
-
-    async runCapabilitySelfTest(userMessage) {
+    async runCapabilitySelfTest(userMessage = "", hooks = {}) {
         const traces = [];
         const results = [];
         const suite = [
@@ -205,29 +391,47 @@ class AgentService {
 
         for (const item of suite) {
             try {
+                this.ensureNotAborted(hooks.signal);
+                await this.emitHook(hooks.onStatus, {
+                    phase: "self-test",
+                    tool: item.tool,
+                    message: `Testing ${item.tool}`,
+                });
                 const output = await this.runTool(item.tool, item.args);
-                traces.push({
+                const trace = {
                     tool: item.tool,
                     status: "success",
                     input: item.args,
                     outputPreview: clampTraceOutput(output),
                     phase: "self-test",
-                });
+                };
+                traces.push(trace);
+                await this.emitHook(hooks.onTrace, trace, [...traces]);
                 results.push(`- ${item.tool}: success`);
             } catch (error) {
-                traces.push({
+                const trace = {
                     tool: item.tool,
                     status: "error",
                     input: item.args,
                     outputPreview: clampTraceOutput({error: error?.message || String(error)}),
                     phase: "self-test",
-                });
+                };
+                traces.push(trace);
+                await this.emitHook(hooks.onTrace, trace, [...traces]);
                 results.push(`- ${item.tool}: error - ${error?.message || String(error)}`);
             }
         }
 
+        const successCount = traces.filter((item) => item.status === "success").length;
+        const errorCount = traces.length - successCount;
+
         return {
-            mode: "agent",
+            mode: "self-test",
+            summary: {
+                total: traces.length,
+                successCount,
+                errorCount,
+            },
             content: [
                 "Agent self-test finished.",
                 "",
@@ -345,8 +549,8 @@ class AgentService {
         return searchTools.buildPrefetchPlan(userMessage);
     }
 
-    async runPrefetchTools(userMessage, traces, conversation) {
-        return searchTools.runPrefetchTools(this, userMessage, traces, conversation);
+    async runPrefetchTools(userMessage, traces, conversation, options = {}) {
+        return searchTools.runPrefetchTools(this, userMessage, traces, conversation, options);
     }
 
 
@@ -358,8 +562,8 @@ class AgentService {
         return visionTools.analyzeClipboardImage(this, args);
     }
 
-    buildAgentSystemPrompt(memories, context) {
-        return searchTools.buildAgentSystemPrompt(memories, context);
+    buildAgentPlanningSystemPrompt(memories, context) {
+        return searchTools.buildAgentPlanningSystemPrompt(memories, context);
     }
 
     async runTool(toolName, args) {

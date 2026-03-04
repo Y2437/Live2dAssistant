@@ -49,7 +49,9 @@
 :root[data-theme="light"] .assistant-bubble,
 :root[data-theme="light"] .assistant-chatCard,
 :root[data-theme="light"] .assistant-chatEntry,
-:root[data-theme="light"] .assistant-chatMeta__item{
+:root[data-theme="light"] .assistant-chatMeta__item,
+:root[data-theme="light"] .assistant-runPanel,
+:root[data-theme="light"] .assistant-runStep{
     background-color: var(--c-panel);
 }
 
@@ -68,6 +70,20 @@
 :root[data-theme="light"] .settings-btn,
 :root[data-theme="light"] .settings-pill,
 :root[data-theme="light"] .settings-list__item,
+:root[data-theme="light"] .settings-statusPill,
+:root[data-theme="light"] .organizer-panel,
+:root[data-theme="light"] .organizer-statCard,
+:root[data-theme="light"] .organizer-search__input,
+:root[data-theme="light"] .organizer-sort__select,
+:root[data-theme="light"] .organizer-toolbarBtn,
+:root[data-theme="light"] .organizer-categoryItem,
+:root[data-theme="light"] .organizer-treeNode__toggle,
+:root[data-theme="light"] .organizer-fileItem,
+:root[data-theme="light"] .organizer-outline__item,
+:root[data-theme="light"] .organizer-scope__chip,
+:root[data-theme="light"] .organizer-fileItem__badge,
+:root[data-theme="light"] .organizer-pdfPreview__text,
+:root[data-theme="light"] .organizer-pdfPreview__match,
 :root[data-theme="light"] .cards-search__input,
 :root[data-theme="light"] .cards-field__control,
 :root[data-theme="light"] .cards-editorHead,
@@ -107,12 +123,34 @@
 :root[data-theme="light"] .assistant-chatCard,
 :root[data-theme="light"] .assistant-chatEntry,
 :root[data-theme="light"] .assistant-chatMeta__item,
+:root[data-theme="light"] .assistant-runPanel,
+:root[data-theme="light"] .assistant-runStep,
+:root[data-theme="light"] .assistant-runPanel__status,
+:root[data-theme="light"] .assistant-runStep__pill,
+:root[data-theme="light"] .assistant-runPanel__toggle,
 :root[data-theme="light"] .assistant-bubble__expand,
 :root[data-theme="light"] .assistant-chatCard__collapse,
 :root[data-theme="light"] .settings-btn,
 :root[data-theme="light"] .settings-pill,
 :root[data-theme="light"] .settings-list__item,
 :root[data-theme="light"] .settings-record,
+:root[data-theme="light"] .settings-statusPill,
+:root[data-theme="light"] .organizer-panel,
+:root[data-theme="light"] .organizer-panel__head,
+:root[data-theme="light"] .organizer-previewHead,
+:root[data-theme="light"] .organizer-outline,
+:root[data-theme="light"] .organizer-search__input,
+:root[data-theme="light"] .organizer-sort__select,
+:root[data-theme="light"] .organizer-toolbarBtn,
+:root[data-theme="light"] .organizer-categoryItem,
+:root[data-theme="light"] .organizer-treeNode__toggle,
+:root[data-theme="light"] .organizer-fileItem,
+:root[data-theme="light"] .organizer-outline__item,
+:root[data-theme="light"] .organizer-scope__chip,
+:root[data-theme="light"] .organizer-fileItem__badge,
+:root[data-theme="light"] .organizer-statCard,
+:root[data-theme="light"] .organizer-pdfPreview__text,
+:root[data-theme="light"] .organizer-pdfPreview__match,
 :root[data-theme="light"] .cards-stat,
 :root[data-theme="light"] .cards-panel,
 :root[data-theme="light"] .cards-card,
@@ -153,6 +191,14 @@
 :root[data-theme="light"] .assistant-input:hover,
 :root[data-theme="light"] [data-role="assistant-input"]:hover,
 :root[data-theme="light"] .assistant-bubble__expand:hover,
+:root[data-theme="light"] .assistant-runPanel__toggle:hover,
+:root[data-theme="light"] .organizer-search__input:hover,
+:root[data-theme="light"] .organizer-sort__select:hover,
+:root[data-theme="light"] .organizer-toolbarBtn:hover,
+:root[data-theme="light"] .organizer-categoryItem:hover,
+:root[data-theme="light"] .organizer-treeNode__toggle:hover,
+:root[data-theme="light"] .organizer-fileItem:hover,
+:root[data-theme="light"] .organizer-outline__item:hover,
 :root[data-theme="light"] .assistant-chatCard__collapse:hover,
 :root[data-theme="light"] .cards-search__input:hover,
 :root[data-theme="light"] .cards-field__control:hover,
@@ -193,10 +239,22 @@
 :root[data-theme="light"] .placeholder-desc,
 :root[data-theme="light"] .assistant-chatCard__desc,
 :root[data-theme="light"] .assistant-chatEntry__status,
+:root[data-theme="light"] .assistant-runPanel__desc,
+:root[data-theme="light"] .assistant-runStep__preview,
 :root[data-theme="light"] .settings-card__desc,
 :root[data-theme="light"] .settings-list__desc,
 :root[data-theme="light"] .settings-inlineMeta,
 :root[data-theme="light"] .settings-record__meta,
+:root[data-theme="light"] .organizer-status,
+:root[data-theme="light"] .organizer-panel__meta,
+:root[data-theme="light"] .organizer-search__label,
+:root[data-theme="light"] .organizer-sort__label,
+:root[data-theme="light"] .organizer-fileItem__path,
+:root[data-theme="light"] .organizer-fileItem__excerpt,
+:root[data-theme="light"] .organizer-previewHead__meta,
+:root[data-theme="light"] .organizer-outline__empty,
+:root[data-theme="light"] .organizer-statCard__hint,
+:root[data-theme="light"] .organizer-pdfPreview__matchText,
 :root[data-theme="light"] .cards-desc,
 :root[data-theme="light"] .cards-editorHead__desc,
 :root[data-theme="light"] .cards-form__status,
@@ -205,6 +263,16 @@
 :root[data-theme="light"] .cards-card__source,
 :root[data-theme="light"] .cards-modal__time{
     color: var(--c-muted);
+}
+
+:root[data-theme="light"] .settings-statusPill[data-status="success"]{
+    background-color: rgba(22, 163, 74, 0.10);
+    color: #166534;
+}
+
+:root[data-theme="light"] .settings-statusPill[data-status="error"]{
+    background-color: rgba(220, 38, 38, 0.10);
+    color: #991b1b;
 }
 
 /* focus rings */
@@ -218,6 +286,14 @@
 :root[data-theme="light"] .assistant-send:focus-visible,
 :root[data-theme="light"] [data-role="assistant-send"]:focus-visible,
 :root[data-theme="light"] .assistant-bubble__expand:focus-visible,
+:root[data-theme="light"] .assistant-runPanel__toggle:focus-visible,
+:root[data-theme="light"] .organizer-search__input:focus,
+:root[data-theme="light"] .organizer-sort__select:focus,
+:root[data-theme="light"] .organizer-toolbarBtn:focus-visible,
+:root[data-theme="light"] .organizer-categoryItem:focus-visible,
+:root[data-theme="light"] .organizer-treeNode__toggle:focus-visible,
+:root[data-theme="light"] .organizer-fileItem:focus-visible,
+:root[data-theme="light"] .organizer-outline__item:focus-visible,
 :root[data-theme="light"] .assistant-chatCard__collapse:focus-visible,
 :root[data-theme="light"] .settings-btn:focus-visible,
 :root[data-theme="light"] .cards-card:focus-visible,

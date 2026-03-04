@@ -1,5 +1,6 @@
 const MEMORY_CATEGORIES = new Set(["identity", "preference", "project", "constraint", "plan", "relationship", "workflow", "reference", "other"]);
 const DEFAULT_CARD_CATEGORY = "未分类";
+const {buildKnowledgeCardSummaryMessages} = require("./promptRegistry");
 
 function normalizeAssistantContext(data) {
     if (!Array.isArray(data)) {
@@ -194,19 +195,6 @@ function validateKnowledgeCardPayload(data, options = {}) {
         category: typeof data?.category === "string" && data.category.trim() ? data.category.trim() : DEFAULT_CARD_CATEGORY,
         source: typeof data?.source === "string" && data.source.trim() ? data.source.trim() : "user",
     };
-}
-
-function buildKnowledgeCardSummaryMessages(data) {
-    return [
-        {
-            role: "system",
-            message: "你是知识卡片摘要助手。请基于标题、分类和正文，生成一条简洁客观的中文摘要。要求：1. 18到48字；2. 不使用 Markdown；3. 不使用项目符号；4. 不重复标题；5. 只输出摘要正文。",
-        },
-        {
-            role: "user",
-            message: `标题: ${data.title}\n分类: ${data.category}\n正文: ${data.content}`,
-        },
-    ];
 }
 
 module.exports = {

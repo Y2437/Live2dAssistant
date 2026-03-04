@@ -4,6 +4,11 @@ const {clipboard, desktopCapturer} = require("electron");
 const {aiChatWithModel} = require("./aiService");
 const {AGENT_SCREENSHOT_DIR_PATH, ENV_CONFIG} = require("../config");
 const {sanitizeFileName} = require("./agentShared");
+const {
+    VISION_ANALYSIS_SYSTEM_PROMPT,
+    DEFAULT_IMAGE_ANALYSIS_PROMPT,
+    DEFAULT_CLIPBOARD_IMAGE_PROMPT,
+} = require("./promptRegistry");
 
 // Screen, clipboard, and vision helpers for multimodal agent tools.
 
@@ -52,7 +57,7 @@ async function captureScreen(name) {
 
 async function analyzeImage(args) {
     const imagePath = String(args?.imagePath || "").trim();
-    const prompt = String(args?.prompt || "Please describe the key information in this image.").trim();
+    const prompt = String(args?.prompt || DEFAULT_IMAGE_ANALYSIS_PROMPT).trim();
     if (!imagePath) throw new Error("imagePath is required.");
     const model = ENV_CONFIG.AI_VISION_MODEL || ENV_CONFIG.VISION_MODEL;
     if (!model) throw new Error("Missing vision model configuration.");
@@ -61,7 +66,7 @@ async function analyzeImage(args) {
     const response = await aiChatWithModel([
         {
             role: "system",
-            content: [{type: "text", text: "You are an image analysis tool. Return only concise, objective observations in Chinese."}],
+            content: [{type: "text", text: VISION_ANALYSIS_SYSTEM_PROMPT}],
         },
         {
             role: "user",
@@ -89,7 +94,7 @@ async function analyzeClipboardImage(service, args = {}) {
     if (!image || image.isEmpty()) throw new Error("Clipboard image is empty.");
     const filePath = path.join(AGENT_SCREENSHOT_DIR_PATH, `${Date.now()}-clipboard.png`);
     await fs.writeFile(filePath, image.toPNG());
-    return analyzeImage({imagePath: filePath, prompt: args.prompt || "Analyze the clipboard image."});
+    return analyzeImage({imagePath: filePath, prompt: args.prompt || DEFAULT_CLIPBOARD_IMAGE_PROMPT});
 }
 
 module.exports = {getPomodoroStatus, getClipboardSnapshot, captureScreen, analyzeImage, listScreenshots, analyzeClipboardImage};

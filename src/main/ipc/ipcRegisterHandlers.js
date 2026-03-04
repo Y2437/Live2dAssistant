@@ -1,4 +1,6 @@
 const {ipcMain} = require("electron");
+const AGENT_STREAM_EVENT = "app:agentChatStream:event";
+const activeAgentStreams = new Map();
 
 // Grouped IPC registration helpers keep ipcRegister focused on state and lifecycle.
 
@@ -63,6 +65,10 @@ function registerAgentHandlers(registry) {
         await service.rebuildLibraryIndex();
         return service.getCapabilities();
     });
+    ipcMain.handle("app:runAgentSelfTest", async (event, payload) => {
+        const query = typeof payload?.query === "string" ? payload.query.trim() : "";
+        return ensureAgentService(registry).runCapabilitySelfTest(query);
+    });
     ipcMain.handle("app:agentChat", async (event, message) => {
         if (typeof message !== "string" || !message.trim()) {
             throw new Error("Message is required.");
@@ -70,6 +76,62 @@ function registerAgentHandlers(registry) {
         const result = await ensureAgentService(registry).chat(message.trim());
         await registry.recordAssistantExchange(message.trim(), result?.content || "");
         return result;
+    });
+    ipcMain.handle("app:agentChatStream", async (event, payload) => {
+        const message = typeof payload?.message === "string" ? payload.message.trim() : "";
+        const requestId = typeof payload?.requestId === "string" ? payload.requestId : "";
+        if (!message) {
+            throw new Error("Message is required.");
+        }
+        if (!requestId) {
+            throw new Error("Request id is required.");
+        }
+        const send = (data) => {
+            event.sender.send(AGENT_STREAM_EVENT, {
+                requestId,
+                ...data,
+            });
+        };
+        const abortController = new AbortController();
+        activeAgentStreams.set(requestId, abortController);
+        try {
+            const result = await ensureAgentService(registry).chat(message, {
+                onStatus: async (status) => send({type: "status", status}),
+                onTrace: async (trace, traces) => send({type: "trace", trace, traces}),
+                onText: async (content) => send({type: "content", content}),
+                signal: abortController.signal,
+            });
+            await registry.recordAssistantExchange(message, result?.content || "");
+            send({type: "complete", result});
+            return result;
+        } catch (error) {
+            if (error?.name === "AbortError") {
+                send({
+                    type: "canceled",
+                    error: error?.message || "Request canceled.",
+                });
+                throw error;
+            }
+            send({
+                type: "error",
+                error: error?.message || String(error),
+            });
+            throw error;
+        } finally {
+            activeAgentStreams.delete(requestId);
+        }
+    });
+    ipcMain.handle("app:agentChatCancel", async (event, payload) => {
+        const requestId = typeof payload?.requestId === "string" ? payload.requestId : "";
+        if (!requestId) {
+            throw new Error("Request id is required.");
+        }
+        const controller = activeAgentStreams.get(requestId);
+        if (!controller) {
+            return {ok: false, requestId};
+        }
+        controller.abort();
+        return {ok: true, requestId};
     });
 }
 
@@ -132,6 +194,7 @@ function registerKnowledgeCardHandlers(registry) {
 }
 
 module.exports = {
+    AGENT_STREAM_EVENT,
     registerCoreHandlers,
     registerAiChatHandlers,
     registerContextHandlers,

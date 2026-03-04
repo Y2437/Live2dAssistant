@@ -2,6 +2,7 @@ import { $, $$ } from "../shared/dom.js";
 import { CONFIG } from "../core/config.js";
 import {
     renderAgentCapabilityList,
+    renderAgentSelfTestList,
     renderAgentToolList,
     renderContextList,
     renderMemoryList,
@@ -21,9 +22,13 @@ const settingsDom = {
     agentCapabilityList: $('[data-role="settings-agent-capability-list"]'),
     agentToolsList: $('[data-role="settings-agent-tools-list"]'),
     rebuildLibraryBtn: $('[data-role="settings-rebuild-library"]'),
+    runSelfTestBtn: $('[data-role="settings-run-self-test"]'),
+    selfTestMeta: $('[data-role="settings-self-test-meta"]'),
+    selfTestList: $('[data-role="settings-self-test-list"]'),
     extractMemoryBtn: null,
     memoryStatus: null,
     memoryRoutineMeta: null,
+    selfTestResult: null,
 };
 
 function ensureAgentSettingsCard() {
@@ -39,6 +44,7 @@ function ensureAgentSettingsCard() {
         <p class="settings-card__desc">Large-window mode agent tools, file index, and capability status.</p>
         <div class="settings-actions">
             <button type="button" class="settings-btn" data-role="settings-rebuild-library">Rebuild library index</button>
+            <button type="button" class="settings-btn" data-role="settings-run-self-test">Run self-test</button>
             <span class="settings-inlineMeta" data-role="settings-agent-meta">Agent loading...</span>
         </div>
         <div class="settings-dataPanel">
@@ -53,6 +59,13 @@ function ensureAgentSettingsCard() {
             </div>
             <div class="settings-recordList" data-role="settings-agent-tools-list"></div>
         </div>
+        <div class="settings-dataPanel">
+            <div class="settings-dataPanel__head">
+                <h4 class="settings-dataPanel__title">Self-test</h4>
+                <span class="settings-inlineMeta" data-role="settings-self-test-meta">No self-test result yet.</span>
+            </div>
+            <div class="settings-recordList" data-role="settings-self-test-list"></div>
+        </div>
     `;
     grid.appendChild(section);
 
@@ -60,6 +73,9 @@ function ensureAgentSettingsCard() {
     settingsDom.agentCapabilityList = $('[data-role="settings-agent-capability-list"]');
     settingsDom.agentToolsList = $('[data-role="settings-agent-tools-list"]');
     settingsDom.rebuildLibraryBtn = $('[data-role="settings-rebuild-library"]');
+    settingsDom.runSelfTestBtn = $('[data-role="settings-run-self-test"]');
+    settingsDom.selfTestMeta = $('[data-role="settings-self-test-meta"]');
+    settingsDom.selfTestList = $('[data-role="settings-self-test-list"]');
 }
 
 function ensureMemoryControls() {
@@ -175,7 +191,25 @@ function setMemoryRoutineMeta(meta) {
         Number.isFinite(meta.lastSkippedCount) ? `skipped ${meta.lastSkippedCount}` : "",
         meta.lastError ? `error ${meta.lastError}` : "",
     ].filter(Boolean);
-    settingsDom.memoryRoutineMeta.textContent = parts.join(" · ");
+    settingsDom.memoryRoutineMeta.textContent = parts.join(" | ");
+}
+
+function setSelfTestMeta(text) {
+    if (settingsDom.selfTestMeta) {
+        settingsDom.selfTestMeta.textContent = text;
+    }
+}
+
+function syncSelfTestView() {
+    if (settingsDom.selfTestList) {
+        settingsDom.selfTestList.innerHTML = renderAgentSelfTestList(settingsDom.selfTestResult);
+    }
+    const summary = settingsDom.selfTestResult?.summary;
+    if (!summary) {
+        setSelfTestMeta("No self-test result yet.");
+        return;
+    }
+    setSelfTestMeta(`Checked ${summary.total} tools | ${summary.successCount} success | ${summary.errorCount} error`);
 }
 
 async function syncSettingsData() {
@@ -206,8 +240,8 @@ async function syncSettingsData() {
         const categorySummary = Object.entries(memoryData?.stats?.categoryCounts || {})
             .slice(0, 4)
             .map(([name, count]) => `${name}:${count}`)
-            .join(" · ");
-        settingsDom.memoryCount.textContent = `${activeCount}/${memoryData.memoryCount} active${categorySummary ? ` · ${categorySummary}` : ""}`;
+            .join(" | ");
+        settingsDom.memoryCount.textContent = `${activeCount}/${memoryData.memoryCount} active${categorySummary ? ` | ${categorySummary}` : ""}`;
     }
     if (settingsDom.agentMeta) {
         settingsDom.agentMeta.textContent = agentCapabilities
@@ -227,6 +261,7 @@ async function syncSettingsData() {
     if (settingsDom.agentToolsList) {
         settingsDom.agentToolsList.innerHTML = renderAgentToolList(agentCapabilities?.tools || []);
     }
+    syncSelfTestView();
 }
 
 async function handleExtractMemory() {
@@ -264,6 +299,34 @@ async function handleDeleteMemory(memoryId) {
     }
 }
 
+async function handleRunAgentSelfTest() {
+    if (!window.api.runAgentSelfTest || !settingsDom.runSelfTestBtn) {
+        return;
+    }
+    settingsDom.runSelfTestBtn.disabled = true;
+    setSelfTestMeta("Running self-test...");
+    try {
+        const result = await window.api.runAgentSelfTest("settings self-test");
+        settingsDom.selfTestResult = result || null;
+        syncSelfTestView();
+    } catch (error) {
+        console.error(error);
+        settingsDom.selfTestResult = {
+            summary: {total: 1, successCount: 0, errorCount: 1},
+            traces: [{
+                tool: "runAgentSelfTest",
+                status: "error",
+                phase: "self-test",
+                input: {},
+                outputPreview: {error: error.message || String(error)},
+            }],
+        };
+        syncSelfTestView();
+    } finally {
+        settingsDom.runSelfTestBtn.disabled = false;
+    }
+}
+
 function wireSettingsActions() {
     if (settingsDom.clearContextBtn && window.api.clearAiContext) {
         settingsDom.clearContextBtn.addEventListener("click", async () => {
@@ -293,6 +356,12 @@ function wireSettingsActions() {
             } finally {
                 settingsDom.rebuildLibraryBtn.disabled = false;
             }
+        });
+    }
+
+    if (settingsDom.runSelfTestBtn) {
+        settingsDom.runSelfTestBtn.addEventListener("click", async () => {
+            await handleRunAgentSelfTest();
         });
     }
 

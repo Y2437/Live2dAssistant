@@ -1,6 +1,11 @@
 ﻿const {ipcMain} = require('electron');
 const {aiChat, aiChatWithModel} = require('./aiService.js');
 const {AgentService} = require("./agentService");
+const {buildAssistantChatMessages} = require("./assistantPrompt");
+const {
+    buildKnowledgeCardSummaryMessages: buildKnowledgeCardSummaryPromptMessages,
+    buildMemoryExtractionMessages: buildMemoryExtractionPromptMessages,
+} = require("./promptRegistry");
 const {
     normalizeAssistantContext,
     normalizeLongTermMemory,
@@ -15,7 +20,6 @@ const {
     buildKnowledgeCardFallbackSummary,
     validateKnowledgeCardPayload,
     normalizeKnowledgeCards,
-    buildKnowledgeCardSummaryMessages,
 } = require("./ipcDataUtils");
 const {
     registerCoreHandlers,
@@ -31,7 +35,6 @@ const {
     WIDTH,
     HEIGHT,
     WINDOW_KEYS,
-    AI_CHAT_SYSTEM_PROMPT,
     AI_TOUCH_RESPONSE,
     POMODORO_JSON_PATH,
     AI_CONTEXT_JSON_PATH,
@@ -58,11 +61,7 @@ class ipcRegister{
     constructor(ipc){
     }
     static buildAiChatMessages(message){
-        return [
-            {role:"system",message:AI_CHAT_SYSTEM_PROMPT},
-            ...this.assistantContext,
-            {role:"user",message},
-        ];
+        return buildAssistantChatMessages(this.assistantContext, message);
     }
     static trimAssistantContext(){
         if(this.assistantContext.length <= this.MAX_CONTEXT_MESSAGES){
@@ -258,28 +257,7 @@ class ipcRegister{
         return this.getLongTermMemoryData();
     }
     static buildMemoryExtractionMessages(contextItems){
-        return [
-            {
-                role: "system",
-                message: [
-                    "You extract durable user memory from chat history.",
-                    "Return valid JSON only.",
-                    "Schema: {\"memories\":[{\"title\":\"...\",\"content\":\"...\",\"source\":\"daily-extract\",\"category\":\"project\",\"tags\":[\"tag\"],\"confidence\":0.82}]}",
-                    "Rules:",
-                    "- Keep only stable, reusable facts, preferences, projects, constraints, or long-running goals.",
-                    "- Ignore one-off small talk.",
-                    "- At most 6 memories.",
-                    "- Each memory should be concise and deduplicated.",
-                    "- Add category from: identity, preference, project, constraint, plan, relationship, workflow, reference, other.",
-                    "- Add tags as short lowercase keywords.",
-                    "- Add confidence from 0 to 1.",
-                ].join("\n"),
-            },
-            {
-                role: "user",
-                message: contextItems.map((item, index)=>`${index + 1}. ${item.role}: ${item.message}`).join("\n"),
-            },
-        ];
+        return buildMemoryExtractionPromptMessages(contextItems);
     }
     static parseJsonObject(text){
         const value = String(text || "").trim();
@@ -446,7 +424,7 @@ class ipcRegister{
         return buildKnowledgeCardFallbackSummary(data);
     }
     static buildKnowledgeCardSummaryMessages(data){
-        return buildKnowledgeCardSummaryMessages(data);
+        return buildKnowledgeCardSummaryPromptMessages(data);
     }
     static async generateKnowledgeCardSummary(data){
         const model = ENV_CONFIG.AI_SUMMARY_MODEL || ENV_CONFIG.AI_MODEL;

@@ -79,17 +79,22 @@
                                     </svg>
                                 </button>
                             </div>
+                            <section class="assistant-runPanel" data-role="assistant-run-panel" hidden>
+                                <div class="assistant-runPanel__summary">
+                                    <div class="assistant-runPanel__copy">
+                                        <h4 class="assistant-runPanel__title">Execution Summary</h4>
+                                        <p class="assistant-runPanel__desc" data-role="assistant-run-summary">No execution yet.</p>
+                                    </div>
+                                    <div class="assistant-runPanel__actions">
+                                        <span class="assistant-runPanel__status" data-role="assistant-run-status">Idle</span>
+                                        <button type="button" class="assistant-runPanel__toggle" data-role="assistant-run-toggle">Expand details</button>
+                                    </div>
+                                </div>
+                                <div class="assistant-runPanel__body" data-role="assistant-run-body" hidden>
+                                    <div class="assistant-runPanel__timeline" data-role="assistant-run-timeline"></div>
+                                </div>
+                            </section>
                             <div class="assistant-chatLog" data-role="assistant-chat-log"></div>
-                            <div class="assistant-chatMeta" data-role="assistant-chat-meta">
-                                <div class="assistant-chatMeta__item">
-                                    <span class="assistant-chatMeta__label">输出模式</span>
-                                    <span class="assistant-chatMeta__value" data-role="assistant-chat-mode">气泡输出</span>
-                                </div>
-                                <div class="assistant-chatMeta__item">
-                                    <span class="assistant-chatMeta__label">后续扩展</span>
-                                    <span class="assistant-chatMeta__value">思考过程 / Agent 行为</span>
-                                </div>
-                            </div>
                             <div class="assistant-chatTools">
                                 <button type="button" class="assistant-scrollToBottom" data-role="assistant-scroll-bottom" hidden>回到底部</button>
                             </div>
@@ -98,6 +103,8 @@
                                     <label for="assistant-input">
                                         <input id="assistant-input" class="assistant-input" data-role="assistant-input" type="text" placeholder="输入内容，例如让看板娘总结今天的对话" autocomplete="off" spellcheck="false" />
                                     </label>
+                                    <button type="button" class="assistant-send assistant-send--ghost" data-role="assistant-retry" hidden>重试</button>
+                                    <button type="button" class="assistant-send assistant-send--ghost" data-role="assistant-cancel" hidden>取消</button>
                                     <button type="submit" class="assistant-send" data-role="assistant-send">发送</button>
                                 </form>
                             </div>
