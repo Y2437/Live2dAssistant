@@ -48,7 +48,7 @@ class ipcRegister{
     static assistantContext = [];
     static assistantLongTermMemory = [];
     static knowledgeCards = [];
-    static MAX_CONTEXT_MESSAGES = 32;
+    static MAX_CONTEXT_MESSAGES = 48;
     static agentService = null;
     static memoryRoutineMeta = {
         lastExtractionDate: "",

@@ -59,6 +59,11 @@
 :root[data-theme="dark"] .shell__main,
 :root[data-theme="dark"] .assistant-live2d,
 :root[data-theme="dark"] .placeholder-slot,
+:root[data-theme="dark"] .assistant-scope__trigger,
+:root[data-theme="dark"] .assistant-scope__action,
+:root[data-theme="dark"] .assistant-scope__option,
+:root[data-theme="dark"] .assistant-scope__checkmark,
+:root[data-theme="dark"] .assistant-scope__optionBadge,
 :root[data-theme="dark"] .assistant-actionBtn,
 :root[data-theme="dark"] [data-role="assistant-actions"] [data-action],
 :root[data-theme="dark"] .assistant-input,
@@ -107,6 +112,12 @@
 :root[data-theme="dark"] .shell__nav,
 :root[data-theme="dark"] .nav__btn,
 :root[data-theme="dark"] .nav__footer,
+:root[data-theme="dark"] .assistant-scope__trigger,
+:root[data-theme="dark"] .assistant-scope__menu,
+:root[data-theme="dark"] .assistant-scope__action,
+:root[data-theme="dark"] .assistant-scope__option,
+:root[data-theme="dark"] .assistant-scope__checkmark,
+:root[data-theme="dark"] .assistant-scope__optionBadge,
 :root[data-theme="dark"] .placeholder-card,
 :root[data-theme="dark"] .placeholder-slot,
 :root[data-theme="dark"] .assistant-live2d,
@@ -183,6 +194,9 @@
 
 /* hover borders */
 :root[data-theme="dark"] .nav__btn:hover,
+:root[data-theme="dark"] .assistant-scope__trigger:hover,
+:root[data-theme="dark"] .assistant-scope__action:hover,
+:root[data-theme="dark"] .assistant-scope__option:hover,
 :root[data-theme="dark"] .assistant-actionBtn:hover,
 :root[data-theme="dark"] [data-role="assistant-actions"] [data-action]:hover,
 :root[data-theme="dark"] [data-role="assistant-actions"] [data-local-view]:hover,
@@ -278,6 +292,10 @@
 
 /* focus rings */
 :root[data-theme="dark"] .nav__btn:focus-visible,
+:root[data-theme="dark"] .assistant-scope__trigger:focus-visible,
+:root[data-theme="dark"] .assistant-scope__action:focus-visible,
+:root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:focus-visible),
+:root[data-theme="dark"] .assistant-scope__checkbox:focus-visible,
 :root[data-theme="dark"] .assistant-actionBtn:focus-visible,
 :root[data-theme="dark"] [data-role="assistant-actions"] [data-action]:focus-visible,
 :root[data-theme="dark"] [data-role="assistant-actions"] [data-local-view]:focus-visible,
@@ -309,6 +327,20 @@
 :root[data-theme="dark"] .cards-suggest__item:focus-visible,
 :root[data-theme="dark"] .cards-modal__close:focus-visible{
     outline-color: var(--c-focus);
+}
+
+:root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:checked){
+    border-color: rgba(183,95,21,0.52);
+    background-color: rgba(183,95,21,0.07);
+}
+
+:root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:checked) .assistant-scope__checkmark{
+    border-color: rgba(244,195,143,0.72);
+    background-color: rgba(183,95,21,0.2);
+}
+
+:root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:checked) .assistant-scope__checkmark::after{
+    border-color: #ffd7ab;
 }
 
 :root[data-theme="dark"] .cards-stat,

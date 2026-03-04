@@ -69,11 +69,15 @@ function registerAgentHandlers(registry) {
         const query = typeof payload?.query === "string" ? payload.query.trim() : "";
         return ensureAgentService(registry).runCapabilitySelfTest(query);
     });
-    ipcMain.handle("app:agentChat", async (event, message) => {
+    ipcMain.handle("app:agentChat", async (event, payload) => {
+        const message = typeof payload === "string"
+            ? payload
+            : payload?.message;
+        const allowedTools = Array.isArray(payload?.allowedTools) ? payload.allowedTools : null;
         if (typeof message !== "string" || !message.trim()) {
             throw new Error("Message is required.");
         }
-        const result = await ensureAgentService(registry).chat(message.trim());
+        const result = await ensureAgentService(registry).chat(message.trim(), {}, {allowedTools});
         await registry.recordAssistantExchange(message.trim(), result?.content || "");
         return result;
     });
@@ -95,12 +99,13 @@ function registerAgentHandlers(registry) {
         const abortController = new AbortController();
         activeAgentStreams.set(requestId, abortController);
         try {
+            const allowedTools = Array.isArray(payload?.allowedTools) ? payload.allowedTools : null;
             const result = await ensureAgentService(registry).chat(message, {
                 onStatus: async (status) => send({type: "status", status}),
                 onTrace: async (trace, traces) => send({type: "trace", trace, traces}),
                 onText: async (content) => send({type: "content", content}),
                 signal: abortController.signal,
-            });
+            }, {allowedTools});
             await registry.recordAssistantExchange(message, result?.content || "");
             send({type: "complete", result});
             return result;

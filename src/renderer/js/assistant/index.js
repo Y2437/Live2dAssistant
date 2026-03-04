@@ -14,6 +14,13 @@ const dom = {
     scrollBottom: $('[data-role="assistant-scroll-bottom"]'),
     collapse: $('[data-role="assistant-collapse"]'),
     inputForm: $("form.assistant-form"),
+    scope: $('[data-role="assistant-scope"]'),
+    scopeTrigger: $('[data-role="assistant-scope-trigger"]'),
+    scopeSummary: $('[data-role="assistant-scope-summary"]'),
+    scopeMenu: $('[data-role="assistant-scope-menu"]'),
+    scopeList: $('[data-role="assistant-scope-list"]'),
+    scopeSelectAll: $('[data-role="assistant-scope-select-all"]'),
+    scopeClear: $('[data-role="assistant-scope-clear"]'),
     input: $('[data-role="assistant-input"]'),
     send: $('[data-role="assistant-send"]'),
     cancel: $('[data-role="assistant-cancel"]'),
@@ -42,9 +49,14 @@ const assistantState = {
     activeRequest: null,
     requestTimeoutId: null,
     lastRetryText: "",
+    lastRetryAllowedTools: null,
     runtimeStatus: null,
     runtimeTraces: [],
     runPanelExpanded: false,
+    alwaysAllowedTools: [],
+    availableTools: [],
+    selectedTools: [],
+    scopeOpen: false,
 };
 
 const TIMEOUT_MS = CONFIG.LIVE2D_CONFIG.TIMEOUT_MS;
@@ -54,6 +66,32 @@ const AUTO_EXPAND_LENGTH = CONFIG.LIVE2D_CONFIG.AUTO_EXPAND_LENGTH;
 const AUTO_EXPAND_LINES = CONFIG.LIVE2D_CONFIG.AUTO_EXPAND_LINES;
 const REQUEST_TIMEOUT_MS = CONFIG.ASSISTANT_CONFIG.REQUEST_TIMEOUT_MS;
 const NEAR_BOTTOM_OFFSET = CONFIG.ASSISTANT_CONFIG.NEAR_BOTTOM_OFFSET;
+const SPECIAL_AGENT_TOOL_NAMES = new Set([
+    "list_cards",
+    "search_cards",
+    "get_card",
+    "create_card",
+    "get_pomodoro_status",
+    "get_clipboard",
+    "analyze_clipboard_image",
+    "get_library_overview",
+    "search_library",
+    "read_library_file",
+    "web_search",
+    "read_web_page",
+    "capture_screen",
+    "list_screenshots",
+    "analyze_image",
+]);
+const SPECIAL_AGENT_CATEGORY_LABELS = {
+    cards: "知识卡片",
+    pomodoro: "番茄钟",
+    clipboard: "剪贴板",
+    library: "资料库",
+    web: "联网",
+    vision: "视觉",
+};
+const AGENT_SCOPE_STORAGE_KEY = "assistant.agentScope.specialTools.v1";
 
 function dispatchNavigate(viewKey) {
     window.dispatchEvent(new CustomEvent("shell:navigate", { detail: { viewKey } }));
@@ -430,11 +468,150 @@ function syncRequestControls() {
     if (dom.input) {
         dom.input.disabled = busy;
     }
+    if (dom.scopeTrigger) {
+        dom.scopeTrigger.disabled = busy;
+    }
+    if (dom.scopeSelectAll) {
+        dom.scopeSelectAll.disabled = busy;
+    }
+    if (dom.scopeClear) {
+        dom.scopeClear.disabled = busy;
+    }
 }
 
-async function getResponse(text) {
+function getAllowedToolsForRequest() {
+    return [...assistantState.alwaysAllowedTools, ...assistantState.selectedTools];
+}
+
+function saveScopeSelection() {
+    try {
+        window.localStorage.setItem(AGENT_SCOPE_STORAGE_KEY, JSON.stringify(assistantState.selectedTools));
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function loadScopeSelection() {
+    try {
+        const raw = window.localStorage.getItem(AGENT_SCOPE_STORAGE_KEY);
+        if (!raw) {
+            return null;
+        }
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : null;
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
+function setScopeOpen(open) {
+    assistantState.scopeOpen = Boolean(open);
+    if (dom.scopeMenu) {
+        dom.scopeMenu.hidden = !assistantState.scopeOpen;
+    }
+    if (dom.scopeTrigger) {
+        dom.scopeTrigger.setAttribute("aria-expanded", assistantState.scopeOpen ? "true" : "false");
+    }
+}
+
+function buildScopeSummary() {
+    const total = assistantState.availableTools.length;
+    const selectedCount = assistantState.selectedTools.length;
+    if (!total) {
+        return "仅基础能力";
+    }
+    if (selectedCount === total) {
+        return "全部扩展能力";
+    }
+    if (selectedCount === 0) {
+        return "仅基础能力";
+    }
+    if (selectedCount <= 2) {
+        return assistantState.selectedTools
+            .map((toolName) => assistantState.availableTools.find((item) => item.name === toolName)?.label || toolName)
+            .join("、");
+    }
+    return `已选 ${selectedCount} 项能力`;
+}
+
+function syncScopeSummary() {
+    if (dom.scopeSummary) {
+        dom.scopeSummary.textContent = buildScopeSummary();
+    }
+}
+
+function renderScopeToolOptions() {
+    if (!dom.scopeList) {
+        return;
+    }
+    dom.scopeList.innerHTML = "";
+    assistantState.availableTools.forEach((tool) => {
+        const option = document.createElement("label");
+        option.className = "assistant-scope__option";
+        const categoryLabel = SPECIAL_AGENT_CATEGORY_LABELS[tool.category] || "扩展";
+        option.innerHTML = `
+            <input type="checkbox" class="assistant-scope__checkbox" value="${tool.name}">
+            <span class="assistant-scope__checkmark" aria-hidden="true"></span>
+            <span class="assistant-scope__optionBody">
+                <span class="assistant-scope__optionMeta">
+                    <span class="assistant-scope__optionTitle">${tool.label || tool.name}</span>
+                    <span class="assistant-scope__optionBadge">${categoryLabel}</span>
+                </span>
+                <span class="assistant-scope__optionDesc">${tool.description || tool.name}</span>
+            </span>
+        `;
+        const checkbox = $('input[type="checkbox"]', option);
+        checkbox.checked = assistantState.selectedTools.includes(tool.name);
+        checkbox.addEventListener("change", () => {
+            if (checkbox.checked) {
+                assistantState.selectedTools = assistantState.selectedTools.includes(tool.name)
+                    ? assistantState.selectedTools
+                    : [...assistantState.selectedTools, tool.name];
+            } else {
+                assistantState.selectedTools = assistantState.selectedTools.filter((item) => item !== tool.name);
+            }
+            saveScopeSelection();
+            syncScopeSummary();
+        });
+        dom.scopeList.appendChild(option);
+    });
+}
+
+async function loadAgentCapabilities() {
+    if (!window.api.getAgentCapabilities || !dom.scope) {
+        return;
+    }
+    try {
+        const capabilities = await window.api.getAgentCapabilities();
+        const toolDetails = Array.isArray(capabilities?.toolDetails)
+            ? capabilities.toolDetails
+            : (capabilities?.tools || []).map((name) => ({name, label: name, description: name}));
+        assistantState.alwaysAllowedTools = toolDetails
+            .filter((item) => !SPECIAL_AGENT_TOOL_NAMES.has(item.name))
+            .map((item) => item.name);
+        const specialTools = toolDetails.filter((item) => SPECIAL_AGENT_TOOL_NAMES.has(item.name));
+        if (!specialTools.length) {
+            dom.scope.hidden = true;
+            return;
+        }
+        assistantState.availableTools = specialTools;
+        const savedSelection = loadScopeSelection();
+        const validToolNames = new Set(specialTools.map((item) => item.name));
+        assistantState.selectedTools = Array.isArray(savedSelection)
+            ? savedSelection.filter((item) => validToolNames.has(item))
+            : specialTools.map((item) => item.name);
+        renderScopeToolOptions();
+        syncScopeSummary();
+    } catch (error) {
+        console.error(error);
+        dom.scope.hidden = true;
+    }
+}
+
+async function getResponse(text, allowedTools = null) {
     if (window.api.agentChat) {
-        return await window.api.agentChat(text);
+        return await window.api.agentChat(text, {allowedTools});
     }
     return {
         content: (await window.api.chat(text)).choices[0].message.content,
@@ -466,8 +643,9 @@ async function cancelActiveRequest() {
     await window.api.cancelAgentChat(assistantState.activeRequest.requestId);
 }
 
-async function handleChat(text) {
+async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
     assistantState.lastRetryText = "";
+    assistantState.lastRetryAllowedTools = null;
     syncRequestControls();
     resetRuntimeState();
 
@@ -527,7 +705,7 @@ async function handleChat(text) {
                 onCancel() {
                     canceled = true;
                 },
-            }, requestId);
+            }, requestId, {allowedTools});
             assistantState.activeRequest = {requestId};
             syncRequestControls();
             scheduleRequestTimeout(async () => {
@@ -536,7 +714,7 @@ async function handleChat(text) {
             });
             response = await request;
         } else {
-            response = await getResponse(text);
+            response = await getResponse(text, allowedTools);
         }
 
         if (!hasLiveContent) {
@@ -548,6 +726,7 @@ async function handleChat(text) {
         setRuntimeStatus({message: CONFIG.ASSISTANT_CONFIG.STATUS_DONE});
         setChatStatus(assistantEntry, CONFIG.ASSISTANT_CONFIG.STATUS_DONE);
         assistantState.lastRetryText = "";
+        assistantState.lastRetryAllowedTools = null;
     } catch (error) {
         const isAbort = canceled || timedOut || error?.name === "AbortError";
         let fallbackMessage = CONFIG.ASSISTANT_CONFIG.REQUEST_FAILED_TEXT;
@@ -565,6 +744,7 @@ async function handleChat(text) {
         setRuntimeStatus({message: statusText});
         setChatStatus(assistantEntry, statusText);
         assistantState.lastRetryText = text;
+        assistantState.lastRetryAllowedTools = [...allowedTools];
         if (!isAbort) {
             console.error(error);
         }
@@ -611,8 +791,10 @@ function wireInput() {
         if (assistantState.activeRequest) return;
         const text = dom.input.value.trim();
         if (!text) return;
+        const allowedTools = getAllowedToolsForRequest();
+        setScopeOpen(false);
         dom.input.value = "";
-        await enqueue(() => handleChat(text));
+        await enqueue(() => handleChat(text, allowedTools));
     });
     if (dom.cancel) {
         dom.cancel.addEventListener("click", async () => {
@@ -623,7 +805,10 @@ function wireInput() {
     if (dom.retry) {
         dom.retry.addEventListener("click", async () => {
             if (!assistantState.lastRetryText || assistantState.activeRequest) return;
-            await enqueue(() => handleChat(assistantState.lastRetryText));
+            await enqueue(() => handleChat(
+                assistantState.lastRetryText,
+                assistantState.lastRetryAllowedTools ?? getAllowedToolsForRequest(),
+            ));
         });
     }
     if (dom.runToggle) {
@@ -632,6 +817,41 @@ function wireInput() {
             syncRunPanel();
         });
     }
+    if (dom.scopeTrigger) {
+        dom.scopeTrigger.addEventListener("click", () => {
+            setScopeOpen(!assistantState.scopeOpen);
+        });
+    }
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && assistantState.scopeOpen) {
+            setScopeOpen(false);
+        }
+    });
+    if (dom.scopeSelectAll) {
+        dom.scopeSelectAll.addEventListener("click", () => {
+            assistantState.selectedTools = assistantState.availableTools.map((item) => item.name);
+            saveScopeSelection();
+            renderScopeToolOptions();
+            syncScopeSummary();
+        });
+    }
+    if (dom.scopeClear) {
+        dom.scopeClear.addEventListener("click", () => {
+            assistantState.selectedTools = [];
+            saveScopeSelection();
+            renderScopeToolOptions();
+            syncScopeSummary();
+        });
+    }
+    document.addEventListener("click", (event) => {
+        if (!assistantState.scopeOpen || !dom.scope) {
+            return;
+        }
+        if (dom.scope.contains(event.target)) {
+            return;
+        }
+        setScopeOpen(false);
+    });
 }
 
 function wireNavBtn() {
@@ -678,6 +898,7 @@ function wireChatLayout() {
 
 async function initAssistant() {
     mountAssistant();
+    await loadAgentCapabilities();
     if (!dom.stage) return;
     initPixiApp();
     await initLive2d();

@@ -181,7 +181,7 @@ async function runPrefetchTools(service, userMessage, traces, conversation, opti
     const plan = Array.isArray(options.plan) ? options.plan : buildPrefetchPlan(userMessage);
     for (const item of plan) {
         try {
-            const result = await service.runTool(item.tool, item.args);
+            const result = await service.runTool(item.tool, item.args, options.allowedTools);
             const trace = {tool: item.tool, status: "success", input: item.args, outputPreview: clampTraceOutput(result), phase: "prefetch"};
             traces.push(trace);
             if (options.onTrace) {
@@ -207,10 +207,10 @@ async function runPrefetchTools(service, userMessage, traces, conversation, opti
     }
 }
 
-function buildAgentPlanningSystemPrompt(memories, context) {
+function buildAgentPlanningSystemPrompt(memories, context, allowedTools = null) {
     const memoryText = memories.length ? memories.map((item, index) => `${index + 1}. ${item.title}: ${item.content}`).join("\n") : NO_LONG_TERM_MEMORY_TEXT;
     const contextText = context.length ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n") : NO_RECENT_CONTEXT_TEXT;
-    return buildPlanningPromptTemplate({contextText, memoryText});
+    return buildPlanningPromptTemplate({contextText, memoryText, allowedTools});
 }
 
 async function runTool(service, toolName, args) {

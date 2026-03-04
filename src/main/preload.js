@@ -11,8 +11,11 @@ contextBridge.exposeInMainWorld("api", {
     },
     openWindow: (windowKey) => ipcRenderer.invoke("app:openWindow", windowKey),
     chat: (message) => ipcRenderer.invoke("app:aiChat", message),
-    agentChat: (message) => ipcRenderer.invoke("app:agentChat", message),
-    agentChatStream: (message, handlers = {}, requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`) => {
+    agentChat: (message, options = {}) => ipcRenderer.invoke("app:agentChat", {
+        message,
+        allowedTools: Array.isArray(options?.allowedTools) ? options.allowedTools : null,
+    }),
+    agentChatStream: (message, handlers = {}, requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`, options = {}) => {
         const listener = (event, payload) => {
             if (!payload || payload.requestId !== requestId) {
                 return;
@@ -34,7 +37,11 @@ contextBridge.exposeInMainWorld("api", {
             }
         };
         ipcRenderer.on(AGENT_STREAM_EVENT, listener);
-        const request = ipcRenderer.invoke("app:agentChatStream", {message, requestId})
+        const request = ipcRenderer.invoke("app:agentChatStream", {
+            message,
+            requestId,
+            allowedTools: Array.isArray(options?.allowedTools) ? options.allowedTools : null,
+        })
             .finally(() => {
                 ipcRenderer.removeListener(AGENT_STREAM_EVENT, listener);
             });

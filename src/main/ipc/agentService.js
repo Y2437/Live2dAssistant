@@ -19,7 +19,10 @@ const libraryTools = require("./agentLibraryTools");
 const searchTools = require("./agentSearchTools");
 const visionTools = require("./agentVisionTools");
 const {buildAssistantFinalAnswerMessages} = require("./assistantPrompt");
-const {buildAgentPrefetchPlannerPrompt} = require("./promptRegistry");
+const {
+    buildAgentPrefetchPlannerPrompt,
+    getAgentToolSpecs,
+} = require("./promptRegistry");
 
 // AgentService keeps orchestration state here and delegates tool-heavy domains to helper modules.
 class AgentService {
@@ -152,20 +155,45 @@ class AgentService {
         return parts.length ? ` (${parts.join(", ")})` : "";
     }
 
-    normalizePrefetchPlan(rawPlan = []) {
-        const allowedTools = new Set([
-            "get_context",
-            "search_memory",
-            "get_memory_routine_status",
-            "search_cards",
-            "list_cards",
-            "get_library_overview",
-            "search_library",
-            "get_clipboard",
-            "list_screenshots",
-            "get_pomodoro_status",
-            "web_search",
-        ]);
+    getToolSpecs() {
+        return getAgentToolSpecs();
+    }
+
+    normalizeAllowedTools(allowedTools = null) {
+        const toolSpecs = this.getToolSpecs();
+        const validTools = new Set(toolSpecs.map((item) => item.name));
+        if (allowedTools == null) {
+            return toolSpecs.map((item) => item.name);
+        }
+        if (!Array.isArray(allowedTools)) {
+            return toolSpecs.map((item) => item.name);
+        }
+        const seen = new Set();
+        return allowedTools
+            .map((item) => String(item || "").trim())
+            .filter((item) => item && validTools.has(item))
+            .filter((item) => {
+                if (seen.has(item)) {
+                    return false;
+                }
+                seen.add(item);
+                return true;
+            });
+    }
+
+    ensureToolAllowed(toolName, allowedTools = null) {
+        const allowedSet = new Set(this.normalizeAllowedTools(allowedTools));
+        if (!allowedSet.has(toolName)) {
+            throw new Error(`Tool not allowed for this request: ${toolName}`);
+        }
+    }
+
+    normalizePrefetchPlan(rawPlan = [], allowedTools = null) {
+        const requestAllowed = new Set(this.normalizeAllowedTools(allowedTools));
+        const prefetchAllowed = new Set(this.getToolSpecs()
+            .filter((item) => item.prefetchable)
+            .map((item) => item.name)
+            .filter((item) => requestAllowed.has(item)));
         const items = Array.isArray(rawPlan) ? rawPlan : (Array.isArray(rawPlan?.plan) ? rawPlan.plan : []);
         const seen = new Set();
         return items
@@ -173,7 +201,7 @@ class AgentService {
                 tool: String(item?.tool || "").trim(),
                 args: normalizeToolArgs(item?.args),
             }))
-            .filter((item) => item.tool && allowedTools.has(item.tool))
+            .filter((item) => item.tool && prefetchAllowed.has(item.tool))
             .filter((item) => {
                 const key = `${item.tool}:${JSON.stringify(item.args)}`;
                 if (seen.has(key)) {
@@ -185,7 +213,7 @@ class AgentService {
             .slice(0, 3);
     }
 
-    async planPrefetchTools(userMessage, context, hooks = {}) {
+    async planPrefetchTools(userMessage, context, hooks = {}, allowedTools = null) {
         const conversation = [
             {
                 role: "system",
@@ -193,6 +221,7 @@ class AgentService {
                     type: "text",
                     text: buildAgentPrefetchPlannerPrompt({
                         userMessage,
+                        allowedTools,
                         contextText: context.length
                             ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n")
                             : "没有最近对话上下文。",
@@ -212,7 +241,7 @@ class AgentService {
             });
             const parsed = safeJsonParse(turn.content)
                 || safeJsonParse(String(turn.content || "").replace(/```json|```/gi, "").trim());
-            return this.normalizePrefetchPlan(parsed?.plan || []);
+            return this.normalizePrefetchPlan(parsed?.plan || [], allowedTools);
         } catch (error) {
             return [];
         }
@@ -316,11 +345,12 @@ class AgentService {
         };
     }
 
-    async chat(userMessage, hooks = {}) {
+    async chat(userMessage, hooks = {}, options = {}) {
         this.ensureNotAborted(hooks.signal);
         const traces = [];
         const planningConversation = [];
         const context = this.getAssistantContext().slice(-8);
+        const allowedTools = this.normalizeAllowedTools(options.allowedTools);
         const memories = this.getLongTermMemory().slice(-10).map((item) => ({
             title: item.title,
             content: summarizeText(item.content, 160),
@@ -331,7 +361,7 @@ class AgentService {
             content: [
                 {
                     type: "text",
-                    text: this.buildAgentPlanningSystemPrompt(memories, context),
+                    text: this.buildAgentPlanningSystemPrompt(memories, context, allowedTools),
                 },
             ],
         });
@@ -340,9 +370,10 @@ class AgentService {
             content: [{type: "text", text: userMessage}],
         });
         await this.emitHook(hooks.onStatus, {phase: "prefetch", message: "Preparing context"});
-        const prefetchPlan = await this.planPrefetchTools(userMessage, context, hooks);
+        const prefetchPlan = await this.planPrefetchTools(userMessage, context, hooks, allowedTools);
         await this.runPrefetchTools(userMessage, traces, planningConversation, {
             plan: prefetchPlan,
+            allowedTools,
             onTrace: async (trace, nextTraces) => {
                 await this.emitHook(hooks.onTrace, trace, [...nextTraces]);
             },
@@ -398,7 +429,7 @@ class AgentService {
                     tool: action.tool,
                     message: `Running ${action.tool}`,
                 });
-                toolResult = await this.runTool(action.tool, args);
+                toolResult = await this.runTool(action.tool, args, allowedTools);
                 await this.pushWorkflowTrace(traces, hooks, {
                     tool: action.tool,
                     status: "success",
@@ -549,36 +580,15 @@ class AgentService {
 
     getCapabilities() {
         const chunkCount = this.libraryIndex.items.reduce((sum, item) => sum + (item.chunkCount || 0), 0);
+        const toolSpecs = this.getToolSpecs();
         return {
             visionEnabled: Boolean(ENV_CONFIG.AI_VISION_MODEL || ENV_CONFIG.VISION_MODEL),
             libraryRootCount: this.libraryRoots.length,
             libraryFileCount: this.libraryIndex.items.length,
             libraryChunkCount: chunkCount,
             libraryUpdatedAt: this.libraryIndex.updatedAt,
-            tools: [
-                "get_context",
-                "get_memory",
-                "search_memory",
-                "get_memory_routine_status",
-                "add_memory",
-                "delete_memory",
-                "extract_memory",
-                "list_cards",
-                "search_cards",
-                "get_card",
-                "create_card",
-                "get_pomodoro_status",
-                "get_clipboard",
-                "analyze_clipboard_image",
-                "get_library_overview",
-                "search_library",
-                "read_library_file",
-                "web_search",
-                "read_web_page",
-                "capture_screen",
-                "list_screenshots",
-                "analyze_image",
-            ],
+            tools: toolSpecs.map((item) => item.name),
+            toolDetails: toolSpecs,
         };
     }
 
@@ -637,11 +647,12 @@ class AgentService {
         return visionTools.analyzeClipboardImage(this, args);
     }
 
-    buildAgentPlanningSystemPrompt(memories, context) {
-        return searchTools.buildAgentPlanningSystemPrompt(memories, context);
+    buildAgentPlanningSystemPrompt(memories, context, allowedTools = null) {
+        return searchTools.buildAgentPlanningSystemPrompt(memories, context, allowedTools);
     }
 
-    async runTool(toolName, args) {
+    async runTool(toolName, args, allowedTools = null) {
+        this.ensureToolAllowed(toolName, allowedTools);
         return searchTools.runTool(this, toolName, args);
     }
 
