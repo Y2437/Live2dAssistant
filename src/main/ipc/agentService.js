@@ -32,7 +32,12 @@ class AgentService {
         this.getMemoryRoutineMeta = options.getMemoryRoutineMeta;
         this.getKnowledgeCards = options.getKnowledgeCards;
         this.createKnowledgeCard = options.createKnowledgeCard;
+        this.updateKnowledgeCard = options.updateKnowledgeCard;
+        this.deleteKnowledgeCard = options.deleteKnowledgeCard;
         this.getPomodoroData = options.getPomodoroData;
+        this.createPomodoroTask = options.createPomodoroTask;
+        this.updatePomodoroTask = options.updatePomodoroTask;
+        this.deletePomodoroTask = options.deletePomodoroTask;
     }
 
     async ensureReady() {
@@ -550,12 +555,14 @@ class AgentService {
             {tool: "search_memory", args: {query: userMessage}},
             {tool: "get_memory_routine_status", args: {}},
             {tool: "list_cards", args: {}},
+            {tool: "list_card_categories", args: {}},
             {tool: "search_cards", args: {query: userMessage}},
+            {tool: "list_pomodoro_tasks", args: {}},
             {tool: "get_clipboard", args: {}},
             {tool: "list_screenshots", args: {}},
             {tool: "get_pomodoro_status", args: {}},
             {tool: "web_search", args: {query: userMessage}},
-            {tool: "read_web_page", args: {url: "https://www.example.com"}},
+            {tool: "read_web_page", args: {url: "http://example.com"}},
         ];
 
         for (const item of suite) {
@@ -606,7 +613,7 @@ class AgentService {
                 "",
                 ...results,
                 "",
-                "Skipped state-changing or environment-dependent tools: add_memory, delete_memory, extract_memory, create_card, capture_screen, analyze_clipboard_image, analyze_image, get_card.",
+                "Skipped state-changing or environment-dependent tools: add_memory, delete_memory, extract_memory, create_card, update_card, delete_card, create_pomodoro_task, update_pomodoro_task, delete_pomodoro_task, capture_screen, analyze_clipboard_image, analyze_image, get_card.",
             ].join("\n"),
             traces,
         };
@@ -660,6 +667,10 @@ class AgentService {
         return searchTools.listCards(this, category);
     }
 
+    listCardCategories() {
+        return searchTools.listCardCategories(this);
+    }
+
     getCard(args) {
         return searchTools.getCard(this, args);
     }
@@ -694,6 +705,20 @@ class AgentService {
 
     async webSearch(query) {
         return searchTools.webSearch(this, query);
+    }
+
+    async listPomodoroTasks() {
+        const tasks = await this.getPomodoroData();
+        return {
+            count: tasks.length,
+            items: tasks.slice(0, 48).map((item) => ({
+                id: item.id,
+                title: item.title,
+                workMinutes: Math.round((Number(item.workTime) || 0) / 60000),
+                restMinutes: Math.round((Number(item.restTime) || 0) / 60000),
+                repeatTimes: Number(item.repeatTimes) || 0,
+            })),
+        };
     }
 }
 

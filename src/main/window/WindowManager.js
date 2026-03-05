@@ -3,6 +3,7 @@ const path = require('path');
 const {app,BrowserWindow,ipcMain} = require('electron');
 class WindowManager{
     devMode = WINDOW_MODE === "devShell";
+    independentWindows = new Set(["quickFloat"]);
     constructor(){
         this.windows =new Map(WINDOW_KEYS.map((key)=>{return [key,null]}));
         this.defs=new Map(WINDOW_KEYS.map((key)=>{return [key,{
@@ -38,7 +39,7 @@ class WindowManager{
     }
     async open(windowKey){
         const selected=this.windows.get(windowKey);
-        if(this.isDevMode()){
+        if(this.isDevMode() && !this.isIndependentWindow(windowKey)){
             let shell=this.windows.get("devShell");
             if(!shell){
                 const created = await this.create("devShell");
@@ -60,41 +61,71 @@ class WindowManager{
         }else{
             if(!selected){
                 const created= await this.create(windowKey);
-                created.show();
-                created.focus();
+                if(windowKey === "quickFloat"){
+                    created.showInactive();
+                }else{
+                    created.show();
+                    created.focus();
+                }
                 return;
             }
             if(selected.isDestroyed()){
                 this.windows.set(windowKey,null);
                 const created= await this.create(windowKey);
-                created.show();
-                created.focus();
+                if(windowKey === "quickFloat"){
+                    created.showInactive();
+                }else{
+                    created.show();
+                    created.focus();
+                }
                 return;
             }
             if(!selected.isDestroyed()){
-                selected.show();
-                selected.focus();
+                if(windowKey === "quickFloat"){
+                    selected.showInactive();
+                }else{
+                    selected.show();
+                    selected.focus();
+                }
             }
         }
     }
     get(windowKey){
-        if(this.isDevMode()) windowKey="devShell";
+        if(this.isDevMode() && !this.isIndependentWindow(windowKey)) windowKey="devShell";
         const selected=this.windows.get(windowKey);
         if(!selected){return null;}
         if(selected.isDestroyed()){return null;}
         return selected;
     }
+    resolveWindowConfig(windowKey, baseConfig){
+        if(windowKey !== "quickFloat"){
+            return baseConfig;
+        }
+        return {
+            ...baseConfig,
+            width: 360,
+            height: 28,
+            minWidth: 360,
+            minHeight: 28,
+            resizable: false,
+            alwaysOnTop: true,
+            frame: false,
+            titleBarStyle: "hidden",
+            autoHideMenuBar: true,
+        };
+    }
     async create(windowKey){
-        const newWindow=new BrowserWindow(this.defs.get(windowKey).config);
+        const definition = this.defs.get(windowKey);
+        const newWindow=new BrowserWindow(this.resolveWindowConfig(windowKey, definition.config));
         this.windows.set(windowKey,newWindow);
-        await newWindow.loadFile(this.defs.get(windowKey).filePath);
+        await newWindow.loadFile(definition.filePath);
         newWindow.on('close',()=>{
             this.windows.set(windowKey,null);
         })
         return newWindow;
     }
     async toggle(windowKey){
-        if(this.isDevMode()) windowKey="devShell";
+        if(this.isDevMode() && !this.isIndependentWindow(windowKey)) windowKey="devShell";
         const selected=this.get(windowKey);
         if(!selected){
             await this.open(windowKey);
@@ -114,6 +145,9 @@ class WindowManager{
     }
     isDevMode(){
         return this.devMode;
+    }
+    isIndependentWindow(windowKey){
+        return this.independentWindows.has(windowKey);
     }
 
 }

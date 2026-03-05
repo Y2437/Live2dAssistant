@@ -1,6 +1,6 @@
 const dotenv = require("dotenv");
 
-dotenv.config();
+dotenv.config({quiet: true});
 
 const ENV_CONFIG = {
     AI_MODEL: process.env.AI_MODEL || "",

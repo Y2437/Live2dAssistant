@@ -1,0 +1,35 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <title>Quick Float</title>
+    <script type="module" src="../js/quickFloat/index.js" defer></script>
+    <link rel="stylesheet" href="../css/theme/light.css">
+    <link rel="stylesheet" href="../css/theme/dark.css">
+    <link rel="stylesheet" href="../css/style/quickFloat.css">
+</head>
+<body class="quick-float-page">
+<main class="quick-float-root">
+    <section class="quick-float-card">
+        <div class="quick-float-miniActions">
+            <select id="quick-float-language" class="quick-float-select" data-role="quick-float-language">
+                <option value="中文">中文</option>
+                <option value="English">English</option>
+                <option value="日本語">日本語</option>
+                <option value="한국어">한국어</option>
+            </select>
+            <button type="button" class="quick-float-btn" data-role="quick-float-translate">翻译</button>
+            <button type="button" class="quick-float-btn" data-role="quick-float-explain">解释</button>
+            <button type="button" class="quick-float-iconBtn" data-role="quick-float-close" title="关闭">关闭</button>
+        </div>
+        <section class="quick-float-result" data-role="quick-float-result" hidden>
+            <textarea class="quick-float-output" data-role="quick-float-output" readonly></textarea>
+            <div class="quick-float-resultActions">
+                <button type="button" class="quick-float-btn" data-role="quick-float-copy">复制</button>
+                <button type="button" class="quick-float-btn" data-role="quick-float-collapse">收起</button>
+            </div>
+        </section>
+    </section>
+</main>
+</body>
+</html>

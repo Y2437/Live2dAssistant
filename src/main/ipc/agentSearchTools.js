@@ -104,6 +104,23 @@ function listCards(service, category) {
     return {items};
 }
 
+function listCardCategories(service) {
+    const cards = service.getKnowledgeCards();
+    const countMap = new Map();
+    for (const card of cards) {
+        const name = String(card.category || "未分类").trim() || "未分类";
+        countMap.set(name, (countMap.get(name) || 0) + 1);
+    }
+    const items = [...countMap.entries()]
+        .map(([name, count]) => ({name, count}))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "zh-CN"));
+    return {
+        totalCategories: items.length,
+        totalCards: cards.length,
+        items,
+    };
+}
+
 function getCard(service, args) {
     const id = String(args?.id || "").trim();
     const title = String(args?.title || "").trim().toLowerCase();
@@ -233,10 +250,17 @@ async function runTool(service, toolName, args) {
     case "delete_memory": return service.deleteLongTermMemory(args?.id);
     case "extract_memory": return service.extractLongTermMemories();
     case "list_cards": return service.listCards(args?.category);
+    case "list_card_categories": return service.listCardCategories();
     case "search_cards": return service.searchCards(args?.query);
     case "get_card": return service.getCard(args);
     case "create_card": return service.createKnowledgeCard(args);
+    case "update_card": return service.updateKnowledgeCard(args);
+    case "delete_card": return service.deleteKnowledgeCard(args?.id);
     case "get_pomodoro_status": return service.getPomodoroStatus();
+    case "list_pomodoro_tasks": return service.listPomodoroTasks();
+    case "create_pomodoro_task": return service.createPomodoroTask(args);
+    case "update_pomodoro_task": return service.updatePomodoroTask(args);
+    case "delete_pomodoro_task": return service.deletePomodoroTask(args?.id);
     case "get_clipboard": return service.getClipboardSnapshot();
     case "analyze_clipboard_image": return service.analyzeClipboardImage(args);
     case "web_search": return service.webSearch(args?.query);
@@ -432,4 +456,17 @@ async function webSearch(service, query) {
     };
 }
 
-module.exports = {searchMemory, searchCards, listCards, getCard, parseAgentResponse, buildPrefetchPlan, runPrefetchTools, buildAgentPlanningSystemPrompt, runTool, webSearch, readWebPage};
+module.exports = {
+    searchMemory,
+    searchCards,
+    listCards,
+    listCardCategories,
+    getCard,
+    parseAgentResponse,
+    buildPrefetchPlan,
+    runPrefetchTools,
+    buildAgentPlanningSystemPrompt,
+    runTool,
+    webSearch,
+    readWebPage,
+};

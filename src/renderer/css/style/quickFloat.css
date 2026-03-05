@@ -1,0 +1,108 @@
+html,
+body {
+    margin: 0;
+    overflow: hidden;
+}
+
+.quick-float-page {
+    background: var(--c-panel) !important;
+    color: var(--c-text);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    overflow: hidden;
+}
+
+.quick-float-root {
+    padding: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.quick-float-card {
+    border: 1px solid var(--c-border);
+    background: var(--c-panel);
+    border-radius: 0;
+    padding: 6px;
+    display: grid;
+    gap: 4px;
+    box-shadow: var(--shadow-1);
+    -webkit-app-region: drag;
+}
+
+.quick-float-miniActions {
+    display: grid;
+    grid-template-columns: 88px 1fr 1fr 44px;
+    gap: 4px;
+}
+
+.quick-float-iconBtn,
+.quick-float-btn,
+.quick-float-select {
+    border: 1px solid var(--c-border);
+    background: var(--c-bg);
+    color: var(--c-text);
+    border-radius: 0;
+    font-size: 12px;
+    -webkit-app-region: no-drag;
+}
+
+.quick-float-iconBtn,
+.quick-float-btn,
+.quick-float-select {
+    height: 26px;
+    padding: 0 8px;
+}
+
+.quick-float-iconBtn,
+.quick-float-btn {
+    cursor: pointer;
+}
+
+.quick-float-iconBtn:hover:not(:disabled),
+.quick-float-btn:hover:not(:disabled),
+.quick-float-select:hover:not(:disabled) {
+    border-color: var(--c-border-strong);
+}
+
+.quick-float-iconBtn:focus-visible,
+.quick-float-btn:focus-visible,
+.quick-float-select:focus {
+    outline: 2px solid var(--c-focus);
+    outline-offset: 1px;
+}
+
+.quick-float-iconBtn:disabled,
+.quick-float-btn:disabled,
+.quick-float-select:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.quick-float-result {
+    display: grid;
+    gap: 4px;
+}
+
+.quick-float-result[hidden] {
+    display: none !important;
+}
+
+.quick-float-output {
+    border: 1px solid var(--c-border);
+    background: var(--c-bg);
+    color: var(--c-text);
+    border-radius: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    min-height: 180px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    resize: none;
+    -webkit-app-region: no-drag;
+}
+
+.quick-float-resultActions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+}

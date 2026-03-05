@@ -1,4 +1,4 @@
-const {ipcMain} = require("electron");
+const {ipcMain, BrowserWindow} = require("electron");
 const AGENT_STREAM_EVENT = "app:agentChatStream:event";
 const activeAgentStreams = new Map();
 
@@ -39,6 +39,16 @@ function registerCoreHandlers(registry, {wm, WINDOW_KEYS, AI_TOUCH_RESPONSE}) {
 
 function registerAiChatHandlers(registry) {
     ipcMain.handle("app:aiChat", async (event, message) => registry.runAiChat(message));
+}
+
+function registerEmotionHandlers(registry) {
+    ipcMain.handle("app:extractEmotionForLive2d", async (event, payload) => {
+        const text = typeof payload?.text === "string" ? payload.text : "";
+        console.log("[emotion-ipc] request", {textLength: text.length});
+        const result = await registry.extractEmotionForLive2d(text);
+        console.log("[emotion-ipc] response", result);
+        return result;
+    });
 }
 
 function registerContextHandlers(registry) {
@@ -142,6 +152,23 @@ function registerPomodoroHandlers(registry, {POMODORO_JSON_PATH}) {
     });
 }
 
+function registerClipboardHandlers(registry) {
+    ipcMain.handle("app:getClipboardSnapshot", async () => registry.getClipboardSnapshotData());
+    ipcMain.handle("app:getClipboardHistory", async () => registry.getClipboardHistoryData());
+    ipcMain.handle("app:captureClipboard", async (event, payload) => {
+        const source = typeof payload?.source === "string" ? payload.source : "manual";
+        return registry.captureClipboardRecord({source});
+    });
+    ipcMain.handle("app:clearClipboardHistory", async () => registry.clearClipboardHistory());
+    ipcMain.handle("app:deleteClipboardItem", async (event, id) => registry.deleteClipboardItem(id));
+    ipcMain.handle("app:pinClipboardItem", async (event, payload) => {
+        const id = typeof payload?.id === "string" ? payload.id : "";
+        const pinned = payload?.pinned !== false;
+        return registry.pinClipboardItem(id, pinned);
+    });
+    ipcMain.handle("app:copyClipboardItem", async (event, id) => registry.copyClipboardItem(id));
+}
+
 function registerKnowledgeCardHandlers(registry) {
     ipcMain.handle("app:loadKnowledgeCards", async () => registry.getKnowledgeCardsData());
     ipcMain.handle("app:generateKnowledgeCardSummary", async (event, data) => {
@@ -192,12 +219,55 @@ function registerKnowledgeCardHandlers(registry) {
     });
 }
 
+function registerQuickFloatHandlers(registry) {
+    ipcMain.handle("app:getQuickFloatFeatureState", async () => ({
+        enabled: registry.getQuickFloatFeatureEnabled(),
+    }));
+    ipcMain.handle("app:quickFloatCaptureSelectionText", async () => registry.captureSelectedTextFromActiveApp());
+    ipcMain.handle("app:quickTranslateText", async (event, payload) => {
+        const text = typeof payload?.text === "string" ? payload.text : "";
+        const targetLanguage = typeof payload?.targetLanguage === "string" ? payload.targetLanguage : "中文";
+        return registry.runQuickTranslateText(text, targetLanguage);
+    });
+    ipcMain.handle("app:quickExplainText", async (event, payload) => {
+        const text = typeof payload?.text === "string" ? payload.text : "";
+        const targetLanguage = typeof payload?.targetLanguage === "string" ? payload.targetLanguage : "中文";
+        return registry.runQuickExplainText(text, targetLanguage);
+    });
+    ipcMain.handle("app:quickFloatSetWindowMode", async (event, payload) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (!win || win.isDestroyed()) {
+            return {ok: false};
+        }
+        const expanded = payload?.expanded === true;
+        const widthValue = Number(payload?.width);
+        const heightValue = Number(payload?.height);
+        const width = Number.isFinite(widthValue) ? Math.max(300, Math.floor(widthValue)) : 360;
+        const fallbackHeight = expanded ? 332 : 48;
+        const height = Number.isFinite(heightValue) ? Math.max(28, Math.floor(heightValue)) : fallbackHeight;
+        win.setSize(width, height, true);
+        win.setMinimumSize(width, 28);
+        return {ok: true, width, height, expanded};
+    });
+    ipcMain.handle("app:quickFloatSetInteractionState", async (event, payload) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (!win || win.isDestroyed()) {
+            return {ok: false};
+        }
+        win.__quickFloatInteracting = payload?.interacting === true;
+        return {ok: true};
+    });
+}
+
 module.exports = {
     AGENT_STREAM_EVENT,
     registerCoreHandlers,
     registerAiChatHandlers,
+    registerEmotionHandlers,
     registerContextHandlers,
     registerAgentHandlers,
     registerPomodoroHandlers,
+    registerClipboardHandlers,
     registerKnowledgeCardHandlers,
+    registerQuickFloatHandlers,
 };

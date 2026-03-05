@@ -58,6 +58,7 @@ const assistantState = {
     alwaysAllowedTools: [],
     availableTools: [],
     selectedTools: [],
+    scopeModule: "",
     scopeOpen: false,
     directMode: false,
 };
@@ -71,10 +72,17 @@ const REQUEST_TIMEOUT_MS = CONFIG.ASSISTANT_CONFIG.REQUEST_TIMEOUT_MS;
 const NEAR_BOTTOM_OFFSET = CONFIG.ASSISTANT_CONFIG.NEAR_BOTTOM_OFFSET;
 const SPECIAL_AGENT_TOOL_NAMES = new Set([
     "list_cards",
+    "list_card_categories",
     "search_cards",
     "get_card",
     "create_card",
+    "update_card",
+    "delete_card",
     "get_pomodoro_status",
+    "list_pomodoro_tasks",
+    "create_pomodoro_task",
+    "update_pomodoro_task",
+    "delete_pomodoro_task",
     "get_clipboard",
     "analyze_clipboard_image",
     "web_search",
@@ -85,13 +93,16 @@ const SPECIAL_AGENT_TOOL_NAMES = new Set([
 ]);
 const SPECIAL_AGENT_CATEGORY_LABELS = {
     cards: "知识卡片",
-    pomodoro: "番茄钟",
+    pomodoro: "番茄钟任务",
     clipboard: "剪贴板",
     web: "联网",
     vision: "视觉",
 };
 const AGENT_SCOPE_STORAGE_KEY = "assistant.agentScope.specialTools.v1";
 const ASSISTANT_DIRECT_MODE_STORAGE_KEY = "assistant.directMode.v1";
+const LIVE2D_IDLE_MOTION_COUNT = 9;
+const LIVE2D_TAPBODY_MOTION_COUNT = 1;
+const EMOTION_LOG_PREFIX = "[emotion-client]";
 
 function dispatchNavigate(viewKey) {
     window.dispatchEvent(new CustomEvent("shell:navigate", { detail: { viewKey } }));
@@ -576,22 +587,77 @@ function syncScopeSummary() {
     }
 }
 
+function getScopeModules() {
+    const map = new Map();
+    assistantState.availableTools.forEach((tool) => {
+        const key = String(tool.category || "other");
+        if (!map.has(key)) {
+            map.set(key, {
+                key,
+                label: SPECIAL_AGENT_CATEGORY_LABELS[key] || key,
+                tools: [],
+            });
+        }
+        map.get(key).tools.push(tool);
+    });
+    return [...map.values()];
+}
+
+function ensureScopeModule(modules = []) {
+    if (!modules.length) {
+        assistantState.scopeModule = "";
+        return;
+    }
+    const exists = modules.some((item) => item.key === assistantState.scopeModule);
+    if (!exists) {
+        assistantState.scopeModule = modules[0].key;
+    }
+}
+
 function renderScopeToolOptions() {
     if (!dom.scopeList) {
         return;
     }
-    dom.scopeList.innerHTML = "";
-    assistantState.availableTools.forEach((tool) => {
+    const modules = getScopeModules();
+    ensureScopeModule(modules);
+    const activeModule = modules.find((item) => item.key === assistantState.scopeModule) || modules[0];
+
+    dom.scopeList.innerHTML = `
+        <div class="assistant-scope__moduleList" data-role="assistant-scope-module-list"></div>
+        <div class="assistant-scope__toolList" data-role="assistant-scope-tool-list"></div>
+    `;
+
+    const moduleList = $('[data-role="assistant-scope-module-list"]', dom.scopeList);
+    const toolList = $('[data-role="assistant-scope-tool-list"]', dom.scopeList);
+
+    modules.forEach((module) => {
+        const selectedCount = module.tools.filter((tool) => assistantState.selectedTools.includes(tool.name)).length;
+        const moduleBtn = document.createElement("button");
+        moduleBtn.type = "button";
+        moduleBtn.className = "assistant-scope__moduleBtn";
+        moduleBtn.dataset.module = module.key;
+        moduleBtn.dataset.active = module.key === assistantState.scopeModule ? "true" : "false";
+        moduleBtn.innerHTML = `
+            <span class="assistant-scope__moduleTitle">${module.label}</span>
+            <span class="assistant-scope__moduleMeta">${selectedCount}/${module.tools.length}</span>
+        `;
+        moduleBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            assistantState.scopeModule = module.key;
+            renderScopeToolOptions();
+        });
+        moduleList.appendChild(moduleBtn);
+    });
+
+    (activeModule?.tools || []).forEach((tool) => {
         const option = document.createElement("label");
         option.className = "assistant-scope__option";
-        const categoryLabel = SPECIAL_AGENT_CATEGORY_LABELS[tool.category] || "扩展";
         option.innerHTML = `
             <input type="checkbox" class="assistant-scope__checkbox" value="${tool.name}">
             <span class="assistant-scope__checkmark" aria-hidden="true"></span>
             <span class="assistant-scope__optionBody">
                 <span class="assistant-scope__optionMeta">
                     <span class="assistant-scope__optionTitle">${tool.label || tool.name}</span>
-                    <span class="assistant-scope__optionBadge">${categoryLabel}</span>
                 </span>
                 <span class="assistant-scope__optionDesc">${tool.description || tool.name}</span>
             </span>
@@ -608,8 +674,9 @@ function renderScopeToolOptions() {
             }
             saveScopeSelection();
             syncScopeSummary();
+            renderScopeToolOptions();
         });
-        dom.scopeList.appendChild(option);
+        toolList.appendChild(option);
     });
 }
 
@@ -669,6 +736,104 @@ async function showTouchResponse(text) {
 async function handleTouch(hitName) {
     const response = await window.api.touch(hitName);
     await showTouchResponse(response);
+}
+
+function hashText(value = "") {
+    let hash = 0;
+    const text = String(value || "");
+    for (let index = 0; index < text.length; index += 1) {
+        hash = ((hash << 5) - hash) + text.charCodeAt(index);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+function normalizeMotionHint(signal = {}) {
+    const emotion = String(signal?.emotion || "neutral").toLowerCase();
+    const tone = String(signal?.tone || "flat").toLowerCase();
+    const intensity = Number.isFinite(Number(signal?.intensity)) ? Number(signal.intensity) : 0.5;
+    let group = signal?.motionHint?.group === "TapBody" ? "TapBody" : "Idle";
+    let index = Number.isFinite(Number(signal?.motionHint?.index)) ? Number(signal.motionHint.index) : 0;
+
+    if (emotion === "sad" || emotion === "angry" || emotion === "surprised") {
+        group = "TapBody";
+    }
+    if (group === "TapBody") {
+        return {
+            group,
+            index: Math.max(0, Math.floor(index)) % LIVE2D_TAPBODY_MOTION_COUNT,
+        };
+    }
+    const toneIndexMap = {
+        excited: 6,
+        warm: 2,
+        low: 4,
+        steady: 0,
+        serious: 7,
+        light: 1,
+        flat: 0,
+    };
+    const seedText = `${emotion}:${(signal?.keywords || []).join("|")}`;
+    if (!Number.isFinite(index) || index < 0 || index >= LIVE2D_IDLE_MOTION_COUNT) {
+        index = Number.isFinite(toneIndexMap[tone]) ? toneIndexMap[tone] : (hashText(seedText) % LIVE2D_IDLE_MOTION_COUNT);
+    }
+    if (intensity > 0.82 && index < LIVE2D_IDLE_MOTION_COUNT - 1) {
+        index += 1;
+    }
+    return {
+        group: "Idle",
+        index: Math.max(0, Math.floor(index)) % LIVE2D_IDLE_MOTION_COUNT,
+    };
+}
+
+async function playLive2dMotion(motion = {group: "Idle", index: 0}) {
+    const live2d = assistantState.live2d;
+    if (!live2d) {
+        console.log(`${EMOTION_LOG_PREFIX} step5 no-live2d-instance`);
+        return;
+    }
+    try {
+        if (typeof live2d.motion === "function") {
+            console.log(`${EMOTION_LOG_PREFIX} step5 play-motion`, motion);
+            await live2d.motion(motion.group, motion.index);
+            console.log(`${EMOTION_LOG_PREFIX} step6 motion-done`, motion);
+            return;
+        }
+    } catch (error) {
+        console.warn(`${EMOTION_LOG_PREFIX} step5 motion(group,index) failed, fallback`, error?.message || error);
+    }
+    try {
+        if (typeof live2d.motion === "function") {
+            console.log(`${EMOTION_LOG_PREFIX} step5b play-motion-fallback-group`, motion.group);
+            await live2d.motion(motion.group);
+            console.log(`${EMOTION_LOG_PREFIX} step6 motion-fallback-done`, motion.group);
+        }
+    } catch (error) {
+        console.error(`${EMOTION_LOG_PREFIX} stepX motion-failed`, error);
+    }
+}
+
+async function syncEmotionMotionFromText(text) {
+    if (!text || !assistantState.live2d) {
+        console.log(`${EMOTION_LOG_PREFIX} step0 skip`, {
+            hasText: Boolean(text),
+            hasLive2d: Boolean(assistantState.live2d),
+        });
+        return;
+    }
+    try {
+        console.log(`${EMOTION_LOG_PREFIX} step1 start`, {textLength: text.length});
+        const signal = window.api.extractEmotionForLive2d
+            ? await window.api.extractEmotionForLive2d(text)
+            : {emotion: "neutral", motionHint: {group: "Idle", index: hashText(text) % LIVE2D_IDLE_MOTION_COUNT}};
+        console.log(`${EMOTION_LOG_PREFIX} step2 signal`, signal);
+        const motion = normalizeMotionHint(signal);
+        console.log(`${EMOTION_LOG_PREFIX} step3 mapped-motion`, motion);
+        await playLive2dMotion(motion);
+        console.log(`${EMOTION_LOG_PREFIX} step4 done`);
+    } catch (error) {
+        console.error(`${EMOTION_LOG_PREFIX} stepX failed`, error);
+    }
 }
 
 async function cancelActiveRequest() {
@@ -757,6 +922,10 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
 
         if (!hasLiveContent) {
             updateAssistantContent(response?.content || "");
+        }
+        if (responseText) {
+            console.log(`${EMOTION_LOG_PREFIX} trigger-after-response`, {length: responseText.length});
+            void syncEmotionMotionFromText(responseText);
         }
         if (!directMode && (!assistantState.runtimeTraces || !assistantState.runtimeTraces.length) && Array.isArray(response?.traces) && response.traces.length) {
             setRuntimeTraces(response.traces);
@@ -866,6 +1035,14 @@ function wireInput() {
     if (dom.scopeTrigger) {
         dom.scopeTrigger.addEventListener("click", () => {
             setScopeOpen(!assistantState.scopeOpen);
+        });
+    }
+    if (dom.scopeMenu) {
+        dom.scopeMenu.addEventListener("click", (event) => {
+            event.stopPropagation();
+        });
+        dom.scopeMenu.addEventListener("mousedown", (event) => {
+            event.stopPropagation();
         });
     }
     if (dom.thinkToggle) {

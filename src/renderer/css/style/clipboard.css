@@ -5,3 +5,260 @@
     min-height: 0;
     align-content: start;
 }
+
+.clipboard-card{
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--c-border);
+    background: var(--c-panel);
+    box-shadow: var(--shadow-1);
+    min-height: 0;
+}
+
+.clipboard-head{
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.clipboard-title{
+    margin: 0;
+    font-size: 15px;
+    font-weight: 850;
+    letter-spacing: 0.2px;
+}
+
+.clipboard-desc{
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--c-muted);
+}
+
+.clipboard-actions{
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.clipboard-btn{
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--c-border);
+    background: var(--c-bg);
+    color: var(--c-text);
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.clipboard-btn:hover{
+    border-color: var(--c-border-strong);
+    transform: translateY(-1px);
+}
+
+.clipboard-btn--danger{
+    color: #cf3d3d;
+}
+
+.clipboard-btn[data-enabled="true"]{
+    border-color: var(--c-accent);
+    background: color-mix(in srgb, var(--c-accent) 14%, var(--c-bg));
+}
+
+.clipboard-toolbar{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.clipboard-stats{
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.clipboard-pill{
+    border: 1px solid var(--c-border);
+    background: var(--c-bg);
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 800;
+    padding: 6px 8px;
+}
+
+.clipboard-live{
+    margin: 0;
+    color: var(--c-muted);
+    font-size: 12px;
+}
+
+.clipboard-controls{
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.clipboard-searchWrap{
+    display: block;
+}
+
+.clipboard-search{
+    width: 100%;
+    border: 1px solid var(--c-border);
+    background: var(--c-bg);
+    color: var(--c-text);
+    padding: 8px 10px;
+    font-size: 12px;
+}
+
+.clipboard-filters{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.clipboard-filter{
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--c-border);
+    background: var(--c-bg);
+    color: var(--c-text);
+    padding: 7px 9px;
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.clipboard-filter.is-active{
+    border-color: var(--c-accent);
+    background: color-mix(in srgb, var(--c-accent) 12%, var(--c-bg));
+}
+
+.clipboard-status{
+    margin: 0;
+    font-size: 12px;
+    color: var(--c-muted);
+}
+
+.clipboard-list{
+    min-height: 0;
+    max-height: min(64vh, 680px);
+    overflow: auto;
+    display: grid;
+    gap: 8px;
+    align-content: start;
+}
+
+.clipboard-item{
+    border: 1px solid var(--c-border);
+    background: var(--c-bg);
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+}
+
+.clipboard-item__head{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.clipboard-item__meta{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.clipboard-item__type{
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 900;
+    border: 1px solid var(--c-border);
+    padding: 4px 6px;
+}
+
+.clipboard-item__time{
+    font-size: 11px;
+    color: var(--c-muted);
+}
+
+.clipboard-item__actions{
+    display: flex;
+    gap: 6px;
+}
+
+.clipboard-item__btn{
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--c-border);
+    background: var(--c-bg);
+    color: var(--c-text);
+    padding: 5px 8px;
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.clipboard-item__btn--danger{
+    color: #cf3d3d;
+}
+
+.clipboard-item__text{
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.clipboard-item__text--muted{
+    color: var(--c-muted);
+}
+
+.clipboard-item__imageWrap{
+    display: grid;
+    gap: 4px;
+}
+
+.clipboard-item__image{
+    max-width: min(280px, 100%);
+    max-height: 180px;
+    border: 1px solid var(--c-border);
+    object-fit: contain;
+    background: var(--c-panel);
+}
+
+.clipboard-item__imageMeta{
+    font-size: 11px;
+    color: var(--c-muted);
+}
+
+.clipboard-empty{
+    border: 1px dashed var(--c-border);
+    color: var(--c-muted);
+    text-align: center;
+    padding: 22px;
+    font-size: 12px;
+}
+
+@media (max-width: 920px){
+    .clipboard-head{
+        display: grid;
+    }
+
+    .clipboard-controls{
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

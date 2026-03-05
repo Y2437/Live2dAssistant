@@ -774,8 +774,60 @@
 
 .assistant-scope__list{
     display: grid;
+    gap: 10px;
+}
+
+.assistant-scope__moduleList{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.assistant-scope__moduleBtn{
+    appearance: none;
+    -webkit-appearance: none;
+    border-style: solid;
+    border-width: 1px;
+    border-radius: 0;
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
     gap: 8px;
-    max-height: min(44vh, 320px);
+    padding: 6px 8px;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 120ms var(--ease-out), box-shadow 120ms var(--ease-out), opacity 120ms var(--ease-out);
+}
+
+.assistant-scope__moduleBtn[data-active="true"]{
+    box-shadow: var(--shadow-1);
+}
+
+.assistant-scope__moduleBtn:hover{
+    transform: translateY(-1px);
+}
+
+.assistant-scope__moduleBtn:focus-visible{
+    outline-style: solid;
+    outline-width: 2px;
+    outline-offset: 3px;
+}
+
+.assistant-scope__moduleTitle{
+    font-weight: 800;
+    letter-spacing: 0.18px;
+}
+
+.assistant-scope__moduleMeta{
+    font-weight: 700;
+    opacity: 0.72;
+}
+
+.assistant-scope__toolList{
+    display: grid;
+    gap: 8px;
+    max-height: min(38vh, 280px);
     overflow: auto;
     padding-right: 4px;
 }
@@ -860,7 +912,7 @@
 .assistant-scope__optionMeta{
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 10px;
 }
 
@@ -868,19 +920,6 @@
     font-size: 12px;
     line-height: 1.2;
     font-weight: 800;
-}
-
-.assistant-scope__optionBadge{
-    flex: 0 0 auto;
-    padding: 3px 6px;
-    border-style: solid;
-    border-width: 1px;
-    font-size: 10px;
-    line-height: 1;
-    font-weight: 800;
-    letter-spacing: 0.18px;
-    text-transform: uppercase;
-    opacity: 0.82;
 }
 
 .assistant-scope__optionDesc{

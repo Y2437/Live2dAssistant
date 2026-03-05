@@ -9,6 +9,7 @@
     <script type="module" src="../js/assistant/index.js" defer></script>
     <script type="module" src="../js/cards/index.js" defer></script>
     <script type="module" src="../js/pomodoro/index.js" defer></script>
+    <script type="module" src="../js/clipboard/index.js" defer></script>
     <script type="module" src="../js/shell/app.js" defer></script>
     <link rel="stylesheet" href="../css/theme/light.css">
     <link rel="stylesheet" href="../css/theme/dark.css">
@@ -134,6 +135,7 @@
                             <button type="button" class="assistant-actionBtn" data-action="pomodoro">番茄钟</button>
                             <button type="button" class="assistant-actionBtn" data-action="cards">知识卡片</button>
                             <button type="button" class="assistant-actionBtn" data-action="clipboard">剪贴板</button>
+                            <button type="button" class="assistant-actionBtn" data-action="quickFloat">悬浮翻译窗</button>
                             <button type="button" class="assistant-actionBtn" data-local-view="settings">记忆设置</button>
                         </div>
                     </div>
@@ -396,79 +398,107 @@
             <h2 class="view__title">设置</h2>
             <div class="view__mount" data-mount>
                 <div class="settings-root">
-                    <div class="settings-grid">
-                        <section class="placeholder-card settings-card settings-card--hero">
+                    <section class="placeholder-card settings-hero">
+                        <div class="settings-card__head">
+                            <div>
+                                <h3 class="settings-card__title">控制台与行为设置</h3>
+                                <p class="settings-card__desc">统一管理主题、默认视图、看板娘行为开关、记忆链路与 Agent 自检。</p>
+                            </div>
+                        </div>
+                        <div class="settings-pillList">
+                            <span class="settings-pill">界面主题</span>
+                            <span class="settings-pill">启动视图</span>
+                            <span class="settings-pill">记忆提炼</span>
+                            <span class="settings-pill">Agent 自检</span>
+                        </div>
+                    </section>
+                    <div class="settings-layout">
+                        <section class="placeholder-card settings-card">
+                            <h3 class="settings-card__title">系统偏好</h3>
+                            <p class="settings-card__desc">这些设置会立即保存到本地，并在下次启动继续生效。</p>
+                            <div class="settings-form">
+                                <label class="settings-field">
+                                    <span class="settings-field__label">主题</span>
+                                    <select class="settings-field__control" data-role="settings-theme">
+                                        <option value="light">浅色</option>
+                                        <option value="dark">深色</option>
+                                    </select>
+                                </label>
+                                <label class="settings-field">
+                                    <span class="settings-field__label">启动默认视图</span>
+                                    <select class="settings-field__control" data-role="settings-start-view">
+                                        <option value="assistant">看板娘</option>
+                                        <option value="pomodoro">番茄钟</option>
+                                        <option value="cards">知识卡片箱</option>
+                                        <option value="clipboard">剪贴板管理器</option>
+                                        <option value="settings">设置</option>
+                                    </select>
+                                </label>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" data-role="settings-direct-mode-default">
+                                    <span class="settings-toggle__text">看板娘默认启用“直接调用”模式</span>
+                                </label>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" data-role="settings-clipboard-auto-default">
+                                    <span class="settings-toggle__text">剪贴板管理器默认开启自动记录</span>
+                                </label>
+                            </div>
+                            <p class="settings-inlineMeta" data-role="settings-pref-status">偏好设置已加载。</p>
+                        </section>
+                        <section class="placeholder-card settings-card settings-card--memory">
                             <div class="settings-card__head">
                                 <div>
-                                    <h3 class="settings-card__title">看板娘设置与记忆管理</h3>
-                                    <p class="settings-card__desc">这里承接大窗口模式的记忆、输出和 Agent 行为配置入口。</p>
+                                    <h3 class="settings-card__title">记忆与上下文</h3>
+                                    <p class="settings-card__desc">查看短期上下文、长期记忆，手动提炼并清理无效记录。</p>
                                 </div>
                             </div>
-                            <div class="settings-pillList">
-                                <span class="settings-pill">本地记忆库</span>
-                                <span class="settings-pill">每日提炼</span>
-                                <span class="settings-pill">流式输出</span>
-                                <span class="settings-pill">Agent 能力</span>
-                            </div>
-                        </section>
-                        <section class="placeholder-card settings-card">
-                            <h3 class="settings-card__title">永久记忆</h3>
-                            <p class="settings-card__desc">后续这里会接本地记忆数据库、检索与删除能力。</p>
                             <div class="settings-actions">
                                 <button type="button" class="settings-btn" data-role="settings-clear-context">清空对话上下文</button>
-                                <span class="settings-inlineMeta" data-role="settings-context-meta">已保存上下文：0 条</span>
+                                <button type="button" class="settings-btn" data-role="settings-extract-memory">提炼长期记忆</button>
+                                <span class="settings-inlineMeta" data-role="settings-context-meta">Saved context: 0</span>
                             </div>
+                            <p class="settings-inlineMeta" data-role="settings-memory-status">Memory extractor is idle.</p>
+                            <p class="settings-inlineMeta" data-role="settings-memory-routine-meta">Daily memory routine status unavailable.</p>
                             <div class="settings-dataPanel">
                                 <div class="settings-dataPanel__head">
                                     <h4 class="settings-dataPanel__title">短期上下文</h4>
-                                    <span class="settings-inlineMeta" data-role="settings-context-count">0 条消息</span>
+                                    <span class="settings-inlineMeta" data-role="settings-context-count">0 messages</span>
                                 </div>
                                 <div class="settings-recordList" data-role="settings-context-list"></div>
                             </div>
                             <div class="settings-dataPanel">
                                 <div class="settings-dataPanel__head">
                                     <h4 class="settings-dataPanel__title">长期记忆</h4>
-                                    <span class="settings-inlineMeta" data-role="settings-memory-count">0 条记忆</span>
+                                    <span class="settings-inlineMeta" data-role="settings-memory-count">0 memory</span>
                                 </div>
                                 <div class="settings-recordList" data-role="settings-memory-list"></div>
                             </div>
-                            <div class="settings-list">
-                                <article class="settings-list__item">
-                                    <h4 class="settings-list__title">记忆提炼任务</h4>
-                                    <p class="settings-list__desc">每日日期切换时分析聊天记录，提取稳定偏好、身份信息和长期上下文。</p>
-                                </article>
-                                <article class="settings-list__item">
-                                    <h4 class="settings-list__title">记忆管理界面</h4>
-                                    <p class="settings-list__desc">支持查看、筛选、归档和手动删除，方便调试记忆污染问题。</p>
-                                </article>
-                            </div>
                         </section>
-                        <section class="placeholder-card settings-card">
-                            <h3 class="settings-card__title">输出表现</h3>
-                            <p class="settings-card__desc">前端结构已经预留为气泡输出和右侧对话栏双通道。</p>
-                            <div class="settings-list">
-                                <article class="settings-list__item">
-                                    <h4 class="settings-list__title">流式输出</h4>
-                                    <p class="settings-list__desc">当前先用前端伪流式过渡，后面替换成真正的模型流。</p>
-                                </article>
-                                <article class="settings-list__item">
-                                    <h4 class="settings-list__title">聊天侧栏</h4>
-                                    <p class="settings-list__desc">长回复可从气泡切换到对话窗口，保留触摸反馈在原位显示。</p>
-                                </article>
+                        <section class="placeholder-card settings-card settings-card--agent">
+                            <h3 class="settings-card__title">Agent 工作台</h3>
+                            <p class="settings-card__desc">检查当前可用能力并执行自检，快速定位工具链问题。</p>
+                            <div class="settings-actions">
+                                <button type="button" class="settings-btn" data-role="settings-run-self-test">Run self-test</button>
+                                <span class="settings-inlineMeta" data-role="settings-agent-meta">Agent status loading...</span>
                             </div>
-                        </section>
-                        <section class="placeholder-card settings-card">
-                            <h3 class="settings-card__title">Agent 能力清单</h3>
-                            <p class="settings-card__desc">这里只做查看，不在这一步实现所有能力。</p>
-                            <div class="settings-list">
-                                <article class="settings-list__item">
-                                    <h4 class="settings-list__title">联网与感知</h4>
-                                    <p class="settings-list__desc">网页搜索、截图、图片理解与剪贴板读取。</p>
-                                </article>
-                                <article class="settings-list__item">
-                                    <h4 class="settings-list__title">个人工作流</h4>
-                                    <p class="settings-list__desc">番茄钟、知识卡片创建、记忆查看与日常辅助能力。</p>
-                                </article>
+                            <div class="settings-dataPanel">
+                                <div class="settings-dataPanel__head">
+                                    <h4 class="settings-dataPanel__title">Capabilities</h4>
+                                </div>
+                                <div class="settings-recordList" data-role="settings-agent-capability-list"></div>
+                            </div>
+                            <div class="settings-dataPanel">
+                                <div class="settings-dataPanel__head">
+                                    <h4 class="settings-dataPanel__title">Tools</h4>
+                                </div>
+                                <div class="settings-recordList" data-role="settings-agent-tools-list"></div>
+                            </div>
+                            <div class="settings-dataPanel">
+                                <div class="settings-dataPanel__head">
+                                    <h4 class="settings-dataPanel__title">Self-test</h4>
+                                    <span class="settings-inlineMeta" data-role="settings-self-test-meta">No self-test result yet.</span>
+                                </div>
+                                <div class="settings-recordList" data-role="settings-self-test-list"></div>
                             </div>
                         </section>
                     </div>

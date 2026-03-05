@@ -9,105 +9,139 @@ import {
 } from "../settings/view.js";
 
 const DEFAULT_VIEW = CONFIG.DEFAULT_VIEW;
+const ASSISTANT_DIRECT_MODE_STORAGE_KEY = "assistant.directMode.v1";
+const CLIPBOARD_AUTO_CAPTURE_STORAGE_KEY = "clipboard.autoCapture.v1";
+const SETTINGS_THEME_STORAGE_KEY = "settings.theme.v1";
+const SETTINGS_START_VIEW_STORAGE_KEY = "settings.startView.v1";
 
 const settingsDom = {
     root: $(".settings-root"),
     clearContextBtn: $('[data-role="settings-clear-context"]'),
+    extractMemoryBtn: $('[data-role="settings-extract-memory"]'),
     contextMeta: $('[data-role="settings-context-meta"]'),
     contextCount: $('[data-role="settings-context-count"]'),
     contextList: $('[data-role="settings-context-list"]'),
     memoryCount: $('[data-role="settings-memory-count"]'),
     memoryList: $('[data-role="settings-memory-list"]'),
+    memoryStatus: $('[data-role="settings-memory-status"]'),
+    memoryRoutineMeta: $('[data-role="settings-memory-routine-meta"]'),
     agentMeta: $('[data-role="settings-agent-meta"]'),
     agentCapabilityList: $('[data-role="settings-agent-capability-list"]'),
     agentToolsList: $('[data-role="settings-agent-tools-list"]'),
     runSelfTestBtn: $('[data-role="settings-run-self-test"]'),
     selfTestMeta: $('[data-role="settings-self-test-meta"]'),
     selfTestList: $('[data-role="settings-self-test-list"]'),
-    extractMemoryBtn: null,
-    memoryStatus: null,
-    memoryRoutineMeta: null,
+    themeSelect: $('[data-role="settings-theme"]'),
+    startViewSelect: $('[data-role="settings-start-view"]'),
+    directModeDefaultToggle: $('[data-role="settings-direct-mode-default"]'),
+    clipboardAutoDefaultToggle: $('[data-role="settings-clipboard-auto-default"]'),
+    prefStatus: $('[data-role="settings-pref-status"]'),
     selfTestResult: null,
 };
 
-function ensureAgentSettingsCard() {
-    const grid = $(".settings-grid");
-    if (!grid || settingsDom.agentMeta) {
-        return;
+function readStorage(key, fallback = "") {
+    try {
+        const value = window.localStorage.getItem(key);
+        return value == null ? fallback : value;
+    } catch (error) {
+        return fallback;
     }
-
-    const section = document.createElement("section");
-    section.className = "placeholder-card settings-card";
-    section.innerHTML = `
-        <h3 class="settings-card__title">Agent workspace</h3>
-        <p class="settings-card__desc">Large-window mode agent tools and capability status.</p>
-        <div class="settings-actions">
-            <button type="button" class="settings-btn" data-role="settings-run-self-test">Run self-test</button>
-            <span class="settings-inlineMeta" data-role="settings-agent-meta">Agent status loading...</span>
-        </div>
-        <div class="settings-dataPanel">
-            <div class="settings-dataPanel__head">
-                <h4 class="settings-dataPanel__title">Capabilities</h4>
-            </div>
-            <div class="settings-recordList" data-role="settings-agent-capability-list"></div>
-        </div>
-        <div class="settings-dataPanel">
-            <div class="settings-dataPanel__head">
-                <h4 class="settings-dataPanel__title">Tools</h4>
-            </div>
-            <div class="settings-recordList" data-role="settings-agent-tools-list"></div>
-        </div>
-        <div class="settings-dataPanel">
-            <div class="settings-dataPanel__head">
-                <h4 class="settings-dataPanel__title">Self-test</h4>
-                <span class="settings-inlineMeta" data-role="settings-self-test-meta">No self-test result yet.</span>
-            </div>
-            <div class="settings-recordList" data-role="settings-self-test-list"></div>
-        </div>
-    `;
-    grid.appendChild(section);
-
-    settingsDom.agentMeta = $('[data-role="settings-agent-meta"]');
-    settingsDom.agentCapabilityList = $('[data-role="settings-agent-capability-list"]');
-    settingsDom.agentToolsList = $('[data-role="settings-agent-tools-list"]');
-    settingsDom.runSelfTestBtn = $('[data-role="settings-run-self-test"]');
-    settingsDom.selfTestMeta = $('[data-role="settings-self-test-meta"]');
-    settingsDom.selfTestList = $('[data-role="settings-self-test-list"]');
 }
 
-function ensureMemoryControls() {
-    if (!settingsDom.root || settingsDom.extractMemoryBtn) {
-        return;
+function writeStorage(key, value) {
+    try {
+        window.localStorage.setItem(key, value);
+    } catch (error) {
+        console.error(error);
     }
+}
 
-    const actions = $(".settings-actions", settingsDom.root);
-    if (actions) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "settings-btn";
-        button.dataset.role = "settings-extract-memory";
-        button.textContent = "Extract long-term memory";
-        actions.appendChild(button);
-        settingsDom.extractMemoryBtn = button;
-    }
+function readBooleanStorage(key, fallback = false) {
+    const raw = readStorage(key, fallback ? "true" : "false");
+    return raw === "true";
+}
 
-    if (settingsDom.memoryList && !settingsDom.memoryStatus) {
-        const status = document.createElement("p");
-        status.className = "settings-inlineMeta";
-        status.dataset.role = "settings-memory-status";
-        status.textContent = "Memory extractor is idle.";
-        settingsDom.memoryList.parentElement?.appendChild(status);
-        settingsDom.memoryStatus = status;
+function setPreferenceStatus(text) {
+    if (settingsDom.prefStatus) {
+        settingsDom.prefStatus.textContent = text;
     }
+}
 
-    if (settingsDom.memoryList && !settingsDom.memoryRoutineMeta) {
-        const meta = document.createElement("p");
-        meta.className = "settings-inlineMeta";
-        meta.dataset.role = "settings-memory-routine-meta";
-        meta.textContent = "Daily memory routine status unavailable.";
-        settingsDom.memoryList.parentElement?.appendChild(meta);
-        settingsDom.memoryRoutineMeta = meta;
+function resolveTheme(value) {
+    return value === "dark" ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+    const resolved = resolveTheme(theme);
+    document.documentElement.setAttribute("data-theme", resolved);
+    if (settingsDom.themeSelect) {
+        settingsDom.themeSelect.value = resolved;
     }
+}
+
+function loadThemePreference() {
+    const fromStorage = readStorage(SETTINGS_THEME_STORAGE_KEY, "");
+    if (fromStorage === "light" || fromStorage === "dark") {
+        return fromStorage;
+    }
+    const fromDocument = document.documentElement.getAttribute("data-theme");
+    return resolveTheme(fromDocument || "light");
+}
+
+function saveThemePreference(theme) {
+    const resolved = resolveTheme(theme);
+    writeStorage(SETTINGS_THEME_STORAGE_KEY, resolved);
+    applyTheme(resolved);
+    setPreferenceStatus(`主题已切换到：${resolved === "dark" ? "深色" : "浅色"}`);
+}
+
+function availableInShellView(viewKey) {
+    return Boolean(document.querySelector(`.view[data-view="${viewKey}"]`));
+}
+
+function resolveStartView(viewKey) {
+    const normalized = String(viewKey || "").trim();
+    return availableInShellView(normalized) ? normalized : DEFAULT_VIEW;
+}
+
+function loadStartViewPreference() {
+    return resolveStartView(readStorage(SETTINGS_START_VIEW_STORAGE_KEY, DEFAULT_VIEW));
+}
+
+function saveStartViewPreference(viewKey) {
+    const resolved = resolveStartView(viewKey);
+    writeStorage(SETTINGS_START_VIEW_STORAGE_KEY, resolved);
+    if (settingsDom.startViewSelect) {
+        settingsDom.startViewSelect.value = resolved;
+    }
+    setPreferenceStatus(`启动默认视图已更新为：${resolved}`);
+}
+
+function loadBehaviorPreferencesIntoControls() {
+    if (settingsDom.directModeDefaultToggle) {
+        settingsDom.directModeDefaultToggle.checked = readBooleanStorage(ASSISTANT_DIRECT_MODE_STORAGE_KEY, false);
+    }
+    if (settingsDom.clipboardAutoDefaultToggle) {
+        settingsDom.clipboardAutoDefaultToggle.checked = readBooleanStorage(CLIPBOARD_AUTO_CAPTURE_STORAGE_KEY, false);
+    }
+}
+
+function saveBehaviorPreferencesFromControls() {
+    if (settingsDom.directModeDefaultToggle) {
+        writeStorage(ASSISTANT_DIRECT_MODE_STORAGE_KEY, String(settingsDom.directModeDefaultToggle.checked));
+    }
+    if (settingsDom.clipboardAutoDefaultToggle) {
+        writeStorage(CLIPBOARD_AUTO_CAPTURE_STORAGE_KEY, String(settingsDom.clipboardAutoDefaultToggle.checked));
+    }
+    setPreferenceStatus("行为偏好已保存。");
+}
+
+function syncPreferencesUI() {
+    applyTheme(loadThemePreference());
+    if (settingsDom.startViewSelect) {
+        settingsDom.startViewSelect.value = loadStartViewPreference();
+    }
+    loadBehaviorPreferencesIntoControls();
 }
 
 function setNavBtnActive(viewKey) {
@@ -129,6 +163,7 @@ function showView(viewKey) {
     }
 
     if (viewKey === "settings") {
+        syncPreferencesUI();
         syncSettingsData().catch((error) => {
             console.error(error);
         });
@@ -219,7 +254,6 @@ async function syncSettingsData() {
     if (window.api.getMemoryRoutineMeta) {
         jobs.push(window.api.getMemoryRoutineMeta());
     }
-
     if (window.api.getAgentCapabilities) {
         jobs.push(window.api.getAgentCapabilities());
     }
@@ -241,9 +275,7 @@ async function syncSettingsData() {
         settingsDom.memoryCount.textContent = `${activeCount}/${memoryData.memoryCount} active${categorySummary ? ` | ${categorySummary}` : ""}`;
     }
     if (settingsDom.agentMeta) {
-        settingsDom.agentMeta.textContent = agentCapabilities
-            ? "Agent available"
-            : "Agent unavailable";
+        settingsDom.agentMeta.textContent = agentCapabilities ? "Agent available" : "Agent unavailable";
     }
     if (settingsDom.contextList) {
         settingsDom.contextList.innerHTML = renderContextList(contextData.items || []);
@@ -356,16 +388,35 @@ function wireSettingsActions() {
             await handleDeleteMemory(button.dataset.memoryId);
         });
     }
+
+    if (settingsDom.themeSelect) {
+        settingsDom.themeSelect.addEventListener("change", () => {
+            saveThemePreference(settingsDom.themeSelect.value);
+        });
+    }
+
+    if (settingsDom.startViewSelect) {
+        settingsDom.startViewSelect.addEventListener("change", () => {
+            saveStartViewPreference(settingsDom.startViewSelect.value);
+        });
+    }
+
+    if (settingsDom.directModeDefaultToggle) {
+        settingsDom.directModeDefaultToggle.addEventListener("change", saveBehaviorPreferencesFromControls);
+    }
+
+    if (settingsDom.clipboardAutoDefaultToggle) {
+        settingsDom.clipboardAutoDefaultToggle.addEventListener("change", saveBehaviorPreferencesFromControls);
+    }
 }
 
 function boot() {
-    ensureAgentSettingsCard();
-    ensureMemoryControls();
+    applyTheme(loadThemePreference());
     wireNav();
     wireIpc();
     wireCustomNavigation();
     wireSettingsActions();
-    showView(DEFAULT_VIEW);
+    showView(loadStartViewPreference());
 }
 
 document.addEventListener("DOMContentLoaded", boot);

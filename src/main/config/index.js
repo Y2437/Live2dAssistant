@@ -10,6 +10,7 @@ const AI_CONTEXT_JSON_PATH = path.join(app.getPath("userData"), "assistant-conte
 const AI_LONG_TERM_MEMORY_JSON_PATH = path.join(app.getPath("userData"), "assistant-long-term-memory.json");
 const KNOWLEDGE_CARDS_JSON_PATH = path.join(app.getPath("userData"), "knowledge-cards.json");
 const AI_MEMORY_ROUTINE_JSON_PATH = path.join(app.getPath("userData"), "assistant-memory-routine.json");
+const CLIPBOARD_HISTORY_JSON_PATH = path.join(app.getPath("userData"), "clipboard-history.json");
 const AGENT_SCREENSHOT_DIR_PATH = path.join(app.getPath("userData"), "agent-screenshots");
 const PROJECT_ROOT = path.resolve(__dirname, "../../..");
 const WINDOW_KEYS = [
@@ -17,6 +18,7 @@ const WINDOW_KEYS = [
     'pomodoro',
     'cards',
     'clipboard',
+    'quickFloat',
     'devShell',  //作为测试模式的主窗口
 ]
 const WINDOW_FILE_MAP = {
@@ -24,6 +26,7 @@ const WINDOW_FILE_MAP = {
     pomodoro: path.join(__dirname, "../../renderer/view/pomodoro.html"),
     cards: path.join(__dirname, "../../renderer/view/cards.html"),
     clipboard: path.join(__dirname, "../../renderer/view/clipboard.html"),
+    quickFloat: path.join(__dirname, "../../renderer/view/quickFloat.html"),
     devShell: path.join(__dirname, "../../renderer/view/index.html"),
 };
 const AI_TOUCH_RESPONSE = {
@@ -122,6 +125,7 @@ module.exports = {
     AI_LONG_TERM_MEMORY_JSON_PATH,
     KNOWLEDGE_CARDS_JSON_PATH,
     AI_MEMORY_ROUTINE_JSON_PATH,
+    CLIPBOARD_HISTORY_JSON_PATH,
     AGENT_SCREENSHOT_DIR_PATH,
     PROJECT_ROOT,
     ENV_CONFIG,
