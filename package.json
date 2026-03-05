@@ -4,7 +4,8 @@
   "description": "哎也不知道能不能搞成",
   "main": "src/main/main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node scripts/auto-test.js",
+    "test:auto": "node scripts/auto-test.js",
     "start": "electron-forge start",
     "make": "electron-forge make",
     "package": "electron-forge package"

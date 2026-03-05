@@ -48,10 +48,7 @@ export function renderAgentCapabilityList(capabilities) {
     }
     const items = [
         ["Vision model", capabilities.visionEnabled ? "enabled" : "disabled"],
-        ["Library roots", String(capabilities.libraryRootCount ?? 0)],
-        ["Indexed files", String(capabilities.libraryFileCount ?? 0)],
-        ["Indexed chunks", String(capabilities.libraryChunkCount ?? 0)],
-        ["Last index update", capabilities.libraryUpdatedAt || "not indexed"],
+        ["Tool count", String(Array.isArray(capabilities.tools) ? capabilities.tools.length : 0)],
     ];
     return items.map(([title, value]) => `
         <article class="settings-record">

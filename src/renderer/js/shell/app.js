@@ -21,7 +21,6 @@ const settingsDom = {
     agentMeta: $('[data-role="settings-agent-meta"]'),
     agentCapabilityList: $('[data-role="settings-agent-capability-list"]'),
     agentToolsList: $('[data-role="settings-agent-tools-list"]'),
-    rebuildLibraryBtn: $('[data-role="settings-rebuild-library"]'),
     runSelfTestBtn: $('[data-role="settings-run-self-test"]'),
     selfTestMeta: $('[data-role="settings-self-test-meta"]'),
     selfTestList: $('[data-role="settings-self-test-list"]'),
@@ -41,11 +40,10 @@ function ensureAgentSettingsCard() {
     section.className = "placeholder-card settings-card";
     section.innerHTML = `
         <h3 class="settings-card__title">Agent workspace</h3>
-        <p class="settings-card__desc">Large-window mode agent tools, file index, and capability status.</p>
+        <p class="settings-card__desc">Large-window mode agent tools and capability status.</p>
         <div class="settings-actions">
-            <button type="button" class="settings-btn" data-role="settings-rebuild-library">Rebuild library index</button>
             <button type="button" class="settings-btn" data-role="settings-run-self-test">Run self-test</button>
-            <span class="settings-inlineMeta" data-role="settings-agent-meta">Agent loading...</span>
+            <span class="settings-inlineMeta" data-role="settings-agent-meta">Agent status loading...</span>
         </div>
         <div class="settings-dataPanel">
             <div class="settings-dataPanel__head">
@@ -72,7 +70,6 @@ function ensureAgentSettingsCard() {
     settingsDom.agentMeta = $('[data-role="settings-agent-meta"]');
     settingsDom.agentCapabilityList = $('[data-role="settings-agent-capability-list"]');
     settingsDom.agentToolsList = $('[data-role="settings-agent-tools-list"]');
-    settingsDom.rebuildLibraryBtn = $('[data-role="settings-rebuild-library"]');
     settingsDom.runSelfTestBtn = $('[data-role="settings-run-self-test"]');
     settingsDom.selfTestMeta = $('[data-role="settings-self-test-meta"]');
     settingsDom.selfTestList = $('[data-role="settings-self-test-list"]');
@@ -245,7 +242,7 @@ async function syncSettingsData() {
     }
     if (settingsDom.agentMeta) {
         settingsDom.agentMeta.textContent = agentCapabilities
-            ? `Indexed ${agentCapabilities.libraryFileCount} files`
+            ? "Agent available"
             : "Agent unavailable";
     }
     if (settingsDom.contextList) {
@@ -343,19 +340,6 @@ function wireSettingsActions() {
     if (settingsDom.extractMemoryBtn) {
         settingsDom.extractMemoryBtn.addEventListener("click", async () => {
             await handleExtractMemory();
-        });
-    }
-
-    if (settingsDom.rebuildLibraryBtn && window.api.rebuildAgentLibraryIndex) {
-        settingsDom.rebuildLibraryBtn.addEventListener("click", async () => {
-            settingsDom.rebuildLibraryBtn.disabled = true;
-            try {
-                await window.api.rebuildAgentLibraryIndex();
-                await syncSettingsData();
-                window.dispatchEvent(new CustomEvent("organizer:refresh"));
-            } finally {
-                settingsDom.rebuildLibraryBtn.disabled = false;
-            }
         });
     }
 

@@ -118,15 +118,4 @@ export const CONFIG = {
             confirmDelete: (title) => `确定删除卡片“${title}”吗？`,
         },
     },
-    ORGANIZER_CONFIG: {
-        CATEGORY_LABELS: {
-            all: "All files",
-            markdown: "Markdown",
-            code: "Code",
-            pdf: "PDF",
-            config: "Config",
-            text: "Text",
-            other: "Other",
-        },
-    },
 };

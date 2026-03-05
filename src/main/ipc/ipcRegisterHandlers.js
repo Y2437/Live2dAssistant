@@ -57,14 +57,6 @@ function registerContextHandlers(registry) {
 
 function registerAgentHandlers(registry) {
     ipcMain.handle("app:getAgentCapabilities", async () => ensureAgentService(registry).getCapabilities());
-    ipcMain.handle("app:getAgentLibraryIndex", async () => ensureAgentService(registry).getLibraryIndexData());
-    ipcMain.handle("app:searchAgentLibrary", async (event, query) => ensureAgentService(registry).searchLibrary(query));
-    ipcMain.handle("app:readAgentLibraryFile", async (event, filePath) => ensureAgentService(registry).readLibraryFile(filePath));
-    ipcMain.handle("app:rebuildAgentLibraryIndex", async () => {
-        const service = ensureAgentService(registry);
-        await service.rebuildLibraryIndex();
-        return service.getCapabilities();
-    });
     ipcMain.handle("app:runAgentSelfTest", async (event, payload) => {
         const query = typeof payload?.query === "string" ? payload.query.trim() : "";
         return ensureAgentService(registry).runCapabilitySelfTest(query);

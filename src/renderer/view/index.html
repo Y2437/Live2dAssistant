@@ -8,7 +8,6 @@
     <script src="../vendor/live2d/cubism4.min.js" defer></script>
     <script type="module" src="../js/assistant/index.js" defer></script>
     <script type="module" src="../js/cards/index.js" defer></script>
-    <script type="module" src="../js/organizer/index.js" defer></script>
     <script type="module" src="../js/pomodoro/index.js" defer></script>
     <script type="module" src="../js/shell/app.js" defer></script>
     <link rel="stylesheet" href="../css/theme/light.css">
@@ -18,7 +17,6 @@
     <link rel="stylesheet" href="../css/style/assistant.css">
     <link rel="stylesheet" href="../css/style/settings.css">
     <link rel="stylesheet" href="../css/style/pomodoro.css">
-    <link rel="stylesheet" href="../css/style/organizer.css">
     <link rel="stylesheet" href="../css/style/cards.css">
     <link rel="stylesheet" href="../css/style/clipboard.css">
 </head>
@@ -29,7 +27,6 @@
         <div class="nav__group">
             <button class="nav__btn" type="button" data-view="assistant">看板娘</button>
             <button class="nav__btn" type="button" data-view="pomodoro">番茄钟</button>
-            <button class="nav__btn" type="button" data-view="organizer">资料整理器</button>
             <button class="nav__btn" type="button" data-view="cards">知识卡片箱</button>
             <button class="nav__btn" type="button" data-view="clipboard">剪贴板管理器</button>
         </div>
@@ -135,7 +132,6 @@
                     <div class="assistant-panel">
                         <div class="assistant-actions" data-role="assistant-actions">
                             <button type="button" class="assistant-actionBtn" data-action="pomodoro">番茄钟</button>
-                            <button type="button" class="assistant-actionBtn" data-action="organizer">资料整理</button>
                             <button type="button" class="assistant-actionBtn" data-action="cards">知识卡片</button>
                             <button type="button" class="assistant-actionBtn" data-action="clipboard">剪贴板</button>
                             <button type="button" class="assistant-actionBtn" data-local-view="settings">记忆设置</button>
@@ -250,18 +246,6 @@
                                 <div class="pomoConfetti" data-pomo="confetti" aria-hidden="true"></div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-        <section class="view" data-view="organizer">
-            <h2 class="view__title">资料整理器</h2>
-            <div class="view__mount" data-mount>
-                <div class="organizer-root">
-                    <div class="placeholder-card">
-                        <h3 class="placeholder-title">资料整理器占位</h3>
-                        <p class="placeholder-desc">后续在这里挂载资料整理器组件和托管文件浏览能力。</p>
-                        <div class="placeholder-slot" data-slot="organizer"></div>
                     </div>
                 </div>
             </div>
@@ -417,7 +401,7 @@
                             <div class="settings-card__head">
                                 <div>
                                     <h3 class="settings-card__title">看板娘设置与记忆管理</h3>
-                                    <p class="settings-card__desc">这里先承接大窗口模式的记忆、输出和 Agent 行为配置入口，后续可以直接接本地 RAG 与每日提炼任务。</p>
+                                    <p class="settings-card__desc">这里承接大窗口模式的记忆、输出和 Agent 行为配置入口。</p>
                                 </div>
                             </div>
                             <div class="settings-pillList">
@@ -478,12 +462,12 @@
                             <p class="settings-card__desc">这里只做查看，不在这一步实现所有能力。</p>
                             <div class="settings-list">
                                 <article class="settings-list__item">
-                                    <h4 class="settings-list__title">资料检索</h4>
-                                    <p class="settings-list__desc">网页搜索、资料库文件检索、Markdown / 代码 / PDF 阅读。</p>
+                                    <h4 class="settings-list__title">联网与感知</h4>
+                                    <p class="settings-list__desc">网页搜索、截图、图片理解与剪贴板读取。</p>
                                 </article>
                                 <article class="settings-list__item">
                                     <h4 class="settings-list__title">个人工作流</h4>
-                                    <p class="settings-list__desc">截图、图片理解、剪贴板读取、知识卡片创建、记忆查看。</p>
+                                    <p class="settings-list__desc">番茄钟、知识卡片创建、记忆查看与日常辅助能力。</p>
                                 </article>
                             </div>
                         </section>

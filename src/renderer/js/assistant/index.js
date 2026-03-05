@@ -77,9 +77,6 @@ const SPECIAL_AGENT_TOOL_NAMES = new Set([
     "get_pomodoro_status",
     "get_clipboard",
     "analyze_clipboard_image",
-    "get_library_overview",
-    "search_library",
-    "read_library_file",
     "web_search",
     "read_web_page",
     "capture_screen",
@@ -90,7 +87,6 @@ const SPECIAL_AGENT_CATEGORY_LABELS = {
     cards: "知识卡片",
     pomodoro: "番茄钟",
     clipboard: "剪贴板",
-    library: "资料库",
     web: "联网",
     vision: "视觉",
 };

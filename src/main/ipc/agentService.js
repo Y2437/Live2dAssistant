@@ -1,21 +1,16 @@
 const fs = require("fs/promises");
-const path = require("path");
 const {aiChatWithContent, aiChatWithContentStream} = require("./aiService");
 const {
-    AGENT_LIBRARY_INDEX_JSON_PATH,
-    AGENT_LIBRARY_ROOTS_JSON_PATH,
     AGENT_SCREENSHOT_DIR_PATH,
     ENV_CONFIG,
 } = require("../config");
 const {
     MAX_AGENT_STEPS,
-    DEFAULT_LIBRARY_ROOTS,
     safeJsonParse,
     summarizeText,
     clampTraceOutput,
     normalizeToolArgs,
 } = require("./agentShared");
-const libraryTools = require("./agentLibraryTools");
 const searchTools = require("./agentSearchTools");
 const visionTools = require("./agentVisionTools");
 const {buildAssistantFinalAnswerMessages} = require("./assistantPrompt");
@@ -38,53 +33,10 @@ class AgentService {
         this.getKnowledgeCards = options.getKnowledgeCards;
         this.createKnowledgeCard = options.createKnowledgeCard;
         this.getPomodoroData = options.getPomodoroData;
-        this.libraryRoots = [];
-        this.libraryIndex = {updatedAt: "", items: [], stats: null, categories: []};
     }
 
     async ensureReady() {
         await fs.mkdir(AGENT_SCREENSHOT_DIR_PATH, {recursive: true});
-        this.libraryRoots = await this.loadLibraryRoots();
-        await this.loadStoredLibraryIndex();
-        await this.rebuildLibraryIndex();
-    }
-
-    async loadStoredLibraryIndex() {
-        try {
-            const raw = await fs.readFile(AGENT_LIBRARY_INDEX_JSON_PATH, "utf8");
-            const data = safeJsonParse(raw);
-            if (data && Array.isArray(data.items)) {
-                this.libraryIndex = {
-                    updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
-                    items: data.items,
-                    stats: data.stats || null,
-                    categories: Array.isArray(data.categories) ? data.categories : [],
-                };
-            }
-        } catch (error) {
-            if (error?.code !== "ENOENT") {
-                console.warn("[agent] loadStoredLibraryIndex failed:", error.message);
-            }
-        }
-    }
-
-    async loadLibraryRoots() {
-        try {
-            const raw = await fs.readFile(AGENT_LIBRARY_ROOTS_JSON_PATH, "utf8");
-            const data = safeJsonParse(raw);
-            if (Array.isArray(data?.roots) && data.roots.length) {
-                return data.roots
-                    .filter((item) => typeof item === "string" && item.trim())
-                    .map((item) => path.resolve(item));
-            }
-        } catch (error) {
-            if (error?.code !== "ENOENT") {
-                console.warn("[agent] loadLibraryRoots failed:", error.message);
-            }
-        }
-        const roots = DEFAULT_LIBRARY_ROOTS.map((item) => path.resolve(item));
-        await fs.writeFile(AGENT_LIBRARY_ROOTS_JSON_PATH, JSON.stringify({roots}, null, 2), "utf8");
-        return roots;
     }
 
     async emitHook(hook, ...args) {
@@ -599,8 +551,6 @@ class AgentService {
             {tool: "get_memory_routine_status", args: {}},
             {tool: "list_cards", args: {}},
             {tool: "search_cards", args: {query: userMessage}},
-            {tool: "get_library_overview", args: {}},
-            {tool: "search_library", args: {query: userMessage}},
             {tool: "get_clipboard", args: {}},
             {tool: "list_screenshots", args: {}},
             {tool: "get_pomodoro_status", args: {}},
@@ -656,7 +606,7 @@ class AgentService {
                 "",
                 ...results,
                 "",
-                "Skipped state-changing or environment-dependent tools: add_memory, delete_memory, extract_memory, create_card, capture_screen, analyze_clipboard_image, analyze_image, read_library_file, get_card.",
+                "Skipped state-changing or environment-dependent tools: add_memory, delete_memory, extract_memory, create_card, capture_screen, analyze_clipboard_image, analyze_image, get_card.",
             ].join("\n"),
             traces,
         };
@@ -680,50 +630,17 @@ class AgentService {
     }
 
 
-    async rebuildLibraryIndex() {
-        return libraryTools.rebuildLibraryIndex(this);
-    }
-
-    buildLibraryItem(root, fullPath, stat, ext, excerpt, status, options = {}) {
-        return libraryTools.buildLibraryItem(this, root, fullPath, stat, ext, excerpt, status, options);
-    }
-
-    async walkLibraryRoot(root, items, currentDir = root, previousMap = new Map(), stats = null, seenIds = new Set()) {
-        return libraryTools.walkLibraryRoot(this, root, items, currentDir, previousMap, stats, seenIds);
-    }
-
     searchMemory(query) {
         return searchTools.searchMemory(this, query);
     }
 
     getCapabilities() {
-        const chunkCount = this.libraryIndex.items.reduce((sum, item) => sum + (item.chunkCount || 0), 0);
         const toolSpecs = this.getToolSpecs();
         return {
             visionEnabled: Boolean(ENV_CONFIG.AI_VISION_MODEL || ENV_CONFIG.VISION_MODEL),
-            libraryRootCount: this.libraryRoots.length,
-            libraryFileCount: this.libraryIndex.items.length,
-            libraryChunkCount: chunkCount,
-            libraryUpdatedAt: this.libraryIndex.updatedAt,
             tools: toolSpecs.map((item) => item.name),
             toolDetails: toolSpecs,
         };
-    }
-
-    getLibraryIndexData() {
-        return libraryTools.getLibraryIndexData(this);
-    }
-
-    searchLibrary(query) {
-        return libraryTools.searchLibrary(this, query);
-    }
-
-    getLibraryOverview() {
-        return libraryTools.getLibraryOverview(this);
-    }
-
-    async readLibraryFile(requestedPath) {
-        return libraryTools.readLibraryFile(this, requestedPath);
     }
 
     async readWebPage(url) {

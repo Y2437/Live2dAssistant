@@ -239,9 +239,6 @@ async function runTool(service, toolName, args) {
     case "get_pomodoro_status": return service.getPomodoroStatus();
     case "get_clipboard": return service.getClipboardSnapshot();
     case "analyze_clipboard_image": return service.analyzeClipboardImage(args);
-    case "get_library_overview": return service.getLibraryOverview();
-    case "search_library": return service.searchLibrary(args?.query);
-    case "read_library_file": return service.readLibraryFile(args?.path);
     case "web_search": return service.webSearch(args?.query);
     case "read_web_page": return service.readWebPage(args?.url);
     case "capture_screen": return service.captureScreen(args?.name);
