@@ -187,14 +187,14 @@ async function initLive2d() {
 }
 
 function placeLive2d() {
+    if (!assistantState.viewActive) return;
+    const width = dom.stage.clientWidth;
+    const height = dom.stage.clientHeight;
+    if (!width || !height || !assistantState.live2d) return;
+    if (assistantState.lastStageWidth === width && assistantState.lastStageHeight === height) {
+        return;
+    }
     measureSync("assistant.placeLive2d", () => {
-        if (!assistantState.viewActive) return;
-        const width = dom.stage.clientWidth;
-        const height = dom.stage.clientHeight;
-        if (!width || !height || !assistantState.live2d) return;
-        if (assistantState.lastStageWidth === width && assistantState.lastStageHeight === height) {
-            return;
-        }
         assistantState.lastStageWidth = width;
         assistantState.lastStageHeight = height;
 
@@ -209,6 +209,14 @@ function placeLive2d() {
 function initResizeObserver() {
     assistantState.resizeObserver = new ResizeObserver(() => {
         if (!assistantState.viewActive) {
+            return;
+        }
+        const width = dom.stage?.clientWidth || 0;
+        const height = dom.stage?.clientHeight || 0;
+        if (!width || !height) {
+            return;
+        }
+        if (assistantState.lastStageWidth === width && assistantState.lastStageHeight === height) {
             return;
         }
         if (assistantState.stageResizeRafId) {
@@ -235,13 +243,19 @@ function setAssistantRenderActive(active) {
     if (!assistantState.pixiApp) {
         return;
     }
-    assistantState.viewActive = active === true;
+    const shouldBeActive = active === true;
+    if (assistantState.viewActive === shouldBeActive) {
+        return;
+    }
+    assistantState.viewActive = shouldBeActive;
     try {
         if (assistantState.viewActive) {
             if (assistantState.resizeObserver && !assistantState.resizeObserverActive && dom.stage) {
                 assistantState.resizeObserver.observe(dom.stage);
                 assistantState.resizeObserverActive = true;
             }
+            assistantState.lastStageWidth = 0;
+            assistantState.lastStageHeight = 0;
             assistantState.pixiApp.start?.();
             assistantState.pixiApp.ticker?.start?.();
             placeLive2d();
