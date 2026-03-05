@@ -217,6 +217,11 @@ function renderMarkdown(target, text) {
     target.innerHTML = marked.parse(text || "");
 }
 
+function renderPlainText(target, text) {
+    target.textContent = text || "";
+    target.style.whiteSpace = "pre-wrap";
+}
+
 function isNearBottom() {
     if (!dom.chatLog) return true;
     const distance = dom.chatLog.scrollHeight - dom.chatLog.scrollTop - dom.chatLog.clientHeight;
@@ -250,7 +255,7 @@ function shouldExpandForChat(text = "", traces = []) {
     return value.trim().length >= AUTO_EXPAND_LENGTH || lineCount >= AUTO_EXPAND_LINES || (Array.isArray(traces) && traces.length >= 2);
 }
 
-function renderBubble(text, type = "chat") {
+function renderBubble(text, type = "chat", options = {}) {
     if (!dom.bubble) return;
     assistantState.lastBubbleType = type;
     if (dom.bubbleLabel) {
@@ -261,7 +266,13 @@ function renderBubble(text, type = "chat") {
     dom.bubble.classList.remove("is-updating");
     void dom.bubble.offsetWidth;
     dom.bubble.classList.add("is-updating");
-    renderMarkdown(dom.bubbleBody || dom.bubble, text);
+    const bubbleTarget = dom.bubbleBody || dom.bubble;
+    if (options.streaming === true) {
+        renderPlainText(bubbleTarget, text);
+    } else {
+        bubbleTarget.style.whiteSpace = "";
+        renderMarkdown(bubbleTarget, text);
+    }
     if (dom.bubbleBody) {
         dom.bubbleBody.scrollTop = dom.bubbleBody.scrollHeight;
     }
@@ -442,12 +453,12 @@ function syncRunPanel() {
         ? CONFIG.ASSISTANT_CONFIG.RUN_PANEL_TOGGLE_COLLAPSE
         : CONFIG.ASSISTANT_CONFIG.RUN_PANEL_TOGGLE_EXPAND;
     dom.runBody.hidden = !assistantState.runPanelExpanded;
-    dom.runTimeline.innerHTML = "";
 
     if (!assistantState.runPanelExpanded) {
         return;
     }
 
+    dom.runTimeline.innerHTML = "";
     traces.forEach((trace, index) => {
         const pills = [];
         if (trace.kind) pills.push(`kind: ${trace.kind}`);
@@ -862,10 +873,17 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
     let canceled = false;
     const directMode = assistantState.directMode;
 
-    const updateAssistantContent = (nextText) => {
-        responseText = nextText || "";
-        renderMarkdown(assistantEntry.content, responseText || CONFIG.ASSISTANT_CONFIG.THINKING_TEXT);
-        const expandForResponse = shouldExpandForChat(responseText, assistantState.runtimeTraces);
+    let streamRenderFrameId = 0;
+    let pendingStreamText = "";
+    const applyAssistantContent = (value, options = {}) => {
+        const textValue = value || "";
+        if (options.streaming === true) {
+            renderPlainText(assistantEntry.content, textValue || CONFIG.ASSISTANT_CONFIG.THINKING_TEXT);
+        } else {
+            assistantEntry.content.style.whiteSpace = "";
+            renderMarkdown(assistantEntry.content, textValue || CONFIG.ASSISTANT_CONFIG.THINKING_TEXT);
+        }
+        const expandForResponse = shouldExpandForChat(textValue, assistantState.runtimeTraces);
         if (!assistantState.expanded && expandForResponse) {
             setLayout(true);
             assistantState.shouldStickToBottom = true;
@@ -873,9 +891,28 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
         } else {
             scrollChatToBottom();
         }
-        if (!assistantState.expanded && responseText) {
-            renderBubble(responseText, "chat");
+        if (!assistantState.expanded && textValue) {
+            renderBubble(textValue, "chat", {streaming: options.streaming === true});
         }
+    };
+    const flushStreamRender = () => {
+        streamRenderFrameId = 0;
+        applyAssistantContent(pendingStreamText, {streaming: true});
+    };
+    const updateAssistantContent = (nextText, options = {}) => {
+        responseText = nextText || "";
+        if (options.streaming === true) {
+            pendingStreamText = responseText;
+            if (!streamRenderFrameId) {
+                streamRenderFrameId = window.requestAnimationFrame(flushStreamRender);
+            }
+            return;
+        }
+        if (streamRenderFrameId) {
+            window.cancelAnimationFrame(streamRenderFrameId);
+            streamRenderFrameId = 0;
+        }
+        applyAssistantContent(responseText, {streaming: false});
     };
 
     setChatStatus(assistantEntry, CONFIG.ASSISTANT_CONFIG.STATUS_STREAMING);
@@ -900,7 +937,7 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
                 },
                 onContent(content) {
                     hasLiveContent = true;
-                    updateAssistantContent(content);
+                    updateAssistantContent(content, {streaming: true});
                 },
                 onError() {
                     // Final error handling happens in the catch block below.
@@ -922,6 +959,8 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
 
         if (!hasLiveContent) {
             updateAssistantContent(response?.content || "");
+        } else {
+            updateAssistantContent(responseText);
         }
         if (responseText) {
             console.log(`${EMOTION_LOG_PREFIX} trigger-after-response`, {length: responseText.length});
@@ -964,6 +1003,10 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
             console.error(error);
         }
     } finally {
+        if (streamRenderFrameId) {
+            window.cancelAnimationFrame(streamRenderFrameId);
+            streamRenderFrameId = 0;
+        }
         clearRequestTimeout();
         assistantState.activeRequest = null;
         syncRequestControls();

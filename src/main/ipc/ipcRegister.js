@@ -54,8 +54,17 @@ class ipcRegister{
     static EMOTION_LOG_PREFIX = "[emotion-pipeline]";
     static assistantContext = [];
     static assistantLongTermMemory = [];
+    static longTermMemoryFingerprintIndex = new Map();
     static knowledgeCards = [];
+    static knowledgeCardsCache = {
+        version: -1,
+        categories: [],
+        items: [],
+    };
+    static knowledgeCardsVersion = 0;
     static clipboardHistory = [];
+    static clipboardFingerprintIndex = new Map();
+    static clipboardIdIndex = new Map();
     static MAX_CLIPBOARD_HISTORY_ITEMS = 120;
     static MAX_CONTEXT_MESSAGES = 48;
     static agentService = null;
@@ -121,19 +130,41 @@ class ipcRegister{
     static isMemoryNoise(title, content){
         return isMemoryNoise(title, content);
     }
+    static rebuildLongTermMemoryIndex(){
+        this.longTermMemoryFingerprintIndex = new Map();
+        this.assistantLongTermMemory.forEach((item, index)=>{
+            const fingerprint = typeof item?.fingerprint === "string" ? item.fingerprint : "";
+            if(fingerprint && !this.longTermMemoryFingerprintIndex.has(fingerprint)){
+                this.longTermMemoryFingerprintIndex.set(fingerprint, index);
+            }
+        });
+    }
     static findDuplicateMemoryIndex(title, content){
         const fingerprint = this.buildMemoryFingerprint(title, content);
-        return this.assistantLongTermMemory.findIndex((item)=>{
+        const fingerprintIndex = this.longTermMemoryFingerprintIndex.get(fingerprint);
+        if(Number.isInteger(fingerprintIndex)
+            && fingerprintIndex >= 0
+            && fingerprintIndex < this.assistantLongTermMemory.length
+            && this.assistantLongTermMemory[fingerprintIndex]?.fingerprint === fingerprint){
+            return fingerprintIndex;
+        }
+        const normalizedTitle = title.trim().toLowerCase();
+        const normalizedContent = content.trim().toLowerCase();
+        for(let index = 0; index < this.assistantLongTermMemory.length; index += 1){
+            const item = this.assistantLongTermMemory[index];
             if(item.fingerprint === fingerprint){
-                return true;
+                return index;
             }
             const titleValue = item.title.trim().toLowerCase();
             const contentValue = item.content.trim().toLowerCase();
-            return titleValue === title.trim().toLowerCase()
-                || contentValue === content.trim().toLowerCase()
-                || contentValue.includes(content.trim().toLowerCase())
-                || content.trim().toLowerCase().includes(contentValue);
-        });
+            if(titleValue === normalizedTitle
+                || contentValue === normalizedContent
+                || contentValue.includes(normalizedContent)
+                || normalizedContent.includes(contentValue)){
+                return index;
+            }
+        }
+        return -1;
     }
     static buildLongTermMemoryStats(items = this.assistantLongTermMemory){
         const categoryCounts = {};
@@ -157,9 +188,11 @@ class ipcRegister{
         try{
             const raw = await fs.readFile(AI_LONG_TERM_MEMORY_JSON_PATH, "utf8");
             this.assistantLongTermMemory = this.normalizeLongTermMemory(JSON.parse(raw));
+            this.rebuildLongTermMemoryIndex();
         }catch(err){
             if(err.code === "ENOENT"){
                 this.assistantLongTermMemory = [];
+                this.rebuildLongTermMemoryIndex();
                 await this.saveLongTermMemory();
                 return;
             }
@@ -247,11 +280,13 @@ class ipcRegister{
             };
             const merged = this.assistantLongTermMemory.splice(duplicateIndex, 1)[0];
             this.assistantLongTermMemory.unshift(merged);
+            this.rebuildLongTermMemoryIndex();
             await this.saveLongTermMemory();
             return merged;
         }
         record.createdAt = now;
         this.assistantLongTermMemory.unshift(record);
+        this.rebuildLongTermMemoryIndex();
         await this.saveLongTermMemory();
         return record;
     }
@@ -264,6 +299,7 @@ class ipcRegister{
             throw new Error("Memory not found.");
         }
         this.assistantLongTermMemory = nextItems;
+        this.rebuildLongTermMemoryIndex();
         await this.saveLongTermMemory();
         return this.getLongTermMemoryData();
     }
@@ -389,20 +425,34 @@ class ipcRegister{
         return this.getMemoryRoutineMeta();
     }
     static getKnowledgeCardsData(){
-        return {
-            cardCount: this.knowledgeCards.length,
-            categories: Array.from(new Set(this.knowledgeCards.map((item)=>item.category))).sort((a, b)=>a.localeCompare(b, "zh-CN")),
-            items: [...this.knowledgeCards]
-                .sort((a, b)=>{
-                    return String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt), "zh-CN");
-                })
-                .map((item)=>({
+        if(this.knowledgeCardsCache.version !== this.knowledgeCardsVersion){
+            const categoriesSet = new Set();
+            const sortedItems = [...this.knowledgeCards].sort((a, b)=>{
+                return String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt), "zh-CN");
+            });
+            const items = sortedItems.map((item)=>{
+                categoriesSet.add(item.category);
+                return {
                     ...item,
                     summary: typeof item.summary === "string" && item.summary.trim()
                         ? item.summary.trim()
                         : this.buildKnowledgeCardFallbackSummary(item),
-                })),
+                };
+            });
+            this.knowledgeCardsCache = {
+                version: this.knowledgeCardsVersion,
+                categories: [...categoriesSet].sort((a, b)=>a.localeCompare(b, "zh-CN")),
+                items,
+            };
+        }
+        return {
+            cardCount: this.knowledgeCards.length,
+            categories: [...this.knowledgeCardsCache.categories],
+            items: this.knowledgeCardsCache.items.map((item)=>({...item})),
         };
+    }
+    static touchKnowledgeCardsCache(){
+        this.knowledgeCardsVersion += 1;
     }
     static async saveKnowledgeCards(){
         await fs.writeFile(KNOWLEDGE_CARDS_JSON_PATH, JSON.stringify(this.knowledgeCards, null, 2), "utf-8");
@@ -849,10 +899,12 @@ class ipcRegister{
             if(JSON.stringify(parsed) !== JSON.stringify(this.knowledgeCards)){
                 await this.saveKnowledgeCards();
             }
+            this.touchKnowledgeCardsCache();
         }catch(err){
             if(err.code === "ENOENT"){
                 this.knowledgeCards = [];
                 await this.saveKnowledgeCards();
+                this.touchKnowledgeCardsCache();
                 return;
             }
             throw err;
@@ -880,6 +932,7 @@ class ipcRegister{
         };
         this.knowledgeCards.push(card);
         await this.saveKnowledgeCards();
+        this.touchKnowledgeCardsCache();
         return card;
     }
     static async updateKnowledgeCardRecord(data){
@@ -898,6 +951,7 @@ class ipcRegister{
         card.source = payload.source;
         card.updatedAt = new Date().toISOString();
         await this.saveKnowledgeCards();
+        this.touchKnowledgeCardsCache();
         return card;
     }
     static async deleteKnowledgeCardRecord(cardId){
@@ -910,6 +964,7 @@ class ipcRegister{
         }
         this.knowledgeCards = nextCards;
         await this.saveKnowledgeCards();
+        this.touchKnowledgeCardsCache();
         return this.getKnowledgeCardsData();
     }
     static normalizePomodoroTaskPayload(data, options = {}){
@@ -959,6 +1014,50 @@ class ipcRegister{
         const next = [...tasks, nextTask];
         await fs.writeFile(POMODORO_JSON_PATH, JSON.stringify(next, null, 2), "utf-8");
         return {task: nextTask, count: next.length};
+    }
+    static normalizePomodoroTaskList(data){
+        if(!Array.isArray(data)){
+            throw new Error("Pomodoro payload must be an array.");
+        }
+        const maxMinutesMs = 99 * 60000;
+        const seenIds = new Set();
+        let nextId = 1;
+        return data.map((item)=>{
+            const title = typeof item?.title === "string" ? item.title.trim() : "";
+            if(!title){
+                throw new Error("Pomodoro task title is required.");
+            }
+            const workTime = Math.round(Number(item?.workTime));
+            const restTime = Math.round(Number(item?.restTime));
+            const repeatTimes = Math.round(Number(item?.repeatTimes));
+            if(!Number.isFinite(workTime) || workTime <= 0 || workTime > maxMinutesMs){
+                throw new Error("Pomodoro task workTime must be between 1 and 99 minutes.");
+            }
+            if(!Number.isFinite(restTime) || restTime <= 0 || restTime > maxMinutesMs){
+                throw new Error("Pomodoro task restTime must be between 1 and 99 minutes.");
+            }
+            if(!Number.isFinite(repeatTimes) || repeatTimes <= 0 || repeatTimes > 99){
+                throw new Error("Pomodoro task repeatTimes must be between 1 and 99.");
+            }
+            const rawId = Math.round(Number(item?.id));
+            const id = Number.isFinite(rawId) && rawId > 0 && !seenIds.has(rawId)
+                ? rawId
+                : nextId;
+            seenIds.add(id);
+            nextId = Math.max(nextId, id + 1);
+            return {
+                id,
+                title,
+                workTime,
+                restTime,
+                repeatTimes,
+            };
+        });
+    }
+    static async savePomodoroTaskList(data){
+        const tasks = this.normalizePomodoroTaskList(data);
+        await fs.writeFile(POMODORO_JSON_PATH, JSON.stringify(tasks, null, 2), "utf-8");
+        return tasks;
     }
     static async updatePomodoroTaskRecord(data){
         const payload = this.normalizePomodoroTaskPayload(data, {requireId: true});
@@ -1011,6 +1110,18 @@ class ipcRegister{
                 fingerprint: typeof item.fingerprint === "string" ? item.fingerprint : "",
             }));
     }
+    static rebuildClipboardIndexes(){
+        this.clipboardFingerprintIndex = new Map();
+        this.clipboardIdIndex = new Map();
+        this.clipboardHistory.forEach((item, index)=>{
+            if(typeof item?.id === "string" && item.id){
+                this.clipboardIdIndex.set(item.id, index);
+            }
+            if(typeof item?.fingerprint === "string" && item.fingerprint && !this.clipboardFingerprintIndex.has(item.fingerprint)){
+                this.clipboardFingerprintIndex.set(item.fingerprint, index);
+            }
+        });
+    }
     static async saveClipboardHistory(){
         await fs.writeFile(CLIPBOARD_HISTORY_JSON_PATH, JSON.stringify(this.clipboardHistory, null, 2), "utf-8");
     }
@@ -1018,9 +1129,11 @@ class ipcRegister{
         try{
             const raw = await fs.readFile(CLIPBOARD_HISTORY_JSON_PATH, "utf8");
             this.clipboardHistory = this.normalizeClipboardHistory(JSON.parse(raw));
+            this.rebuildClipboardIndexes();
         }catch(err){
             if(err.code === "ENOENT"){
                 this.clipboardHistory = [];
+                this.rebuildClipboardIndexes();
                 await this.saveClipboardHistory();
                 return;
             }
@@ -1102,9 +1215,15 @@ class ipcRegister{
                 data: this.getClipboardHistoryData(),
             };
         }
-        const duplicateIndex = this.clipboardHistory.findIndex((item)=>item.fingerprint === snapshot.fingerprint);
-        if(duplicateIndex !== -1){
-            const existing = this.clipboardHistory.splice(duplicateIndex, 1)[0];
+        const indexedDuplicate = this.clipboardFingerprintIndex.get(snapshot.fingerprint);
+        const duplicateSourceIndex = Number.isInteger(indexedDuplicate)
+            && indexedDuplicate >= 0
+            && indexedDuplicate < this.clipboardHistory.length
+            && this.clipboardHistory[indexedDuplicate]?.fingerprint === snapshot.fingerprint
+            ? indexedDuplicate
+            : this.clipboardHistory.findIndex((item)=>item.fingerprint === snapshot.fingerprint);
+        if(duplicateSourceIndex !== -1){
+            const existing = this.clipboardHistory.splice(duplicateSourceIndex, 1)[0];
             const merged = {
                 ...existing,
                 ...snapshot,
@@ -1114,6 +1233,7 @@ class ipcRegister{
                 source: options.source || "manual",
             };
             this.clipboardHistory.unshift(merged);
+            this.rebuildClipboardIndexes();
             await this.saveClipboardHistory();
             return {
                 inserted: false,
@@ -1139,6 +1259,7 @@ class ipcRegister{
         };
         this.clipboardHistory.unshift(item);
         this.trimClipboardHistory();
+        this.rebuildClipboardIndexes();
         await this.saveClipboardHistory();
         return {
             inserted: true,
@@ -1149,6 +1270,7 @@ class ipcRegister{
     }
     static async clearClipboardHistory(){
         this.clipboardHistory = [];
+        this.rebuildClipboardIndexes();
         await this.saveClipboardHistory();
         return this.getClipboardHistoryData();
     }
@@ -1162,6 +1284,7 @@ class ipcRegister{
             throw new Error("Clipboard item not found.");
         }
         this.clipboardHistory = next;
+        this.rebuildClipboardIndexes();
         await this.saveClipboardHistory();
         return this.getClipboardHistoryData();
     }
@@ -1170,7 +1293,13 @@ class ipcRegister{
         if(!itemId){
             throw new Error("Clipboard item id is required.");
         }
-        const index = this.clipboardHistory.findIndex((item)=>item.id === itemId);
+        const indexed = this.clipboardIdIndex.get(itemId);
+        const index = Number.isInteger(indexed)
+            && indexed >= 0
+            && indexed < this.clipboardHistory.length
+            && this.clipboardHistory[indexed]?.id === itemId
+            ? indexed
+            : this.clipboardHistory.findIndex((item)=>item.id === itemId);
         if(index === -1){
             throw new Error("Clipboard item not found.");
         }
@@ -1189,6 +1318,7 @@ class ipcRegister{
                 this.clipboardHistory.splice(firstUnpinned, 0, updated);
             }
         }
+        this.rebuildClipboardIndexes();
         await this.saveClipboardHistory();
         return this.getClipboardHistoryData();
     }
@@ -1197,7 +1327,13 @@ class ipcRegister{
         if(!itemId){
             throw new Error("Clipboard item id is required.");
         }
-        const item = this.clipboardHistory.find((entry)=>entry.id === itemId);
+        const indexed = this.clipboardIdIndex.get(itemId);
+        const item = Number.isInteger(indexed)
+            && indexed >= 0
+            && indexed < this.clipboardHistory.length
+            && this.clipboardHistory[indexed]?.id === itemId
+            ? this.clipboardHistory[indexed]
+            : this.clipboardHistory.find((entry)=>entry.id === itemId);
         if(!item){
             throw new Error("Clipboard item not found.");
         }

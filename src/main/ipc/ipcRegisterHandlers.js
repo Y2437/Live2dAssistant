@@ -146,10 +146,7 @@ function registerAgentHandlers(registry) {
 
 function registerPomodoroHandlers(registry, {POMODORO_JSON_PATH}) {
     ipcMain.handle("app:loadPomodoroJson", async () => registry.ensurePomodoroJson(POMODORO_JSON_PATH));
-    ipcMain.handle("app:savePomodoroJson", async (event, data) => {
-        const fs = require("fs/promises");
-        return fs.writeFile(POMODORO_JSON_PATH, JSON.stringify(data, null, 2));
-    });
+    ipcMain.handle("app:savePomodoroJson", async (event, data) => registry.savePomodoroTaskList(data));
 }
 
 function registerClipboardHandlers(registry) {
@@ -185,38 +182,13 @@ function registerKnowledgeCardHandlers(registry) {
         };
     });
     ipcMain.handle("app:updateKnowledgeCard", async (event, data) => {
-        const payload = registry.validateKnowledgeCardPayload(data, {requireId: true});
-        if (!payload.id) {
-            throw new Error("Card id is required.");
-        }
-        const card = registry.knowledgeCards.find((item) => item.id === payload.id);
-        if (!card) {
-            throw new Error("Card not found.");
-        }
-        card.title = payload.title;
-        card.content = payload.content;
-        card.summary = await registry.resolveKnowledgeCardSummary(payload);
-        card.category = payload.category;
-        card.source = payload.source;
-        card.updatedAt = new Date().toISOString();
-        await registry.saveKnowledgeCards();
+        const card = await registry.updateKnowledgeCardRecord(data);
         return {
             card,
             data: registry.getKnowledgeCardsData(),
         };
     });
-    ipcMain.handle("app:deleteKnowledgeCard", async (event, cardId) => {
-        if (typeof cardId !== "string" || !cardId.trim()) {
-            throw new Error("Card id is required.");
-        }
-        const nextCards = registry.knowledgeCards.filter((item) => item.id !== cardId);
-        if (nextCards.length === registry.knowledgeCards.length) {
-            throw new Error("Card not found.");
-        }
-        registry.knowledgeCards = nextCards;
-        await registry.saveKnowledgeCards();
-        return registry.getKnowledgeCardsData();
-    });
+    ipcMain.handle("app:deleteKnowledgeCard", async (event, cardId) => registry.deleteKnowledgeCardRecord(cardId));
 }
 
 function registerQuickFloatHandlers(registry) {
