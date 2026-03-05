@@ -59,7 +59,7 @@ export const CONFIG = {
         RUN_PANEL_SUMMARY_IDLE: "当前没有思考或工具调用过程。",
     },
     CARDS_CONFIG: {
-        PAGE_SIZE: 6,
+        PAGE_SIZE: 8,
         COPY: {
             cardsTotal: "卡片总数",
             categoryTotal: "分类数",

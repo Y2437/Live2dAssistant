@@ -1,7 +1,7 @@
 ﻿import { CONFIG } from "../core/config.js";
 import { marked } from "../../vendor/marked/lib/marked.esm.js";
 import { $ } from "../shared/dom.js";
-
+import { measureAsync, measureSync } from "../shared/perf.js";
 const dom = {
     root: $(".assistant-root"),
     stage: $('[data-role="assistant-live2d-stage"]'),
@@ -38,9 +38,15 @@ const dom = {
 
 const assistantState = {
     mounted: false,
+    initialized: false,
+    viewActive: true,
     pixiApp: null,
     live2d: null,
     resizeObserver: null,
+    resizeObserverActive: false,
+    stageResizeRafId: 0,
+    lastStageWidth: 0,
+    lastStageHeight: 0,
     baseHeight: null,
     baseWidth: null,
     queue: Promise.resolve(),
@@ -154,45 +160,106 @@ function mountAssistant() {
 }
 
 function initPixiApp() {
-    const width = dom.stage.clientWidth || WIDTH_FALLBACK;
-    const height = dom.stage.clientHeight || HEIGHT_FALLBACK;
-    const app = new window.PIXI.Application({
-        width,
-        height,
-        antialias: true,
-        backgroundAlpha: 0,
+    measureSync("assistant.initPixiApp", () => {
+        const width = dom.stage.clientWidth || WIDTH_FALLBACK;
+        const height = dom.stage.clientHeight || HEIGHT_FALLBACK;
+        const app = new window.PIXI.Application({
+            width,
+            height,
+            antialias: true,
+            backgroundAlpha: 0,
+        });
+        assistantState.pixiApp = app;
+        dom.stage.appendChild(app.view);
     });
-    assistantState.pixiApp = app;
-    dom.stage.appendChild(app.view);
 }
 
 async function initLive2d() {
-    const live2dUrl = new URL(CONFIG.LIVE2D_CONFIG.model.jsonFile, window.location.href).href;
-    const live2d = await window.PIXI.live2d.Live2DModel.from(live2dUrl);
-    live2d.scale.set(1);
-    assistantState.baseHeight = live2d.height;
-    assistantState.baseWidth = live2d.width;
-    assistantState.live2d = live2d;
-    assistantState.pixiApp.stage.addChild(live2d);
+    await measureAsync("assistant.initLive2d", async () => {
+        const live2dUrl = new URL(CONFIG.LIVE2D_CONFIG.model.jsonFile, window.location.href).href;
+        const live2d = await window.PIXI.live2d.Live2DModel.from(live2dUrl);
+        live2d.scale.set(1);
+        assistantState.baseHeight = live2d.height;
+        assistantState.baseWidth = live2d.width;
+        assistantState.live2d = live2d;
+        assistantState.pixiApp.stage.addChild(live2d);
+    });
 }
 
 function placeLive2d() {
-    const width = dom.stage.clientWidth;
-    const height = dom.stage.clientHeight;
-    if (!width || !height || !assistantState.live2d) return;
+    measureSync("assistant.placeLive2d", () => {
+        if (!assistantState.viewActive) return;
+        const width = dom.stage.clientWidth;
+        const height = dom.stage.clientHeight;
+        if (!width || !height || !assistantState.live2d) return;
+        if (assistantState.lastStageWidth === width && assistantState.lastStageHeight === height) {
+            return;
+        }
+        assistantState.lastStageWidth = width;
+        assistantState.lastStageHeight = height;
 
-    assistantState.pixiApp.renderer.resize(width, height);
-    assistantState.live2d.pivot.set(assistantState.baseWidth / 2, assistantState.baseHeight / 2);
-    const scale = Math.min(width / assistantState.baseWidth, height / assistantState.baseHeight) * 1.06;
-    assistantState.live2d.scale.set(scale);
-    assistantState.live2d.position.set(width / 2, height * 0.92);
+        assistantState.pixiApp.renderer.resize(width, height);
+        assistantState.live2d.pivot.set(assistantState.baseWidth / 2, assistantState.baseHeight / 2);
+        const scale = Math.min(width / assistantState.baseWidth, height / assistantState.baseHeight) * 1.06;
+        assistantState.live2d.scale.set(scale);
+        assistantState.live2d.position.set(width / 2, height * 0.92);
+    });
 }
 
 function initResizeObserver() {
     assistantState.resizeObserver = new ResizeObserver(() => {
-        placeLive2d();
+        if (!assistantState.viewActive) {
+            return;
+        }
+        if (assistantState.stageResizeRafId) {
+            return;
+        }
+        assistantState.stageResizeRafId = window.requestAnimationFrame(() => {
+            assistantState.stageResizeRafId = 0;
+            placeLive2d();
+        });
     });
     assistantState.resizeObserver.observe(dom.stage);
+    assistantState.resizeObserverActive = true;
+}
+
+function isAssistantViewActive() {
+    const assistantView = document.querySelector('.view[data-view="assistant"]');
+    if (!assistantView) {
+        return true;
+    }
+    return assistantView.classList.contains("is-active");
+}
+
+function setAssistantRenderActive(active) {
+    if (!assistantState.pixiApp) {
+        return;
+    }
+    assistantState.viewActive = active === true;
+    try {
+        if (assistantState.viewActive) {
+            if (assistantState.resizeObserver && !assistantState.resizeObserverActive && dom.stage) {
+                assistantState.resizeObserver.observe(dom.stage);
+                assistantState.resizeObserverActive = true;
+            }
+            assistantState.pixiApp.start?.();
+            assistantState.pixiApp.ticker?.start?.();
+            placeLive2d();
+        } else {
+            if (assistantState.resizeObserverActive && assistantState.resizeObserver) {
+                assistantState.resizeObserver.disconnect();
+                assistantState.resizeObserverActive = false;
+            }
+            if (assistantState.stageResizeRafId) {
+                window.cancelAnimationFrame(assistantState.stageResizeRafId);
+                assistantState.stageResizeRafId = 0;
+            }
+            assistantState.pixiApp.stop?.();
+            assistantState.pixiApp.ticker?.stop?.();
+        }
+    } catch (error) {
+        console.error(error);
+    }
 }
 
 function toggleBubbleVisibility(setVisibility) {
@@ -436,6 +503,7 @@ function createRunStepCard({title, badge, pills = [], preview = ""}) {
 }
 
 function syncRunPanel() {
+    const runPanelStart = performance.now();
     if (!dom.runPanel || !dom.runTimeline || !dom.runStatus || !dom.runSummary || !dom.runToggle || !dom.runBody) return;
     const hasStatus = Boolean(assistantState.runtimeStatus);
     const traces = assistantState.runtimeTraces || [];
@@ -470,6 +538,10 @@ function syncRunPanel() {
             pills,
             preview: trace.outputPreview || CONFIG.ASSISTANT_CONFIG.RUN_PANEL_EMPTY,
         }));
+    });
+    console.log(`[perf] assistant.syncRunPanel ${(performance.now() - runPanelStart).toFixed(2)}ms`, {
+        traceCount: traces.length,
+        expanded: assistantState.runPanelExpanded,
     });
 }
 
@@ -692,34 +764,36 @@ function renderScopeToolOptions() {
 }
 
 async function loadAgentCapabilities() {
-    if (!window.api.getAgentCapabilities || !dom.scope) {
-        return;
-    }
-    try {
-        const capabilities = await window.api.getAgentCapabilities();
-        const toolDetails = Array.isArray(capabilities?.toolDetails)
-            ? capabilities.toolDetails
-            : (capabilities?.tools || []).map((name) => ({name, label: name, description: name}));
-        assistantState.alwaysAllowedTools = toolDetails
-            .filter((item) => !SPECIAL_AGENT_TOOL_NAMES.has(item.name))
-            .map((item) => item.name);
-        const specialTools = toolDetails.filter((item) => SPECIAL_AGENT_TOOL_NAMES.has(item.name));
-        if (!specialTools.length) {
-            dom.scope.hidden = true;
+    await measureAsync("assistant.loadAgentCapabilities", async () => {
+        if (!window.api.getAgentCapabilities || !dom.scope) {
             return;
         }
-        assistantState.availableTools = specialTools;
-        const savedSelection = loadScopeSelection();
-        const validToolNames = new Set(specialTools.map((item) => item.name));
-        assistantState.selectedTools = Array.isArray(savedSelection)
-            ? savedSelection.filter((item) => validToolNames.has(item))
-            : specialTools.map((item) => item.name);
-        renderScopeToolOptions();
-        syncScopeSummary();
-    } catch (error) {
-        console.error(error);
-        dom.scope.hidden = true;
-    }
+        try {
+            const capabilities = await window.api.getAgentCapabilities();
+            const toolDetails = Array.isArray(capabilities?.toolDetails)
+                ? capabilities.toolDetails
+                : (capabilities?.tools || []).map((name) => ({name, label: name, description: name}));
+            assistantState.alwaysAllowedTools = toolDetails
+                .filter((item) => !SPECIAL_AGENT_TOOL_NAMES.has(item.name))
+                .map((item) => item.name);
+            const specialTools = toolDetails.filter((item) => SPECIAL_AGENT_TOOL_NAMES.has(item.name));
+            if (!specialTools.length) {
+                dom.scope.hidden = true;
+                return;
+            }
+            assistantState.availableTools = specialTools;
+            const savedSelection = loadScopeSelection();
+            const validToolNames = new Set(specialTools.map((item) => item.name));
+            assistantState.selectedTools = Array.isArray(savedSelection)
+                ? savedSelection.filter((item) => validToolNames.has(item))
+                : specialTools.map((item) => item.name);
+            renderScopeToolOptions();
+            syncScopeSummary();
+        } catch (error) {
+            console.error(error);
+            dom.scope.hidden = true;
+        }
+    });
 }
 
 async function getResponse(text, allowedTools = null, directMode = false) {
@@ -855,6 +929,7 @@ async function cancelActiveRequest() {
 }
 
 async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
+    const chatStart = performance.now();
     assistantState.lastRetryText = "";
     assistantState.lastRetryAllowedTools = null;
     syncRequestControls();
@@ -1010,6 +1085,11 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
         clearRequestTimeout();
         assistantState.activeRequest = null;
         syncRequestControls();
+        console.log(`[perf] assistant.handleChat ${(performance.now() - chatStart).toFixed(2)}ms`, {
+            inputLength: String(text || "").length,
+            directMode,
+            expanded: assistantState.expanded,
+        });
     }
 
     if (assistantState.expanded) {
@@ -1171,16 +1251,45 @@ function wireChatLayout() {
 }
 
 async function initAssistant() {
-    mountAssistant();
-    assistantState.directMode = loadDirectModePreference();
-    syncThinkingToggle();
-    await loadAgentCapabilities();
-    if (!dom.stage) return;
-    initPixiApp();
-    await initLive2d();
-    initResizeObserver();
-    placeLive2d();
-    wireHit();
+    if (assistantState.initialized) {
+        setAssistantRenderActive(isAssistantViewActive());
+        return;
+    }
+    await measureAsync("assistant.initAssistant", async () => {
+        mountAssistant();
+        assistantState.directMode = loadDirectModePreference();
+        syncThinkingToggle();
+        await loadAgentCapabilities();
+        if (!dom.stage) return;
+        initPixiApp();
+        await initLive2d();
+        initResizeObserver();
+        placeLive2d();
+        wireHit();
+        assistantState.initialized = true;
+        setAssistantRenderActive(isAssistantViewActive());
+    });
+}
+
+function wireAssistantViewLifecycle() {
+    window.addEventListener("shell:viewchange", (event) => {
+        const viewKey = event.detail?.viewKey || "";
+        const active = viewKey === "assistant";
+        if (active && !assistantState.initialized) {
+            initAssistant().catch((error) => {
+                console.error(error);
+            });
+            return;
+        }
+        setAssistantRenderActive(active);
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (!assistantState.initialized) {
+            return;
+        }
+        const active = !document.hidden && isAssistantViewActive();
+        setAssistantRenderActive(active);
+    });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -1188,4 +1297,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     wireInput();
     wireNavBtn();
     wireChatLayout();
+    wireAssistantViewLifecycle();
 });
+
+
+

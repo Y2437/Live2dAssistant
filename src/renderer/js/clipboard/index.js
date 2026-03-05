@@ -1,7 +1,10 @@
 import { $, $$ } from "../shared/dom.js";
+import { measureAsync, measureSync } from "../shared/perf.js";
 
 const AUTO_CAPTURE_STORAGE_KEY = "clipboard.autoCapture.v1";
 const AUTO_CAPTURE_INTERVAL_MS = 1400;
+const VIEW_TRANSITION_MS = 180;
+const CLIPBOARD_SYNC_THROTTLE_MS = 2500;
 
 const clipboardState = {
     mounted: false,
@@ -14,6 +17,8 @@ const clipboardState = {
     timer: null,
     active: true,
     standalone: false,
+    syncTimer: null,
+    lastSyncedAt: 0,
 };
 
 const clipboardDom = {
@@ -93,63 +98,69 @@ function renderSummary() {
 }
 
 function renderList() {
-    if (!clipboardDom.list || !clipboardDom.empty) {
-        return;
-    }
-    const items = getVisibleItems();
-    clipboardDom.list.innerHTML = items.map((item) => {
-        const typeLabel = item.type === "mixed" ? "文本+图片" : (item.type === "image" ? "图片" : "文本");
-        return `
-            <article class="clipboard-item" data-item-id="${item.id}">
-                <div class="clipboard-item__head">
-                    <div class="clipboard-item__meta">
-                        <span class="clipboard-item__type">${typeLabel}</span>
-                        <span class="clipboard-item__time">${formatDate(item.createdAt)}</span>
+    measureSync("clipboard.renderList", () => {
+        if (!clipboardDom.list || !clipboardDom.empty) {
+            return;
+        }
+        const items = getVisibleItems();
+        clipboardDom.list.innerHTML = items.map((item) => {
+            const typeLabel = item.type === "mixed" ? "文本+图片" : (item.type === "image" ? "图片" : "文本");
+            return `
+                <article class="clipboard-item" data-item-id="${item.id}">
+                    <div class="clipboard-item__head">
+                        <div class="clipboard-item__meta">
+                            <span class="clipboard-item__type">${typeLabel}</span>
+                            <span class="clipboard-item__time">${formatDate(item.createdAt)}</span>
+                        </div>
+                        <div class="clipboard-item__actions">
+                            <button type="button" class="clipboard-item__btn" data-action="copy">复制</button>
+                            <button type="button" class="clipboard-item__btn" data-action="pin">${item.pinned ? "取消置顶" : "置顶"}</button>
+                            <button type="button" class="clipboard-item__btn clipboard-item__btn--danger" data-action="delete">删除</button>
+                        </div>
                     </div>
-                    <div class="clipboard-item__actions">
-                        <button type="button" class="clipboard-item__btn" data-action="copy">复制</button>
-                        <button type="button" class="clipboard-item__btn" data-action="pin">${item.pinned ? "取消置顶" : "置顶"}</button>
-                        <button type="button" class="clipboard-item__btn clipboard-item__btn--danger" data-action="delete">删除</button>
-                    </div>
-                </div>
-                ${item.textPreview ? `<p class="clipboard-item__text">${item.textPreview}</p>` : `<p class="clipboard-item__text clipboard-item__text--muted">（无文本内容）</p>`}
-                ${item.hasImage && item.imageDataUrl ? `
-                    <div class="clipboard-item__imageWrap">
-                        <img class="clipboard-item__image" src="${item.imageDataUrl}" alt="clipboard-image-preview" />
-                        <span class="clipboard-item__imageMeta">${item.imageWidth || 0} × ${item.imageHeight || 0}</span>
-                    </div>
-                ` : ""}
-            </article>
-        `;
-    }).join("");
-    clipboardDom.empty.hidden = items.length > 0;
+                    ${item.textPreview ? `<p class="clipboard-item__text">${item.textPreview}</p>` : `<p class="clipboard-item__text clipboard-item__text--muted">（无文本内容）</p>`}
+                    ${item.hasImage && item.imageDataUrl ? `
+                        <div class="clipboard-item__imageWrap">
+                            <img class="clipboard-item__image" src="${item.imageDataUrl}" alt="clipboard-image-preview" />
+                            <span class="clipboard-item__imageMeta">${item.imageWidth || 0} × ${item.imageHeight || 0}</span>
+                        </div>
+                    ` : ""}
+                </article>
+            `;
+        }).join("");
+        clipboardDom.empty.hidden = items.length > 0;
+    });
 }
 
 async function refreshSnapshot() {
-    if (!window.api?.getClipboardSnapshot || !clipboardDom.live) {
-        return;
-    }
-    try {
-        const snapshot = await window.api.getClipboardSnapshot();
-        const textStatus = snapshot?.hasText ? "有文本" : "无文本";
-        const imageStatus = snapshot?.hasImage ? `有图片(${snapshot.imageWidth || 0}x${snapshot.imageHeight || 0})` : "无图片";
-        clipboardDom.live.textContent = `当前剪贴板：${textStatus} / ${imageStatus}`;
-    } catch (error) {
-        clipboardDom.live.textContent = "当前剪贴板：读取失败";
-    }
+    await measureAsync("clipboard.refreshSnapshot", async () => {
+        if (!window.api?.getClipboardSnapshot || !clipboardDom.live) {
+            return;
+        }
+        try {
+            const snapshot = await window.api.getClipboardSnapshot();
+            const textStatus = snapshot?.hasText ? "有文本" : "无文本";
+            const imageStatus = snapshot?.hasImage ? `有图片(${snapshot.imageWidth || 0}x${snapshot.imageHeight || 0})` : "无图片";
+            clipboardDom.live.textContent = `当前剪贴板：${textStatus} / ${imageStatus}`;
+        } catch (error) {
+            clipboardDom.live.textContent = "当前剪贴板：读取失败";
+        }
+    });
 }
 
 async function refreshHistory() {
-    if (!window.api?.getClipboardHistory) {
-        setStatus("当前环境不支持剪贴板历史。");
-        return;
-    }
-    const data = await window.api.getClipboardHistory();
-    clipboardState.items = Array.isArray(data?.items) ? data.items : [];
-    clipboardState.count = Number(data?.count || 0);
-    clipboardState.pinnedCount = Number(data?.pinnedCount || 0);
-    renderSummary();
-    renderList();
+    await measureAsync("clipboard.refreshHistory", async () => {
+        if (!window.api?.getClipboardHistory) {
+            setStatus("当前环境不支持剪贴板历史。");
+            return;
+        }
+        const data = await window.api.getClipboardHistory();
+        clipboardState.items = Array.isArray(data?.items) ? data.items : [];
+        clipboardState.count = Number(data?.count || 0);
+        clipboardState.pinnedCount = Number(data?.pinnedCount || 0);
+        renderSummary();
+        renderList();
+    });
 }
 
 async function captureNow(source = "manual") {
@@ -334,8 +345,11 @@ function buildClipboardMarkup() {
 }
 
 async function syncAll() {
-    await refreshHistory();
-    await refreshSnapshot();
+    await measureAsync("clipboard.syncAll", async () => {
+        await refreshHistory();
+        await refreshSnapshot();
+        clipboardState.lastSyncedAt = Date.now();
+    });
 }
 
 function mountClipboardView() {
@@ -367,7 +381,17 @@ function wireShellViewChanges() {
         const viewKey = event.detail?.viewKey || "";
         clipboardState.active = viewKey === "clipboard";
         if (clipboardState.active) {
-            syncAll().catch((error) => console.error(error));
+            if (clipboardState.syncTimer) {
+                clearTimeout(clipboardState.syncTimer);
+                clipboardState.syncTimer = null;
+            }
+            const dueToStale = Date.now() - clipboardState.lastSyncedAt >= CLIPBOARD_SYNC_THROTTLE_MS;
+            if (dueToStale) {
+                clipboardState.syncTimer = window.setTimeout(() => {
+                    clipboardState.syncTimer = null;
+                    syncAll().catch((error) => console.error(error));
+                }, VIEW_TRANSITION_MS);
+            }
         }
         startAutoCapture();
     });

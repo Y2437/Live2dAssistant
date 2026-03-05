@@ -2,6 +2,7 @@ import { marked } from "../../vendor/marked/lib/marked.esm.js";
 import { CONFIG } from "../core/config.js";
 import { formatDate, stripMarkdown } from "./markdown.js";
 import { escapeHtml } from "../shared/dom.js";
+import { measureAsync, measureSync } from "../shared/perf.js";
 
 const { COPY, PAGE_SIZE } = CONFIG.CARDS_CONFIG;
 
@@ -15,7 +16,11 @@ const cardsState = {
     currentPage: 1,
     editorSnapshot: "",
     loaded: false,
+    lastSyncedAt: 0,
+    syncTimer: null,
 };
+const VIEW_TRANSITION_MS = 180;
+const CARD_SYNC_THROTTLE_MS = 4000;
 
 const cardsDom = {
     root: document.querySelector(".cards-root"),
@@ -250,24 +255,26 @@ function normalizeCardsCopy() {
 }
 
 function renderEditorPreview() {
-    if (!cardsDom.preview) {
-        return;
-    }
-    const title = cardsDom.titleInput?.value.trim() || COPY.untitled;
-    const category = cardsDom.categoryInput?.value.trim() || COPY.uncategorized;
-    const content = cardsDom.contentInput?.value || "";
-    const summary = cardsDom.summaryInput?.value.trim();
+    measureSync("cards.renderEditorPreview", () => {
+        if (!cardsDom.preview) {
+            return;
+        }
+        const title = cardsDom.titleInput?.value.trim() || COPY.untitled;
+        const category = cardsDom.categoryInput?.value.trim() || COPY.uncategorized;
+        const content = cardsDom.contentInput?.value || "";
+        const summary = cardsDom.summaryInput?.value.trim();
 
-    cardsDom.preview.innerHTML = `
-        <article class="cards-markdown">
-            <div class="cards-markdown__meta">
-                <span class="cards-markdown__tag">${escapeHtml(category)}</span>
-            </div>
-            <h3>${escapeHtml(title)}</h3>
-            ${summary ? `<p class="cards-markdown__lead">${escapeHtml(summary)}</p>` : ""}
-            ${renderCardMarkdown(content)}
-        </article>
-    `;
+        cardsDom.preview.innerHTML = `
+            <article class="cards-markdown">
+                <div class="cards-markdown__meta">
+                    <span class="cards-markdown__tag">${escapeHtml(category)}</span>
+                </div>
+                <h3>${escapeHtml(title)}</h3>
+                ${summary ? `<p class="cards-markdown__lead">${escapeHtml(summary)}</p>` : ""}
+                ${renderCardMarkdown(content)}
+            </article>
+        `;
+    });
 }
 
 function renderCardMarkdown(value) {
@@ -514,75 +521,82 @@ function triggerGridAnimation() {
 }
 
 function renderGrid() {
-    if (!cardsDom.grid) {
-        return;
-    }
+    measureSync("cards.renderGrid", () => {
+        if (!cardsDom.grid) {
+            return;
+        }
 
-    const {items, totalItems, totalPages} = getPagedCards();
-    if (!totalItems) {
-        cardsDom.grid.innerHTML = `
-            <article class="cards-empty">
-                <h4 class="cards-empty__title">${COPY.emptyTitle}</h4>
-                <p class="cards-empty__desc">${COPY.emptyDesc}</p>
-            </article>
-        `;
-        renderPagination(1, 0);
-        triggerGridAnimation();
-        return;
-    }
+        const {items, totalItems, totalPages} = getPagedCards();
+        if (!totalItems) {
+            cardsDom.grid.innerHTML = `
+                <article class="cards-empty">
+                    <h4 class="cards-empty__title">${COPY.emptyTitle}</h4>
+                    <p class="cards-empty__desc">${COPY.emptyDesc}</p>
+                </article>
+            `;
+            renderPagination(1, 0);
+            triggerGridAnimation();
+            return;
+        }
 
-    cardsDom.grid.innerHTML = items.map((item) => {
-        const selected = item.id === cardsState.selectedCardId;
-        const summary = (typeof item.summary === "string" && item.summary.trim())
-            ? item.summary.trim()
-            : stripMarkdown(item.content);
-        return `
-            <article class="cards-card${selected ? " is-selected" : ""}" data-role="cards-card" data-card-id="${escapeHtml(item.id)}" tabindex="0">
-                <div class="cards-card__meta">
-                    <span class="cards-card__tag">${escapeHtml(item.category || COPY.uncategorized)}</span>
-                    <span class="cards-card__time">${escapeHtml(`${COPY.createdPrefix} ${formatDate(item.createdAt, COPY.noTime)}`)}</span>
-                </div>
-                <h4 class="cards-card__title">${escapeHtml(item.title || COPY.untitled)}</h4>
-                <p class="cards-card__excerpt">${escapeHtml(summary)}</p>
-                <div class="cards-card__footer">
-                    <span class="cards-card__source">${escapeHtml(`${COPY.creatorPrefix} ${item.source || "user"}`)}</span>
-                    <div class="cards-card__actions">
-                        <button type="button" class="cards-card__btn" data-action="edit">${COPY.edit}</button>
-                        <button type="button" class="cards-card__btn cards-card__btn--danger" data-action="delete">${COPY.remove}</button>
+        cardsDom.grid.innerHTML = items.map((item) => {
+            const selected = item.id === cardsState.selectedCardId;
+            const summary = (typeof item.summary === "string" && item.summary.trim())
+                ? item.summary.trim()
+                : stripMarkdown(item.content);
+            return `
+                <article class="cards-card${selected ? " is-selected" : ""}" data-role="cards-card" data-card-id="${escapeHtml(item.id)}" tabindex="0">
+                    <div class="cards-card__meta">
+                        <span class="cards-card__tag">${escapeHtml(item.category || COPY.uncategorized)}</span>
+                        <span class="cards-card__time">${escapeHtml(`${COPY.createdPrefix} ${formatDate(item.createdAt, COPY.noTime)}`)}</span>
                     </div>
-                </div>
-            </article>
-        `;
-    }).join("");
+                    <h4 class="cards-card__title">${escapeHtml(item.title || COPY.untitled)}</h4>
+                    <p class="cards-card__excerpt">${escapeHtml(summary)}</p>
+                    <div class="cards-card__footer">
+                        <span class="cards-card__source">${escapeHtml(`${COPY.creatorPrefix} ${item.source || "user"}`)}</span>
+                        <div class="cards-card__actions">
+                            <button type="button" class="cards-card__btn" data-action="edit">${COPY.edit}</button>
+                            <button type="button" class="cards-card__btn cards-card__btn--danger" data-action="delete">${COPY.remove}</button>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }).join("");
 
-    renderPagination(totalPages, totalItems);
-    triggerGridAnimation();
+        renderPagination(totalPages, totalItems);
+        triggerGridAnimation();
+    });
 }
 
 function applyCardsData(data) {
-    cardsState.items = Array.isArray(data?.items) ? data.items : [];
-    const categories = Array.isArray(data?.categories) ? data.categories : getCategories();
-    if (cardsState.activeCategory !== "all" && !categories.includes(cardsState.activeCategory)) {
-        cardsState.activeCategory = "all";
-    }
-    updateSummary(categories);
-    renderFilters(categories);
-    renderGrid();
-    paintSelection();
-    renderCategorySuggest();
-    if (cardsState.pageMode === "editor") {
-        cardsState.editorSnapshot = serializeEditorForm();
-        renderEditorPreview();
-    }
+    measureSync("cards.applyCardsData", () => {
+        cardsState.items = Array.isArray(data?.items) ? data.items : [];
+        const categories = Array.isArray(data?.categories) ? data.categories : getCategories();
+        if (cardsState.activeCategory !== "all" && !categories.includes(cardsState.activeCategory)) {
+            cardsState.activeCategory = "all";
+        }
+        updateSummary(categories);
+        renderFilters(categories);
+        renderGrid();
+        paintSelection();
+        renderCategorySuggest();
+        if (cardsState.pageMode === "editor") {
+            cardsState.editorSnapshot = serializeEditorForm();
+            renderEditorPreview();
+        }
+    });
 }
 
 async function syncCards() {
-    if (!window.api?.loadKnowledgeCards) {
-        return;
-    }
-    const data = await window.api.loadKnowledgeCards();
-    applyCardsData(data);
-    cardsState.loaded = true;
+    await measureAsync("cards.syncCards", async () => {
+        if (!window.api?.loadKnowledgeCards) {
+            return;
+        }
+        const data = await window.api.loadKnowledgeCards();
+        applyCardsData(data);
+        cardsState.loaded = true;
+        cardsState.lastSyncedAt = Date.now();
+    });
 }
 
 function getSuggestedCategories() {
@@ -906,7 +920,20 @@ function wireViewSync() {
             return;
         }
         setPageMode("list");
-        await syncCards();
+        if (cardsState.syncTimer) {
+            clearTimeout(cardsState.syncTimer);
+            cardsState.syncTimer = null;
+        }
+        const dueToStale = !cardsState.loaded || (Date.now() - cardsState.lastSyncedAt >= CARD_SYNC_THROTTLE_MS);
+        if (!dueToStale) {
+            return;
+        }
+        cardsState.syncTimer = window.setTimeout(() => {
+            cardsState.syncTimer = null;
+            syncCards().catch((error) => {
+                console.error(error);
+            });
+        }, VIEW_TRANSITION_MS);
     });
 }
 

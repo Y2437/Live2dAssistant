@@ -1,5 +1,6 @@
 import { $, $$ } from "../shared/dom.js";
 import { CONFIG } from "../core/config.js";
+import { measureAsync, measureSync } from "../shared/perf.js";
 import {
     renderAgentCapabilityList,
     renderAgentSelfTestList,
@@ -38,6 +39,8 @@ const settingsDom = {
     prefStatus: $('[data-role="settings-pref-status"]'),
     selfTestResult: null,
 };
+const VIEW_TRANSITION_MS = 180;
+let settingsSyncTimer = null;
 
 function readStorage(key, fallback = "") {
     try {
@@ -151,11 +154,13 @@ function setNavBtnActive(viewKey) {
 }
 
 function showView(viewKey) {
-    const views = $$(".view");
-    setNavBtnActive(viewKey);
-    views.forEach((view) => {
-        view.classList.toggle("is-active", view.dataset.view === viewKey);
-    });
+    measureSync("shell.showView", () => {
+        const views = $$(".view");
+        setNavBtnActive(viewKey);
+        views.forEach((view) => {
+            view.classList.toggle("is-active", view.dataset.view === viewKey);
+        });
+    }, {viewKey});
 
     const hintText = $('p.nav__hint[data-role="ActiveText"]');
     if (hintText) {
@@ -164,9 +169,16 @@ function showView(viewKey) {
 
     if (viewKey === "settings") {
         syncPreferencesUI();
-        syncSettingsData().catch((error) => {
-            console.error(error);
-        });
+        if (settingsSyncTimer) {
+            clearTimeout(settingsSyncTimer);
+            settingsSyncTimer = null;
+        }
+        settingsSyncTimer = window.setTimeout(() => {
+            settingsSyncTimer = null;
+            measureAsync("settings.syncSettingsData", async () => await syncSettingsData(), {viewKey: "settings"}).catch((error) => {
+                console.error(error);
+            });
+        }, VIEW_TRANSITION_MS);
     }
 
     window.dispatchEvent(new CustomEvent("shell:viewchange", {
@@ -175,12 +187,15 @@ function showView(viewKey) {
 }
 
 async function navigate(viewKey) {
+    const startMeta = {viewKey};
     if (!viewKey) return;
     if (document.querySelector(`.view[data-view="${viewKey}"]`)) {
-        showView(viewKey);
+        measureSync("shell.navigate.local", () => {
+            showView(viewKey);
+        }, startMeta);
         return;
     }
-    await window.api.openWindow(viewKey);
+    await measureAsync("shell.navigate.remote", async () => await window.api.openWindow(viewKey), startMeta);
 }
 
 function wireNav() {
@@ -245,52 +260,54 @@ function syncSelfTestView() {
 }
 
 async function syncSettingsData() {
-    if (!window.api.getAiContextData || !window.api.getLongTermMemoryData) return;
+    return await measureAsync("settings.syncSettingsData.body", async () => {
+        if (!window.api.getAiContextData || !window.api.getLongTermMemoryData) return;
 
-    const jobs = [
-        window.api.getAiContextData(),
-        window.api.getLongTermMemoryData(),
-    ];
-    if (window.api.getMemoryRoutineMeta) {
-        jobs.push(window.api.getMemoryRoutineMeta());
-    }
-    if (window.api.getAgentCapabilities) {
-        jobs.push(window.api.getAgentCapabilities());
-    }
+        const jobs = [
+            window.api.getAiContextData(),
+            window.api.getLongTermMemoryData(),
+        ];
+        if (window.api.getMemoryRoutineMeta) {
+            jobs.push(window.api.getMemoryRoutineMeta());
+        }
+        if (window.api.getAgentCapabilities) {
+            jobs.push(window.api.getAgentCapabilities());
+        }
 
-    const [contextData, memoryData, memoryRoutineMeta, agentCapabilities] = await Promise.all(jobs);
+        const [contextData, memoryData, memoryRoutineMeta, agentCapabilities] = await Promise.all(jobs);
 
-    if (settingsDom.contextMeta) {
-        settingsDom.contextMeta.textContent = `Saved context: ${contextData.messageCount}`;
-    }
-    if (settingsDom.contextCount) {
-        settingsDom.contextCount.textContent = `${contextData.messageCount} messages`;
-    }
-    if (settingsDom.memoryCount) {
-        const activeCount = memoryData?.stats?.activeCount ?? memoryData.memoryCount;
-        const categorySummary = Object.entries(memoryData?.stats?.categoryCounts || {})
-            .slice(0, 4)
-            .map(([name, count]) => `${name}:${count}`)
-            .join(" | ");
-        settingsDom.memoryCount.textContent = `${activeCount}/${memoryData.memoryCount} active${categorySummary ? ` | ${categorySummary}` : ""}`;
-    }
-    if (settingsDom.agentMeta) {
-        settingsDom.agentMeta.textContent = agentCapabilities ? "Agent available" : "Agent unavailable";
-    }
-    if (settingsDom.contextList) {
-        settingsDom.contextList.innerHTML = renderContextList(contextData.items || []);
-    }
-    if (settingsDom.memoryList) {
-        settingsDom.memoryList.innerHTML = renderMemoryList(memoryData.items || []);
-    }
-    setMemoryRoutineMeta(memoryRoutineMeta);
-    if (settingsDom.agentCapabilityList) {
-        settingsDom.agentCapabilityList.innerHTML = renderAgentCapabilityList(agentCapabilities);
-    }
-    if (settingsDom.agentToolsList) {
-        settingsDom.agentToolsList.innerHTML = renderAgentToolList(agentCapabilities?.tools || []);
-    }
-    syncSelfTestView();
+        if (settingsDom.contextMeta) {
+            settingsDom.contextMeta.textContent = `Saved context: ${contextData.messageCount}`;
+        }
+        if (settingsDom.contextCount) {
+            settingsDom.contextCount.textContent = `${contextData.messageCount} messages`;
+        }
+        if (settingsDom.memoryCount) {
+            const activeCount = memoryData?.stats?.activeCount ?? memoryData.memoryCount;
+            const categorySummary = Object.entries(memoryData?.stats?.categoryCounts || {})
+                .slice(0, 4)
+                .map(([name, count]) => `${name}:${count}`)
+                .join(" | ");
+            settingsDom.memoryCount.textContent = `${activeCount}/${memoryData.memoryCount} active${categorySummary ? ` | ${categorySummary}` : ""}`;
+        }
+        if (settingsDom.agentMeta) {
+            settingsDom.agentMeta.textContent = agentCapabilities ? "Agent available" : "Agent unavailable";
+        }
+        if (settingsDom.contextList) {
+            settingsDom.contextList.innerHTML = renderContextList(contextData.items || []);
+        }
+        if (settingsDom.memoryList) {
+            settingsDom.memoryList.innerHTML = renderMemoryList(memoryData.items || []);
+        }
+        setMemoryRoutineMeta(memoryRoutineMeta);
+        if (settingsDom.agentCapabilityList) {
+            settingsDom.agentCapabilityList.innerHTML = renderAgentCapabilityList(agentCapabilities);
+        }
+        if (settingsDom.agentToolsList) {
+            settingsDom.agentToolsList.innerHTML = renderAgentToolList(agentCapabilities?.tools || []);
+        }
+        syncSelfTestView();
+    });
 }
 
 async function handleExtractMemory() {

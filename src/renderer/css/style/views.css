@@ -86,14 +86,12 @@
     pointer-events: none;
 
     transform: translateY(10px);
-    filter: blur(2px);
 
     transition: opacity 170ms var(--ease-out),
     transform 170ms var(--ease-out),
-    filter 170ms var(--ease-out),
     visibility 0ms linear 170ms;
 
-    will-change: opacity, transform, filter;
+    will-change: opacity, transform;
 }
 
 .shell__main > .view.is-active{
@@ -102,11 +100,9 @@
     pointer-events: auto;
 
     transform: translateY(0);
-    filter: blur(0);
 
     transition: opacity 170ms var(--ease-out),
     transform 170ms var(--ease-out),
-    filter 170ms var(--ease-out),
     visibility 0ms linear 0ms;
 }
 
@@ -114,7 +110,6 @@
     .shell__main > .view{
         transition: none;
         transform: none;
-        filter: none;
         will-change: auto;
     }
 }

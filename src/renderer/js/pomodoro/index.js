@@ -1,4 +1,5 @@
 import { $, $$ } from "../shared/dom.js";
+import { measureAsync, measureSync } from "../shared/perf.js";
 
 const dom = {
     root: $('[data-pomo="root"]'),
@@ -115,8 +116,10 @@ function saveTaskList() {
 
 function switchPage(page) {
     if (!["edit", "list", "run"].includes(page)) return;
-    dom.root.dataset.page = page;
-    pomodoroState.page = page;
+    measureSync("pomodoro.switchPage", () => {
+        dom.root.dataset.page = page;
+        pomodoroState.page = page;
+    }, {page});
 }
 
 function switchPhase(phase) {
@@ -211,13 +214,14 @@ function clearTimerHandle() {
 }
 
 function renderTaskList() {
-    dom.taskList.innerHTML = "";
+    measureSync("pomodoro.renderTaskList", () => {
+        dom.taskList.innerHTML = "";
 
-    pomodoroState.taskList.forEach((task) => {
-        const li = document.createElement("li");
-        li.className = "pomoItem";
-        li.dataset.taskId = String(task.id);
-        li.draggable = false;
+        pomodoroState.taskList.forEach((task) => {
+            const li = document.createElement("li");
+            li.className = "pomoItem";
+            li.dataset.taskId = String(task.id);
+            li.draggable = false;
 
         if (pomodoroState.selectedTaskId === task.id) {
             li.classList.add("selected");
@@ -261,19 +265,20 @@ function renderTaskList() {
             </svg>
         `;
 
-        li.appendChild(handle);
-        li.appendChild(title);
-        li.appendChild(editBtn);
-        li.appendChild(deleteBtn);
-        dom.taskList.appendChild(li);
-    });
+            li.appendChild(handle);
+            li.appendChild(title);
+            li.appendChild(editBtn);
+            li.appendChild(deleteBtn);
+            dom.taskList.appendChild(li);
+        });
 
-    const hasTasks = pomodoroState.taskList.length > 0;
-    const hasSelectedTask = !!getTaskById(pomodoroState.selectedTaskId);
-    dom.empty.style.display = hasTasks ? "none" : "grid";
-    dom.btnEdit.classList.toggle("disabled", !hasSelectedTask);
-    dom.btnDelete.classList.toggle("disabled", !hasSelectedTask);
-    updateGoButtonState();
+        const hasTasks = pomodoroState.taskList.length > 0;
+        const hasSelectedTask = !!getTaskById(pomodoroState.selectedTaskId);
+        dom.empty.style.display = hasTasks ? "none" : "grid";
+        dom.btnEdit.classList.toggle("disabled", !hasSelectedTask);
+        dom.btnDelete.classList.toggle("disabled", !hasSelectedTask);
+        updateGoButtonState();
+    }, {taskCount: pomodoroState.taskList.length});
 }
 
 function updateGoButtonState() {
@@ -522,12 +527,14 @@ function burstConfetti() {
 }
 
 async function initTaskList() {
-    const data = await window.api.loadPomodoroJson();
-    pomodoroState.taskList = Array.isArray(data) ? data.map(normalizeTask) : [];
-    pomodoroState.index = pomodoroState.taskList.length
-        ? Math.max(...pomodoroState.taskList.map((task) => Number(task.id) || 0)) + 1
-        : 1;
-    pomodoroState.selectedTaskId = pomodoroState.taskList[0]?.id || null;
+    await measureAsync("pomodoro.initTaskList", async () => {
+        const data = await window.api.loadPomodoroJson();
+        pomodoroState.taskList = Array.isArray(data) ? data.map(normalizeTask) : [];
+        pomodoroState.index = pomodoroState.taskList.length
+            ? Math.max(...pomodoroState.taskList.map((task) => Number(task.id) || 0)) + 1
+            : 1;
+        pomodoroState.selectedTaskId = pomodoroState.taskList[0]?.id || null;
+    });
 }
 
 function bindEditableDigit(el, onChange) {
