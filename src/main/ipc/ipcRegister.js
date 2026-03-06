@@ -1,4 +1,4 @@
-﻿const {ipcMain, clipboard, nativeImage} = require('electron');
+﻿const {clipboard, nativeImage} = require("electron");
 const {aiChat, aiChatWithModel} = require('./aiService.js');
 const {AgentService} = require("./agentService");
 const {buildAssistantChatMessages} = require("./assistantPrompt");
@@ -32,13 +32,19 @@ const {
     registerKnowledgeCardHandlers,
     registerQuickFloatHandlers,
 } = require("./ipcRegisterHandlers");
+const {
+    ensurePomodoroJson,
+    savePomodoroTaskList,
+    createPomodoroTaskRecord,
+    updatePomodoroTaskRecord,
+    deletePomodoroTaskRecord,
+} = require("./pomodoroStore");
+const {createClipboardStore} = require("./clipboardStore");
 const fs = require("fs/promises");
 const {execFile} = require("child_process");
 const {promisify} = require("util");
 const {wm} = require("../window/WindowManager");
 const {
-    WIDTH,
-    HEIGHT,
     WINDOW_KEYS,
     AI_TOUCH_RESPONSE,
     POMODORO_JSON_PATH,
@@ -50,7 +56,7 @@ const {
     ENV_CONFIG,
 } = require('../config');
 // Main-process IPC orchestration for chat, memory, cards, and agent wiring.
-class ipcRegister{
+class IpcRegister{
     static EMOTION_LOG_PREFIX = "[emotion-pipeline]";
     static assistantContext = [];
     static assistantLongTermMemory = [];
@@ -62,10 +68,12 @@ class ipcRegister{
         items: [],
     };
     static knowledgeCardsVersion = 0;
-    static clipboardHistory = [];
-    static clipboardFingerprintIndex = new Map();
-    static clipboardIdIndex = new Map();
-    static MAX_CLIPBOARD_HISTORY_ITEMS = 120;
+    static clipboardStore = createClipboardStore({
+        dataPath: CLIPBOARD_HISTORY_JSON_PATH,
+        clipboard,
+        nativeImage,
+        maxItems: 120,
+    });
     static MAX_CONTEXT_MESSAGES = 48;
     static agentService = null;
     static memoryRoutineMeta = {
@@ -967,390 +975,41 @@ class ipcRegister{
         this.touchKnowledgeCardsCache();
         return this.getKnowledgeCardsData();
     }
-    static normalizePomodoroTaskPayload(data, options = {}){
-        const title = typeof data?.title === "string" ? data.title.trim() : "";
-        const workMinutes = Number(data?.workMinutes);
-        const restMinutes = Number(data?.restMinutes);
-        const repeatTimes = Number(data?.repeatTimes);
-        if(!title){
-            throw new Error("Pomodoro task title is required.");
-        }
-        if(!Number.isFinite(workMinutes) || workMinutes <= 0 || workMinutes > 99){
-            throw new Error("workMinutes must be between 1 and 99.");
-        }
-        if(!Number.isFinite(restMinutes) || restMinutes <= 0 || restMinutes > 99){
-            throw new Error("restMinutes must be between 1 and 99.");
-        }
-        if(!Number.isFinite(repeatTimes) || repeatTimes <= 0 || repeatTimes > 99){
-            throw new Error("repeatTimes must be between 1 and 99.");
-        }
-        const idRaw = options.requireId ? Number(data?.id) : null;
-        const id = Number.isFinite(idRaw) ? idRaw : null;
-        if(options.requireId && id == null){
-            throw new Error("Pomodoro task id is required.");
-        }
-        return {
-            id,
-            title,
-            workTime: Math.round(workMinutes * 60000),
-            restTime: Math.round(restMinutes * 60000),
-            repeatTimes: Math.round(repeatTimes),
-        };
-    }
-    static getNextPomodoroTaskId(tasks = []){
-        const maxId = tasks.reduce((max, item)=>Math.max(max, Number(item?.id) || 0), 0);
-        return maxId + 1;
-    }
     static async createPomodoroTaskRecord(data){
-        const payload = this.normalizePomodoroTaskPayload(data);
-        const tasks = await this.ensurePomodoroJson(POMODORO_JSON_PATH);
-        const nextTask = {
-            id: this.getNextPomodoroTaskId(tasks),
-            title: payload.title,
-            workTime: payload.workTime,
-            restTime: payload.restTime,
-            repeatTimes: payload.repeatTimes,
-        };
-        const next = [...tasks, nextTask];
-        await fs.writeFile(POMODORO_JSON_PATH, JSON.stringify(next, null, 2), "utf-8");
-        return {task: nextTask, count: next.length};
-    }
-    static normalizePomodoroTaskList(data){
-        if(!Array.isArray(data)){
-            throw new Error("Pomodoro payload must be an array.");
-        }
-        const maxMinutesMs = 99 * 60000;
-        const seenIds = new Set();
-        let nextId = 1;
-        return data.map((item)=>{
-            const title = typeof item?.title === "string" ? item.title.trim() : "";
-            if(!title){
-                throw new Error("Pomodoro task title is required.");
-            }
-            const workTime = Math.round(Number(item?.workTime));
-            const restTime = Math.round(Number(item?.restTime));
-            const repeatTimes = Math.round(Number(item?.repeatTimes));
-            if(!Number.isFinite(workTime) || workTime <= 0 || workTime > maxMinutesMs){
-                throw new Error("Pomodoro task workTime must be between 1 and 99 minutes.");
-            }
-            if(!Number.isFinite(restTime) || restTime <= 0 || restTime > maxMinutesMs){
-                throw new Error("Pomodoro task restTime must be between 1 and 99 minutes.");
-            }
-            if(!Number.isFinite(repeatTimes) || repeatTimes <= 0 || repeatTimes > 99){
-                throw new Error("Pomodoro task repeatTimes must be between 1 and 99.");
-            }
-            const rawId = Math.round(Number(item?.id));
-            const id = Number.isFinite(rawId) && rawId > 0 && !seenIds.has(rawId)
-                ? rawId
-                : nextId;
-            seenIds.add(id);
-            nextId = Math.max(nextId, id + 1);
-            return {
-                id,
-                title,
-                workTime,
-                restTime,
-                repeatTimes,
-            };
-        });
+        return await createPomodoroTaskRecord(POMODORO_JSON_PATH, data);
     }
     static async savePomodoroTaskList(data){
-        const tasks = this.normalizePomodoroTaskList(data);
-        await fs.writeFile(POMODORO_JSON_PATH, JSON.stringify(tasks, null, 2), "utf-8");
-        return tasks;
+        return await savePomodoroTaskList(POMODORO_JSON_PATH, data);
     }
     static async updatePomodoroTaskRecord(data){
-        const payload = this.normalizePomodoroTaskPayload(data, {requireId: true});
-        const tasks = await this.ensurePomodoroJson(POMODORO_JSON_PATH);
-        const index = tasks.findIndex((item)=>Number(item?.id) === payload.id);
-        if(index === -1){
-            throw new Error("Pomodoro task not found.");
-        }
-        tasks[index] = {
-            ...tasks[index],
-            title: payload.title,
-            workTime: payload.workTime,
-            restTime: payload.restTime,
-            repeatTimes: payload.repeatTimes,
-        };
-        await fs.writeFile(POMODORO_JSON_PATH, JSON.stringify(tasks, null, 2), "utf-8");
-        return {task: tasks[index], count: tasks.length};
+        return await updatePomodoroTaskRecord(POMODORO_JSON_PATH, data);
     }
     static async deletePomodoroTaskRecord(taskId){
-        const id = Number(taskId);
-        if(!Number.isFinite(id)){
-            throw new Error("Pomodoro task id is required.");
-        }
-        const tasks = await this.ensurePomodoroJson(POMODORO_JSON_PATH);
-        const next = tasks.filter((item)=>Number(item?.id) !== id);
-        if(next.length === tasks.length){
-            throw new Error("Pomodoro task not found.");
-        }
-        await fs.writeFile(POMODORO_JSON_PATH, JSON.stringify(next, null, 2), "utf-8");
-        return {deletedId: id, count: next.length};
-    }
-    static normalizeClipboardHistory(data){
-        if(!Array.isArray(data)){
-            return [];
-        }
-        return data
-            .filter((item)=>item && typeof item.id === "string")
-            .map((item)=>({
-                id: item.id,
-                type: item.type === "image" || item.type === "mixed" ? item.type : "text",
-                text: typeof item.text === "string" ? item.text : "",
-                textPreview: typeof item.textPreview === "string" ? item.textPreview : "",
-                hasImage: item.hasImage === true,
-                imageWidth: Number.isFinite(Number(item.imageWidth)) ? Number(item.imageWidth) : 0,
-                imageHeight: Number.isFinite(Number(item.imageHeight)) ? Number(item.imageHeight) : 0,
-                imageDataUrl: typeof item.imageDataUrl === "string" ? item.imageDataUrl : "",
-                createdAt: typeof item.createdAt === "string" ? item.createdAt : "",
-                source: typeof item.source === "string" ? item.source : "manual",
-                pinned: item.pinned === true,
-                fingerprint: typeof item.fingerprint === "string" ? item.fingerprint : "",
-            }));
-    }
-    static rebuildClipboardIndexes(){
-        this.clipboardFingerprintIndex = new Map();
-        this.clipboardIdIndex = new Map();
-        this.clipboardHistory.forEach((item, index)=>{
-            if(typeof item?.id === "string" && item.id){
-                this.clipboardIdIndex.set(item.id, index);
-            }
-            if(typeof item?.fingerprint === "string" && item.fingerprint && !this.clipboardFingerprintIndex.has(item.fingerprint)){
-                this.clipboardFingerprintIndex.set(item.fingerprint, index);
-            }
-        });
-    }
-    static async saveClipboardHistory(){
-        await fs.writeFile(CLIPBOARD_HISTORY_JSON_PATH, JSON.stringify(this.clipboardHistory, null, 2), "utf-8");
+        return await deletePomodoroTaskRecord(POMODORO_JSON_PATH, taskId);
     }
     static async loadClipboardHistory(){
-        try{
-            const raw = await fs.readFile(CLIPBOARD_HISTORY_JSON_PATH, "utf8");
-            this.clipboardHistory = this.normalizeClipboardHistory(JSON.parse(raw));
-            this.rebuildClipboardIndexes();
-        }catch(err){
-            if(err.code === "ENOENT"){
-                this.clipboardHistory = [];
-                this.rebuildClipboardIndexes();
-                await this.saveClipboardHistory();
-                return;
-            }
-            throw err;
-        }
-    }
-    static buildClipboardFingerprint(payload){
-        const text = String(payload?.text || "").trim();
-        const imagePart = payload?.hasImage
-            ? `${payload.imageWidth || 0}x${payload.imageHeight || 0}:${payload.imageDataUrl ? String(payload.imageDataUrl).slice(0, 120) : ""}`
-            : "no-image";
-        return `${text.slice(0, 300)}|${imagePart}`.toLowerCase();
-    }
-    static clipTextPreview(text){
-        const value = String(text || "").replace(/\s+/g, " ").trim();
-        if(!value){
-            return "";
-        }
-        return value.length > 120 ? `${value.slice(0, 120).trim()}...` : value;
+        await this.clipboardStore.loadHistory();
     }
     static getClipboardSnapshotData(){
-        const text = clipboard.readText();
-        const image = clipboard.readImage();
-        const hasImage = image && !image.isEmpty();
-        let imageWidth = 0;
-        let imageHeight = 0;
-        let imageDataUrl = "";
-        if(hasImage){
-            const size = image.getSize();
-            imageWidth = size?.width || 0;
-            imageHeight = size?.height || 0;
-            try{
-                const preview = image.resize({width: Math.min(220, imageWidth || 220)});
-                imageDataUrl = preview.toDataURL();
-            }catch(err){
-                imageDataUrl = "";
-            }
-        }
-        const textValue = typeof text === "string" ? text : "";
-        const hasText = Boolean(textValue.trim());
-        const type = hasText && hasImage ? "mixed" : (hasImage ? "image" : "text");
-        const result = {
-            type,
-            text: textValue,
-            textPreview: this.clipTextPreview(textValue),
-            hasText,
-            hasImage,
-            imageWidth,
-            imageHeight,
-            imageDataUrl,
-        };
-        result.fingerprint = this.buildClipboardFingerprint(result);
-        return result;
+        return this.clipboardStore.getClipboardSnapshotData();
     }
     static getClipboardHistoryData(){
-        const pinnedCount = this.clipboardHistory.filter((item)=>item.pinned).length;
-        return {
-            count: this.clipboardHistory.length,
-            pinnedCount,
-            items: [...this.clipboardHistory],
-        };
-    }
-    static trimClipboardHistory(){
-        if(this.clipboardHistory.length <= this.MAX_CLIPBOARD_HISTORY_ITEMS){
-            return;
-        }
-        const pinnedItems = this.clipboardHistory.filter((item)=>item.pinned);
-        const normalItems = this.clipboardHistory.filter((item)=>!item.pinned);
-        const keepNormalCount = Math.max(0, this.MAX_CLIPBOARD_HISTORY_ITEMS - pinnedItems.length);
-        this.clipboardHistory = [...pinnedItems, ...normalItems.slice(0, keepNormalCount)];
+        return this.clipboardStore.getClipboardHistoryData();
     }
     static async captureClipboardRecord(options = {}){
-        const snapshot = this.getClipboardSnapshotData();
-        if(!snapshot.hasText && !snapshot.hasImage){
-            return {
-                inserted: false,
-                reason: "empty",
-                snapshot,
-                data: this.getClipboardHistoryData(),
-            };
-        }
-        const indexedDuplicate = this.clipboardFingerprintIndex.get(snapshot.fingerprint);
-        const duplicateSourceIndex = Number.isInteger(indexedDuplicate)
-            && indexedDuplicate >= 0
-            && indexedDuplicate < this.clipboardHistory.length
-            && this.clipboardHistory[indexedDuplicate]?.fingerprint === snapshot.fingerprint
-            ? indexedDuplicate
-            : this.clipboardHistory.findIndex((item)=>item.fingerprint === snapshot.fingerprint);
-        if(duplicateSourceIndex !== -1){
-            const existing = this.clipboardHistory.splice(duplicateSourceIndex, 1)[0];
-            const merged = {
-                ...existing,
-                ...snapshot,
-                id: existing.id,
-                pinned: existing.pinned === true,
-                createdAt: new Date().toISOString(),
-                source: options.source || "manual",
-            };
-            this.clipboardHistory.unshift(merged);
-            this.rebuildClipboardIndexes();
-            await this.saveClipboardHistory();
-            return {
-                inserted: false,
-                reason: "duplicate",
-                item: merged,
-                snapshot,
-                data: this.getClipboardHistoryData(),
-            };
-        }
-        const item = {
-            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            type: snapshot.type,
-            text: snapshot.text,
-            textPreview: snapshot.textPreview,
-            hasImage: snapshot.hasImage,
-            imageWidth: snapshot.imageWidth,
-            imageHeight: snapshot.imageHeight,
-            imageDataUrl: snapshot.imageDataUrl || "",
-            fingerprint: snapshot.fingerprint,
-            source: options.source || "manual",
-            pinned: false,
-            createdAt: new Date().toISOString(),
-        };
-        this.clipboardHistory.unshift(item);
-        this.trimClipboardHistory();
-        this.rebuildClipboardIndexes();
-        await this.saveClipboardHistory();
-        return {
-            inserted: true,
-            item,
-            snapshot,
-            data: this.getClipboardHistoryData(),
-        };
+        return await this.clipboardStore.captureClipboardRecord(options);
     }
     static async clearClipboardHistory(){
-        this.clipboardHistory = [];
-        this.rebuildClipboardIndexes();
-        await this.saveClipboardHistory();
-        return this.getClipboardHistoryData();
+        return await this.clipboardStore.clearClipboardHistory();
     }
     static async deleteClipboardItem(id){
-        const itemId = typeof id === "string" ? id.trim() : "";
-        if(!itemId){
-            throw new Error("Clipboard item id is required.");
-        }
-        const next = this.clipboardHistory.filter((item)=>item.id !== itemId);
-        if(next.length === this.clipboardHistory.length){
-            throw new Error("Clipboard item not found.");
-        }
-        this.clipboardHistory = next;
-        this.rebuildClipboardIndexes();
-        await this.saveClipboardHistory();
-        return this.getClipboardHistoryData();
+        return await this.clipboardStore.deleteClipboardItem(id);
     }
     static async pinClipboardItem(id, pinned = true){
-        const itemId = typeof id === "string" ? id.trim() : "";
-        if(!itemId){
-            throw new Error("Clipboard item id is required.");
-        }
-        const indexed = this.clipboardIdIndex.get(itemId);
-        const index = Number.isInteger(indexed)
-            && indexed >= 0
-            && indexed < this.clipboardHistory.length
-            && this.clipboardHistory[indexed]?.id === itemId
-            ? indexed
-            : this.clipboardHistory.findIndex((item)=>item.id === itemId);
-        if(index === -1){
-            throw new Error("Clipboard item not found.");
-        }
-        this.clipboardHistory[index] = {
-            ...this.clipboardHistory[index],
-            pinned: pinned === true,
-        };
-        const updated = this.clipboardHistory.splice(index, 1)[0];
-        if(updated.pinned){
-            this.clipboardHistory.unshift(updated);
-        }else{
-            const firstUnpinned = this.clipboardHistory.findIndex((item)=>!item.pinned);
-            if(firstUnpinned === -1){
-                this.clipboardHistory.push(updated);
-            }else{
-                this.clipboardHistory.splice(firstUnpinned, 0, updated);
-            }
-        }
-        this.rebuildClipboardIndexes();
-        await this.saveClipboardHistory();
-        return this.getClipboardHistoryData();
+        return await this.clipboardStore.pinClipboardItem(id, pinned);
     }
     static async copyClipboardItem(id){
-        const itemId = typeof id === "string" ? id.trim() : "";
-        if(!itemId){
-            throw new Error("Clipboard item id is required.");
-        }
-        const indexed = this.clipboardIdIndex.get(itemId);
-        const item = Number.isInteger(indexed)
-            && indexed >= 0
-            && indexed < this.clipboardHistory.length
-            && this.clipboardHistory[indexed]?.id === itemId
-            ? this.clipboardHistory[indexed]
-            : this.clipboardHistory.find((entry)=>entry.id === itemId);
-        if(!item){
-            throw new Error("Clipboard item not found.");
-        }
-        if(item.text){
-            clipboard.writeText(item.text);
-        }
-        if(item.hasImage && item.imageDataUrl){
-            try{
-                const image = nativeImage.createFromDataURL(item.imageDataUrl);
-                if(image && !image.isEmpty()){
-                    clipboard.writeImage(image);
-                }
-            }catch(err){
-                // Keep text copy successful even if image restore fails.
-            }
-        }
-        return {ok: true, id: item.id};
+        return await this.clipboardStore.copyClipboardItem(id);
     }
     static registerPing(){
         // Core one-off handlers are grouped here to avoid scattering tiny IPC registrations.
@@ -1368,38 +1027,9 @@ class ipcRegister{
     static registerAgent(){
         registerAgentHandlers(this);
     }
-    static async ensurePomodoroJsonExists(dataPath){
-        return JSON.parse(await fs.readFile(dataPath,"utf8"));
-    }
     static async ensurePomodoroJson(dataPath){
-        try{
-            return await this.ensurePomodoroJsonExists(dataPath);
-        }catch(err){
-            if(err.code === "ENOENT"){
-                await fs.writeFile(dataPath,"[]","utf-8");
-                return [];
-            }else throw err;
-        }
-
+        return await ensurePomodoroJson(dataPath);
     }
-
-    // app.whenReady().then(() => {
-    //     path = require("path");
-    //     dataPath=path.join(app.getPath("userData"),"todo.json");
-    //     mainWindow= createWindow({width: WIDTH, height: HEIGHT});
-    //     mainWindow.loadFile(path.join(__dirname, "index.html"));
-    //     mainWindow.webContents.openDevTools();
-    //
-    //
-    //     ipcMain.handle("todo:save",async (event,data)=>{
-    //         let saveData = JSON.stringify(data, null, 2);
-    //         return fs.writeFile(dataPath,saveData);
-    //     });
-    //     ipcMain.handle("todo:load",async (event)=>{
-    //         return await ensureTodoFile(dataPath);
-    //     })
-    //
-    // })
     static registerPomodoroJson(){
         registerPomodoroHandlers(this, {POMODORO_JSON_PATH});
     }
@@ -1449,4 +1079,7 @@ class ipcRegister{
     }
 
 }
-module.exports = {ipcRegister};
+const ipcRegister = IpcRegister;
+module.exports = {ipcRegister, IpcRegister};
+
+
