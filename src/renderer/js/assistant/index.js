@@ -94,6 +94,7 @@ const SPECIAL_AGENT_TOOL_NAMES = new Set([
     "web_search",
     "read_web_page",
     "capture_screen",
+    "capture_camera_photo",
     "list_screenshots",
     "analyze_image",
 ]);
@@ -766,6 +767,9 @@ function renderScopeToolOptions() {
     (activeModule?.tools || []).forEach((tool) => {
         const option = document.createElement("label");
         option.className = "assistant-scope__option";
+        if (tool.name === "capture_camera_photo") {
+            option.dataset.danger = "true";
+        }
         option.innerHTML = `
             <input type="checkbox" class="assistant-scope__checkbox" value="${tool.name}">
             <span class="assistant-scope__checkmark" aria-hidden="true"></span>

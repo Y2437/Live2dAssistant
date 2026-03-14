@@ -276,6 +276,7 @@ async function runTool(service, toolName, args) {
     case "web_search": return service.webSearch(args?.query);
     case "read_web_page": return service.readWebPage(args?.url);
     case "capture_screen": return service.captureScreen(args?.name);
+    case "capture_camera_photo": return service.captureCameraPhoto(args?.name);
     case "list_screenshots": return service.listScreenshots();
     case "analyze_image": return service.analyzeImage(args);
     default: throw new Error(`Unknown tool: ${toolName}`);

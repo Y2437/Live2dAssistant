@@ -247,6 +247,7 @@
     background-color: var(--c-accent);
 }
 
+
 /* secondary text */
 :root[data-theme="light"] .nav__hint,
 :root[data-theme="light"] .placeholder-desc,
@@ -338,6 +339,40 @@
 :root[data-theme="light"] .assistant-thinkToggle[data-enabled="true"] .assistant-thinkToggle__knob{
     border-color: #1d4ed8;
     background-color: #2563eb;
+}
+
+:root[data-theme="light"] .assistant-scope__option[data-danger="true"]{
+    border-color: #ef4444;
+    background: linear-gradient(180deg, rgba(255, 241, 242, 0.96), rgba(255, 228, 230, 0.92));
+}
+
+:root[data-theme="light"] .assistant-scope__option[data-danger="true"]:hover{
+    border-color: #dc2626;
+    background: linear-gradient(180deg, rgba(255, 228, 230, 0.98), rgba(254, 205, 211, 0.94));
+}
+
+:root[data-theme="light"] .assistant-scope__option[data-danger="true"] .assistant-scope__checkmark{
+    border-color: #ef4444;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+:root[data-theme="light"] .assistant-scope__option[data-danger="true"] .assistant-scope__optionTitle{
+    color: #991b1b;
+}
+
+:root[data-theme="light"] .assistant-scope__option[data-danger="true"] .assistant-scope__optionDesc{
+    color: #7f1d1d;
+    opacity: 0.92;
+}
+
+:root[data-theme="light"] .assistant-scope__option[data-danger="true"] .assistant-scope__optionMeta::after{
+    color: #991b1b;
+    border-color: #ef4444;
+    background-color: rgba(255, 255, 255, 0.76);
+}
+
+:root[data-theme="light"] .assistant-scope__option[data-danger="true"]:has(.assistant-scope__checkbox:checked){
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.18) inset, var(--shadow-1);
 }
 
 :root[data-theme="light"] .assistant-thinkToggle:not([data-enabled="true"]){

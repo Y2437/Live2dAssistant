@@ -47,6 +47,7 @@ class AgentService {
         this.createAiDiary = options.createAiDiary;
         this.updateAiDiary = options.updateAiDiary;
         this.deleteAiDiary = options.deleteAiDiary;
+        this.requestCameraCapture = options.requestCameraCapture;
         this.currentUserMessage = "";
     }
 
@@ -736,6 +737,17 @@ class AgentService {
 
     async captureScreen(name) {
         return visionTools.captureScreen(name);
+    }
+
+    async captureCameraPhoto(name) {
+        if (typeof this.requestCameraCapture !== "function") {
+            throw new Error("Camera capture is not available.");
+        }
+        const payload = await this.requestCameraCapture(name);
+        return visionTools.saveCameraCapture({
+            dataUrl: payload?.dataUrl,
+            name,
+        });
     }
 
     async analyzeImage(args) {

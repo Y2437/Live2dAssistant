@@ -248,6 +248,7 @@
     background-color: var(--c-accent);
 }
 
+
 /* secondary text */
 :root[data-theme="dark"] .nav__hint,
 :root[data-theme="dark"] .placeholder-desc,
@@ -489,4 +490,38 @@
 }
 :root[data-theme="dark"] *::-webkit-scrollbar-track{
     background-color: rgba(0,0,0,0);
+}
+
+:root[data-theme="dark"] .assistant-scope__option[data-danger="true"]{
+    border-color: #ef4444;
+    background: linear-gradient(180deg, rgba(60, 13, 18, 0.9), rgba(42, 10, 15, 0.94));
+}
+
+:root[data-theme="dark"] .assistant-scope__option[data-danger="true"]:hover{
+    border-color: #f87171;
+    background: linear-gradient(180deg, rgba(78, 17, 23, 0.94), rgba(54, 16, 21, 0.98));
+}
+
+:root[data-theme="dark"] .assistant-scope__option[data-danger="true"] .assistant-scope__checkmark{
+    border-color: #ef4444;
+    background: rgba(22, 11, 13, 0.92);
+}
+
+:root[data-theme="dark"] .assistant-scope__option[data-danger="true"] .assistant-scope__optionTitle{
+    color: #fecaca;
+}
+
+:root[data-theme="dark"] .assistant-scope__option[data-danger="true"] .assistant-scope__optionDesc{
+    color: #fca5a5;
+    opacity: 0.94;
+}
+
+:root[data-theme="dark"] .assistant-scope__option[data-danger="true"] .assistant-scope__optionMeta::after{
+    color: #fecaca;
+    border-color: #ef4444;
+    background-color: rgba(17, 24, 39, 0.32);
+}
+
+:root[data-theme="dark"] .assistant-scope__option[data-danger="true"]:has(.assistant-scope__checkbox:checked){
+    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.22) inset, var(--shadow-1);
 }

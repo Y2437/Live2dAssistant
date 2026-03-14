@@ -649,6 +649,7 @@
     outline-offset: 3px;
 }
 
+
 .assistant-inputRow{
     display: flex;
     gap: 8px;
@@ -939,6 +940,20 @@
     font-size: 11px;
     line-height: 1.5;
     opacity: 0.76;
+}
+
+.assistant-scope__option[data-danger="true"] .assistant-scope__optionMeta::after{
+    content: "危险";
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 0 6px;
+    border-style: solid;
+    border-width: 1px;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: 0.2px;
 }
 
 .assistant-form > label{

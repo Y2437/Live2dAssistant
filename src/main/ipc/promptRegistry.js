@@ -142,6 +142,7 @@ const AGENT_TOOL_SPECS = [
     {name: "web_search", label: "联网搜索", category: "web", argsExample: "{\"query\":\"keyword\"}", description: "搜索网页并返回标题、摘要和正文摘录。", prefetchable: true},
     {name: "read_web_page", label: "读取网页正文", category: "web", argsExample: "{\"url\":\"https://...\"}", description: "深度读取指定网页正文。"},
     {name: "capture_screen", label: "截图", category: "vision", argsExample: "{\"name\":\"optional name\"}", description: "截图并保存。", mutating: true},
+    {name: "capture_camera_photo", label: "摄像头拍摄", category: "vision", argsExample: "{\"name\":\"optional name\"}", description: "调用电脑摄像头拍摄一张照片并保存。", mutating: true},
     {name: "list_screenshots", label: "截图列表", category: "vision", argsExample: "{}", description: "列出历史截图。", prefetchable: true},
     {name: "analyze_image", label: "分析图片", category: "vision", argsExample: "{\"imagePath\":\"path\",\"prompt\":\"analysis request\"}", description: "分析指定图片。"},
 ];

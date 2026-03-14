@@ -55,6 +55,26 @@ async function captureScreen(name) {
     return {name: source.name, imagePath: filePath, width: image.getSize().width, height: image.getSize().height};
 }
 
+async function saveCameraCapture(args = {}) {
+    const dataUrl = String(args?.dataUrl || "").trim();
+    if (!dataUrl.startsWith("data:image/")) {
+        throw new Error("Camera capture payload is invalid.");
+    }
+    const [, mimeType = "image/png", base64Payload = ""] = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/) || [];
+    if (!base64Payload) {
+        throw new Error("Camera capture payload is empty.");
+    }
+    const extension = mimeType === "image/jpeg" ? "jpg" : "png";
+    const safeName = sanitizeFileName(args?.name || "camera");
+    const filePath = path.join(AGENT_SCREENSHOT_DIR_PATH, `${Date.now()}-${safeName}.${extension}`);
+    await fs.writeFile(filePath, Buffer.from(base64Payload, "base64"));
+    return {
+        imagePath: filePath,
+        mimeType,
+        size: Buffer.byteLength(base64Payload, "base64"),
+    };
+}
+
 async function analyzeImage(args) {
     const imagePath = String(args?.imagePath || "").trim();
     const prompt = String(args?.prompt || DEFAULT_IMAGE_ANALYSIS_PROMPT).trim();
@@ -97,4 +117,4 @@ async function analyzeClipboardImage(service, args = {}) {
     return analyzeImage({imagePath: filePath, prompt: args.prompt || DEFAULT_CLIPBOARD_IMAGE_PROMPT});
 }
 
-module.exports = {getPomodoroStatus, getClipboardSnapshot, captureScreen, analyzeImage, listScreenshots, analyzeClipboardImage};
+module.exports = {getPomodoroStatus, getClipboardSnapshot, captureScreen, saveCameraCapture, analyzeImage, listScreenshots, analyzeClipboardImage};

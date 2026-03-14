@@ -1114,6 +1114,60 @@ class IpcRegister{
             createAiDiary: async (data)=>await this.createAiDiary(data),
             updateAiDiary: async (data)=>await this.updateAiDiary(data),
             deleteAiDiary: async (id)=>await this.deleteAiDiary(id),
+            requestCameraCapture: async (name = "camera") => {
+                const targetWindow = wm.get("assistant");
+                if (!targetWindow || targetWindow.isDestroyed()) {
+                    throw new Error("Assistant window is not available for camera capture.");
+                }
+                const safeName = JSON.stringify(String(name || "camera"));
+                return await targetWindow.webContents.executeJavaScript(`
+                    (async () => {
+                        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+                            throw new Error("Current renderer cannot access the camera.");
+                        }
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 },
+                                facingMode: "user"
+                            },
+                            audio: false
+                        });
+                        try {
+                            const video = document.createElement("video");
+                            video.autoplay = true;
+                            video.muted = true;
+                            video.playsInline = true;
+                            video.srcObject = stream;
+                            await video.play();
+                            if (video.readyState < 2) {
+                                await new Promise((resolve) => {
+                                    video.onloadedmetadata = () => resolve();
+                                });
+                            }
+                            await new Promise((resolve) => window.setTimeout(resolve, 180));
+                            const width = video.videoWidth || 1280;
+                            const height = video.videoHeight || 720;
+                            const canvas = document.createElement("canvas");
+                            canvas.width = width;
+                            canvas.height = height;
+                            const context = canvas.getContext("2d");
+                            if (!context) {
+                                throw new Error("Camera canvas is unavailable.");
+                            }
+                            context.drawImage(video, 0, 0, width, height);
+                            return {
+                                name: ${safeName},
+                                width,
+                                height,
+                                dataUrl: canvas.toDataURL("image/png"),
+                            };
+                        } finally {
+                            stream.getTracks().forEach((track) => track.stop());
+                        }
+                    })()
+                `, true);
+            },
         });
         await this.agentService.ensureReady();
         await this.maybeRunDailyMemoryExtraction();
