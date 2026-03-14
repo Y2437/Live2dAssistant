@@ -1,36 +1,68 @@
 const {contextBridge, ipcRenderer} = require("electron");
 
-const AGENT_STREAM_EVENT = "app:agentChatStream:event";
-const QUICK_FLOAT_FEATURE_EVENT = "quick-float:feature-toggled";
-const QUICK_FLOAT_SELECTION_READY_EVENT = "quick-float:selection-ready";
-const QUICK_FLOAT_SELECTION_ERROR_EVENT = "quick-float:selection-error";
+const IPC_EVENTS = {
+    AGENT_STREAM: "app:agentChatStream:event",
+    SHOW_VIEW: "ui:showView",
+};
+
+const IPC_CHANNELS = {
+    ping: "app:ping",
+    openWindow: "app:openWindow",
+    chat: "app:aiChat",
+    extractEmotionForLive2d: "app:extractEmotionForLive2d",
+    agentChat: "app:agentChat",
+    agentChatStream: "app:agentChatStream",
+    cancelAgentChat: "app:agentChatCancel",
+    getAiContextMeta: "app:getAiContextMeta",
+    getAiContextData: "app:getAiContextData",
+    clearAiContext: "app:clearAiContext",
+    getLongTermMemoryData: "app:getLongTermMemoryData",
+    getMemoryRoutineMeta: "app:getMemoryRoutineMeta",
+    extractLongTermMemories: "app:extractLongTermMemories",
+    deleteLongTermMemory: "app:deleteLongTermMemory",
+    getAgentCapabilities: "app:getAgentCapabilities",
+    runAgentSelfTest: "app:runAgentSelfTest",
+    touch: "app:touch",
+    loadPomodoroJson: "app:loadPomodoroJson",
+    savePomodoroJson: "app:savePomodoroJson",
+    getClipboardSnapshot: "app:getClipboardSnapshot",
+    getClipboardHistory: "app:getClipboardHistory",
+    captureClipboard: "app:captureClipboard",
+    clearClipboardHistory: "app:clearClipboardHistory",
+    deleteClipboardItem: "app:deleteClipboardItem",
+    pinClipboardItem: "app:pinClipboardItem",
+    copyClipboardItem: "app:copyClipboardItem",
+    loadKnowledgeCards: "app:loadKnowledgeCards",
+    createKnowledgeCard: "app:createKnowledgeCard",
+    updateKnowledgeCard: "app:updateKnowledgeCard",
+    generateKnowledgeCardSummary: "app:generateKnowledgeCardSummary",
+    deleteKnowledgeCard: "app:deleteKnowledgeCard",
+    loadCalendarPlan: "app:loadCalendarPlan",
+    getCalendarDayDetail: "app:getCalendarDayDetail",
+    createCalendarTodo: "app:createCalendarTodo",
+    updateCalendarTodo: "app:updateCalendarTodo",
+    deleteCalendarTodo: "app:deleteCalendarTodo",
+    listAiDiaries: "app:listAiDiaries",
+    createAiDiary: "app:createAiDiary",
+    updateAiDiary: "app:updateAiDiary",
+    deleteAiDiary: "app:deleteAiDiary",
+};
+
+function createInvoker(channel) {
+    return (...args) => ipcRenderer.invoke(channel, ...args);
+}
 
 contextBridge.exposeInMainWorld("api", {
-    ping: () => ipcRenderer.invoke("app:ping"),
+    ping: createInvoker(IPC_CHANNELS.ping),
     onShowView: (handler) => {
-        ipcRenderer.on("ui:showView", (event, payload) => {
+        ipcRenderer.on(IPC_EVENTS.SHOW_VIEW, (event, payload) => {
             handler(payload);
         });
     },
-    onQuickFloatFeatureToggle: (handler) => {
-        ipcRenderer.on(QUICK_FLOAT_FEATURE_EVENT, (event, payload) => {
-            handler(payload);
-        });
-    },
-    onQuickFloatSelectionReady: (handler) => {
-        ipcRenderer.on(QUICK_FLOAT_SELECTION_READY_EVENT, (event, payload) => {
-            handler(payload);
-        });
-    },
-    onQuickFloatSelectionError: (handler) => {
-        ipcRenderer.on(QUICK_FLOAT_SELECTION_ERROR_EVENT, (event, payload) => {
-            handler(payload);
-        });
-    },
-    openWindow: (windowKey) => ipcRenderer.invoke("app:openWindow", windowKey),
-    chat: (message) => ipcRenderer.invoke("app:aiChat", message),
-    extractEmotionForLive2d: (text) => ipcRenderer.invoke("app:extractEmotionForLive2d", {text}),
-    agentChat: (message, options = {}) => ipcRenderer.invoke("app:agentChat", {
+    openWindow: createInvoker(IPC_CHANNELS.openWindow),
+    chat: createInvoker(IPC_CHANNELS.chat),
+    extractEmotionForLive2d: (text) => ipcRenderer.invoke(IPC_CHANNELS.extractEmotionForLive2d, {text}),
+    agentChat: (message, options = {}) => ipcRenderer.invoke(IPC_CHANNELS.agentChat, {
         message,
         allowedTools: Array.isArray(options?.allowedTools) ? options.allowedTools : null,
         directMode: options?.directMode === true,
@@ -56,47 +88,48 @@ contextBridge.exposeInMainWorld("api", {
                 handlers.onCancel(payload.error || "Request canceled.");
             }
         };
-        ipcRenderer.on(AGENT_STREAM_EVENT, listener);
-        const request = ipcRenderer.invoke("app:agentChatStream", {
+        ipcRenderer.on(IPC_EVENTS.AGENT_STREAM, listener);
+        return ipcRenderer.invoke(IPC_CHANNELS.agentChatStream, {
             message,
             requestId,
             allowedTools: Array.isArray(options?.allowedTools) ? options.allowedTools : null,
             directMode: options?.directMode === true,
-        })
-            .finally(() => {
-                ipcRenderer.removeListener(AGENT_STREAM_EVENT, listener);
-            });
-        return request;
+        }).finally(() => {
+            ipcRenderer.removeListener(IPC_EVENTS.AGENT_STREAM, listener);
+        });
     },
-    cancelAgentChat: (requestId) => ipcRenderer.invoke("app:agentChatCancel", {requestId}),
-    getAiContextMeta: () => ipcRenderer.invoke("app:getAiContextMeta"),
-    getAiContextData: () => ipcRenderer.invoke("app:getAiContextData"),
-    clearAiContext: () => ipcRenderer.invoke("app:clearAiContext"),
-    getLongTermMemoryData: () => ipcRenderer.invoke("app:getLongTermMemoryData"),
-    getMemoryRoutineMeta: () => ipcRenderer.invoke("app:getMemoryRoutineMeta"),
-    extractLongTermMemories: () => ipcRenderer.invoke("app:extractLongTermMemories"),
-    deleteLongTermMemory: (memoryId) => ipcRenderer.invoke("app:deleteLongTermMemory", memoryId),
-    getAgentCapabilities: () => ipcRenderer.invoke("app:getAgentCapabilities"),
-    runAgentSelfTest: (query = "") => ipcRenderer.invoke("app:runAgentSelfTest", {query}),
-    touch: (name) => ipcRenderer.invoke("app:touch", name),
-    loadPomodoroJson: () => ipcRenderer.invoke("app:loadPomodoroJson"),
-    savePomodoroJson: (data) => ipcRenderer.invoke("app:savePomodoroJson", data),
-    getClipboardSnapshot: () => ipcRenderer.invoke("app:getClipboardSnapshot"),
-    getQuickFloatFeatureState: () => ipcRenderer.invoke("app:getQuickFloatFeatureState"),
-    quickFloatCaptureSelectionText: () => ipcRenderer.invoke("app:quickFloatCaptureSelectionText"),
-    quickFloatSetWindowMode: (payload = {}) => ipcRenderer.invoke("app:quickFloatSetWindowMode", payload),
-    quickFloatSetInteractionState: (payload = {}) => ipcRenderer.invoke("app:quickFloatSetInteractionState", payload),
-    getClipboardHistory: () => ipcRenderer.invoke("app:getClipboardHistory"),
-    captureClipboard: (payload = {}) => ipcRenderer.invoke("app:captureClipboard", payload),
-    clearClipboardHistory: () => ipcRenderer.invoke("app:clearClipboardHistory"),
-    deleteClipboardItem: (id) => ipcRenderer.invoke("app:deleteClipboardItem", id),
-    pinClipboardItem: (id, pinned = true) => ipcRenderer.invoke("app:pinClipboardItem", {id, pinned}),
-    copyClipboardItem: (id) => ipcRenderer.invoke("app:copyClipboardItem", id),
-    quickTranslateText: (payload = {}) => ipcRenderer.invoke("app:quickTranslateText", payload),
-    quickExplainText: (payload = {}) => ipcRenderer.invoke("app:quickExplainText", payload),
-    loadKnowledgeCards: () => ipcRenderer.invoke("app:loadKnowledgeCards"),
-    createKnowledgeCard: (data) => ipcRenderer.invoke("app:createKnowledgeCard", data),
-    updateKnowledgeCard: (data) => ipcRenderer.invoke("app:updateKnowledgeCard", data),
-    generateKnowledgeCardSummary: (data) => ipcRenderer.invoke("app:generateKnowledgeCardSummary", data),
-    deleteKnowledgeCard: (cardId) => ipcRenderer.invoke("app:deleteKnowledgeCard", cardId),
+    cancelAgentChat: (requestId) => ipcRenderer.invoke(IPC_CHANNELS.cancelAgentChat, {requestId}),
+    getAiContextMeta: createInvoker(IPC_CHANNELS.getAiContextMeta),
+    getAiContextData: createInvoker(IPC_CHANNELS.getAiContextData),
+    clearAiContext: createInvoker(IPC_CHANNELS.clearAiContext),
+    getLongTermMemoryData: createInvoker(IPC_CHANNELS.getLongTermMemoryData),
+    getMemoryRoutineMeta: createInvoker(IPC_CHANNELS.getMemoryRoutineMeta),
+    extractLongTermMemories: createInvoker(IPC_CHANNELS.extractLongTermMemories),
+    deleteLongTermMemory: createInvoker(IPC_CHANNELS.deleteLongTermMemory),
+    getAgentCapabilities: createInvoker(IPC_CHANNELS.getAgentCapabilities),
+    runAgentSelfTest: (query = "") => ipcRenderer.invoke(IPC_CHANNELS.runAgentSelfTest, {query}),
+    touch: createInvoker(IPC_CHANNELS.touch),
+    loadPomodoroJson: createInvoker(IPC_CHANNELS.loadPomodoroJson),
+    savePomodoroJson: createInvoker(IPC_CHANNELS.savePomodoroJson),
+    getClipboardSnapshot: createInvoker(IPC_CHANNELS.getClipboardSnapshot),
+    getClipboardHistory: createInvoker(IPC_CHANNELS.getClipboardHistory),
+    captureClipboard: createInvoker(IPC_CHANNELS.captureClipboard),
+    clearClipboardHistory: createInvoker(IPC_CHANNELS.clearClipboardHistory),
+    deleteClipboardItem: createInvoker(IPC_CHANNELS.deleteClipboardItem),
+    pinClipboardItem: (id, pinned = true) => ipcRenderer.invoke(IPC_CHANNELS.pinClipboardItem, {id, pinned}),
+    copyClipboardItem: (id) => ipcRenderer.invoke(IPC_CHANNELS.copyClipboardItem, id),
+    loadKnowledgeCards: createInvoker(IPC_CHANNELS.loadKnowledgeCards),
+    createKnowledgeCard: createInvoker(IPC_CHANNELS.createKnowledgeCard),
+    updateKnowledgeCard: createInvoker(IPC_CHANNELS.updateKnowledgeCard),
+    generateKnowledgeCardSummary: createInvoker(IPC_CHANNELS.generateKnowledgeCardSummary),
+    deleteKnowledgeCard: createInvoker(IPC_CHANNELS.deleteKnowledgeCard),
+    loadCalendarPlan: createInvoker(IPC_CHANNELS.loadCalendarPlan),
+    getCalendarDayDetail: (date) => ipcRenderer.invoke(IPC_CHANNELS.getCalendarDayDetail, {date}),
+    createCalendarTodo: createInvoker(IPC_CHANNELS.createCalendarTodo),
+    updateCalendarTodo: createInvoker(IPC_CHANNELS.updateCalendarTodo),
+    deleteCalendarTodo: (id) => ipcRenderer.invoke(IPC_CHANNELS.deleteCalendarTodo, {id}),
+    listAiDiaries: createInvoker(IPC_CHANNELS.listAiDiaries),
+    createAiDiary: createInvoker(IPC_CHANNELS.createAiDiary),
+    updateAiDiary: createInvoker(IPC_CHANNELS.updateAiDiary),
+    deleteAiDiary: (id) => ipcRenderer.invoke(IPC_CHANNELS.deleteAiDiary, {id}),
 });

@@ -23,6 +23,11 @@
 
     --pomo-emboss-hi: rgba(255,255,255,0.70);
     --pomo-emboss-lo: rgba(14,20,32,0.22);
+    --calendar-workday-bg: #eaf1f8;
+    --calendar-sunday-bg: #cfe0ff;
+    --calendar-holiday-bg: #ffc89a;
+    --calendar-selected-color: #0e1420;
+    --calendar-today-color: #2563eb;
 
 }
 
@@ -79,6 +84,10 @@
 :root[data-theme="light"] .settings-pill,
 :root[data-theme="light"] .settings-list__item,
 :root[data-theme="light"] .settings-statusPill,
+:root[data-theme="light"] .calendar-btn,
+:root[data-theme="light"] .calendar-record__btn,
+:root[data-theme="light"] .calendar-modal__close,
+:root[data-theme="light"] .calendar-search__input,
 :root[data-theme="light"] .cards-search__input,
 :root[data-theme="light"] .cards-field__control,
 :root[data-theme="light"] .cards-editorHead,
@@ -139,6 +148,19 @@
 :root[data-theme="light"] .settings-list__item,
 :root[data-theme="light"] .settings-record,
 :root[data-theme="light"] .settings-statusPill,
+:root[data-theme="light"] .calendar-panel,
+:root[data-theme="light"] .calendar-gridHead,
+:root[data-theme="light"] .calendar-resultPanel,
+:root[data-theme="light"] .calendar-resultPanel__head,
+:root[data-theme="light"] .calendar-cell,
+:root[data-theme="light"] .calendar-resultItem,
+:root[data-theme="light"] .calendar-record,
+:root[data-theme="light"] .calendar-empty,
+:root[data-theme="light"] .calendar-btn,
+:root[data-theme="light"] .calendar-record__btn,
+:root[data-theme="light"] .calendar-modal__close,
+:root[data-theme="light"] .calendar-badge,
+:root[data-theme="light"] .calendar-modal__dialog,
 :root[data-theme="light"] .cards-stat,
 :root[data-theme="light"] .cards-panel,
 :root[data-theme="light"] .cards-card,
@@ -186,6 +208,11 @@
 :root[data-theme="light"] .assistant-bubble__expand:hover,
 :root[data-theme="light"] .assistant-runPanel__toggle:hover,
 :root[data-theme="light"] .assistant-chatCard__collapse:hover,
+:root[data-theme="light"] .calendar-btn:hover,
+:root[data-theme="light"] .calendar-record__btn:hover,
+:root[data-theme="light"] .calendar-modal__close:hover,
+:root[data-theme="light"] .calendar-search__input:hover,
+:root[data-theme="light"] .calendar-resultItem:hover,
 :root[data-theme="light"] .cards-search__input:hover,
 :root[data-theme="light"] .cards-field__control:hover,
 :root[data-theme="light"] .cards-toolbarBtn:hover,
@@ -231,6 +258,13 @@
 :root[data-theme="light"] .settings-list__desc,
 :root[data-theme="light"] .settings-inlineMeta,
 :root[data-theme="light"] .settings-record__meta,
+:root[data-theme="light"] .calendar-desc,
+:root[data-theme="light"] .calendar-modal__meta,
+:root[data-theme="light"] .calendar-record__meta,
+:root[data-theme="light"] .calendar-record__body,
+:root[data-theme="light"] .calendar-empty,
+:root[data-theme="light"] .calendar-resultItem__meta,
+:root[data-theme="light"] .calendar-resultPanel__meta,
 :root[data-theme="light"] .cards-desc,
 :root[data-theme="light"] .cards-editorHead__desc,
 :root[data-theme="light"] .cards-form__status,
@@ -271,6 +305,12 @@
 :root[data-theme="light"] .assistant-runPanel__toggle:focus-visible,
 :root[data-theme="light"] .assistant-chatCard__collapse:focus-visible,
 :root[data-theme="light"] .settings-btn:focus-visible,
+:root[data-theme="light"] .calendar-btn:focus-visible,
+:root[data-theme="light"] .calendar-record__btn:focus-visible,
+:root[data-theme="light"] .calendar-modal__close:focus-visible,
+:root[data-theme="light"] .calendar-cell:focus-visible,
+:root[data-theme="light"] .calendar-search__input:focus,
+:root[data-theme="light"] .calendar-resultItem:focus-visible,
 :root[data-theme="light"] .cards-card:focus-visible,
 :root[data-theme="light"] .cards-search__input:focus,
 :root[data-theme="light"] .cards-field__control:focus,
@@ -364,6 +404,73 @@
 
 :root[data-theme="light"] .cards-modal__backdrop{
     background-color: rgba(14,20,32,0.42);
+}
+
+:root[data-theme="light"] .calendar-panel,
+:root[data-theme="light"] .calendar-modal__dialog{
+    background-color: var(--c-panel);
+}
+
+:root[data-theme="light"] .calendar-record,
+:root[data-theme="light"] .calendar-empty,
+:root[data-theme="light"] .calendar-btn,
+:root[data-theme="light"] .calendar-record__btn,
+:root[data-theme="light"] .calendar-modal__close,
+:root[data-theme="light"] .calendar-search__input,
+:root[data-theme="light"] .calendar-resultItem{
+    background-color: var(--c-bg);
+}
+
+:root[data-theme="light"] .calendar-cell{
+    background-color: var(--calendar-workday-bg);
+}
+
+:root[data-theme="light"] .calendar-resultPanel__head{
+    background-color: var(--c-panel);
+}
+
+:root[data-theme="light"] .calendar-cell.is-selected{
+    color: var(--calendar-selected-color);
+}
+
+:root[data-theme="light"] .calendar-cell.is-today{
+    color: var(--calendar-today-color);
+}
+
+:root[data-theme="light"] .calendar-badge--todo{
+    background-color: rgba(37,99,235,0.08);
+}
+
+:root[data-theme="light"] .calendar-badge--diary{
+    background-color: rgba(5,150,105,0.10);
+}
+
+:root[data-theme="light"] .calendar-badge--holiday{
+    background-color: rgba(217,119,6,0.12);
+}
+
+:root[data-theme="light"] .calendar-cell__dot{
+    background-color: var(--c-accent);
+}
+
+:root[data-theme="light"] .calendar-modal__backdrop{
+    background-color: rgba(14,20,32,0.42);
+}
+
+:root[data-theme="light"] .calendar-monthArrow,
+:root[data-theme="light"] .calendar-jump__input{
+    border-color: var(--c-border);
+    background-color: var(--c-bg);
+}
+
+:root[data-theme="light"] .calendar-monthArrow:hover,
+:root[data-theme="light"] .calendar-jump__input:hover{
+    border-color: var(--c-border-strong);
+}
+
+:root[data-theme="light"] .calendar-monthArrow:focus-visible,
+:root[data-theme="light"] .calendar-jump__input:focus{
+    outline-color: var(--c-focus);
 }
 
 /* scrollbars */

@@ -2,20 +2,11 @@ const {ipcRegister} = require("./ipc/ipcRegister");
 
 const fs = require("fs");
 const path = require("path");
-const {app, globalShortcut} = require("electron");
+const {app} = require("electron");
 const {wm} = require("./window/WindowManager.js");
 const {WINDOW_MODE} = require("./config");
-const {createQuickFloatSelectionCoordinator} = require("./quickFloat/selectionCoordinator");
 
 let maintenanceTimer = null;
-let quickFloatSelectionCoordinator = null;
-
-const QUICK_FLOAT_SHORTCUT_CANDIDATES = [
-    "CommandOrControl+Shift+Y",
-    "CommandOrControl+Alt+Y",
-    "CommandOrControl+Shift+J",
-];
-let activeQuickFloatShortcut = "";
 
 app.disableHardwareAcceleration();
 
@@ -37,17 +28,6 @@ function configureElectronStoragePaths() {
     app.commandLine.appendSwitch("disk-cache-size", "1");
 }
 
-function registerQuickFloatToggleShortcut(handler) {
-    for (const accelerator of QUICK_FLOAT_SHORTCUT_CANDIDATES) {
-        const ok = globalShortcut.register(accelerator, handler);
-        if (ok) {
-            activeQuickFloatShortcut = accelerator;
-            return accelerator;
-        }
-    }
-    return "";
-}
-
 configureElectronStoragePaths();
 
 async function runBackgroundMaintenance() {
@@ -60,7 +40,6 @@ async function runBackgroundMaintenance() {
 
 app.whenReady().then(async () => {
     await ipcRegister.registerAll();
-    quickFloatSelectionCoordinator = createQuickFloatSelectionCoordinator({wm, ipcRegister});
     maintenanceTimer = setInterval(() => {
         runBackgroundMaintenance().catch((error) => {
             console.warn("[maintenance] unexpected error:", error?.message || error);
@@ -69,31 +48,9 @@ app.whenReady().then(async () => {
 
     await wm.open("assistant");
 
-    const registeredShortcut = registerQuickFloatToggleShortcut(async () => {
-        const enabled = ipcRegister.toggleQuickFloatFeatureEnabled();
-        if (!enabled) {
-            quickFloatSelectionCoordinator?.stop();
-            quickFloatSelectionCoordinator?.closeQuickFloatWindow();
-        } else {
-            quickFloatSelectionCoordinator?.resetFingerprint();
-            quickFloatSelectionCoordinator?.start();
-            await quickFloatSelectionCoordinator?.monitorSelectionAndTriggerQuickFloat();
-        }
-
-        quickFloatSelectionCoordinator?.notifyFeatureToggled(enabled);
-        console.log(`[quick-float] feature ${enabled ? "enabled" : "disabled"} via ${activeQuickFloatShortcut || "unknown"}`);
-    });
-
-    if (!registeredShortcut) {
-        console.warn(`[shortcut] register failed: ${QUICK_FLOAT_SHORTCUT_CANDIDATES.join(", ")}`);
-    } else {
-        console.log(`[shortcut] registered: ${registeredShortcut}`);
-    }
-
     if (WINDOW_MODE === "devShell") {
         wm.get("assistant").webContents.openDevTools();
     }
-    quickFloatSelectionCoordinator?.start();
 });
 
 app.on("window-all-closed", () => {
@@ -106,6 +63,4 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
-    quickFloatSelectionCoordinator?.stop();
-    globalShortcut.unregisterAll();
 });

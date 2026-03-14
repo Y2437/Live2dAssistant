@@ -105,6 +105,15 @@ function collectByRegex(filePath, regex) {
     return set;
 }
 
+function collectFromFiles(filePaths, regex) {
+    const set = new Set();
+    for (const filePath of filePaths) {
+        const values = collectByRegex(filePath, regex);
+        values.forEach((value) => set.add(value));
+    }
+    return set;
+}
+
 function checkIpcContract() {
     const preloadPath = path.join(ROOT, "src/main/preload.js");
     const handlerPath = path.join(ROOT, "src/main/ipc/ipcRegisterHandlers.js");
@@ -112,9 +121,12 @@ function checkIpcContract() {
         log("IPC invoke/handle 一致性", false, ["preload.js 或 ipcRegisterHandlers.js 缺失"]);
         return;
     }
+    const preloadContent = fs.readFileSync(preloadPath, "utf8");
     const invokes = collectByRegex(preloadPath, /invoke\("([^"]+)"/g);
+    const preloadChannelLiterals = preloadContent.match(/"app:[^"]+"/g) || [];
+    preloadChannelLiterals.forEach((item) => invokes.add(item.slice(1, -1)));
     const handles = collectByRegex(handlerPath, /ipcMain\.handle\("([^"]+)"/g);
-    const missingHandle = [...invokes].filter((item) => item.startsWith("app:") && !handles.has(item));
+    const missingHandle = [...invokes].filter((item) => item.startsWith("app:") && !item.endsWith(":event") && !handles.has(item));
     const missingInvoke = [...handles].filter((item) => item.startsWith("app:") && !invokes.has(item));
 
     const details = [];

@@ -85,11 +85,11 @@
     visibility: hidden;
     pointer-events: none;
 
-    transform: translateY(10px);
+    transform: translateY(14px) scale(0.992);
 
-    transition: opacity 170ms var(--ease-out),
-    transform 170ms var(--ease-out),
-    visibility 0ms linear 170ms;
+    transition: opacity 220ms var(--ease-out),
+    transform 220ms var(--ease-out),
+    visibility 0ms linear 220ms;
 
     will-change: opacity, transform;
 }
@@ -99,10 +99,10 @@
     visibility: visible;
     pointer-events: auto;
 
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
 
-    transition: opacity 170ms var(--ease-out),
-    transform 170ms var(--ease-out),
+    transition: opacity 220ms var(--ease-out),
+    transform 220ms var(--ease-out),
     visibility 0ms linear 0ms;
 }
 

@@ -11,7 +11,11 @@ function normalizeAssistantContext(data) {
             && (item.role === "user" || item.role === "assistant")
             && typeof item.message === "string"
             && item.message.trim() !== "";
-    }).map((item) => ({role: item.role, message: item.message}));
+    }).map((item) => ({
+        role: item.role,
+        message: item.message.trim(),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : "",
+    }));
 }
 
 function normalizeMemoryCategory(value, title = "", content = "") {

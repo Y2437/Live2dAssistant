@@ -3,7 +3,7 @@ const path = require('path');
 const {app,BrowserWindow,ipcMain} = require('electron');
 class WindowManager{
     devMode = WINDOW_MODE === "devShell";
-    independentWindows = new Set(["quickFloat"]);
+    independentWindows = new Set();
     constructor(){
         this.windows =new Map(WINDOW_KEYS.map((key)=>{return [key,null]}));
         this.defs=new Map(WINDOW_KEYS.map((key)=>{return [key,{
@@ -61,32 +61,20 @@ class WindowManager{
         }else{
             if(!selected){
                 const created= await this.create(windowKey);
-                if(windowKey === "quickFloat"){
-                    created.showInactive();
-                }else{
-                    created.show();
-                    created.focus();
-                }
+                created.show();
+                created.focus();
                 return;
             }
             if(selected.isDestroyed()){
                 this.windows.set(windowKey,null);
                 const created= await this.create(windowKey);
-                if(windowKey === "quickFloat"){
-                    created.showInactive();
-                }else{
-                    created.show();
-                    created.focus();
-                }
+                created.show();
+                created.focus();
                 return;
             }
             if(!selected.isDestroyed()){
-                if(windowKey === "quickFloat"){
-                    selected.showInactive();
-                }else{
-                    selected.show();
-                    selected.focus();
-                }
+                selected.show();
+                selected.focus();
             }
         }
     }
@@ -98,21 +86,7 @@ class WindowManager{
         return selected;
     }
     resolveWindowConfig(windowKey, baseConfig){
-        if(windowKey !== "quickFloat"){
-            return baseConfig;
-        }
-        return {
-            ...baseConfig,
-            width: 360,
-            height: 28,
-            minWidth: 360,
-            minHeight: 28,
-            resizable: false,
-            alwaysOnTop: true,
-            frame: false,
-            titleBarStyle: "hidden",
-            autoHideMenuBar: true,
-        };
+        return baseConfig;
     }
     async create(windowKey){
         const definition = this.defs.get(windowKey);

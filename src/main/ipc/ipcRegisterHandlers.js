@@ -1,4 +1,4 @@
-const {ipcMain, BrowserWindow} = require("electron");
+const {ipcMain} = require("electron");
 const AGENT_STREAM_EVENT = "app:agentChatStream:event";
 const activeAgentStreams = new Map();
 
@@ -191,43 +191,24 @@ function registerKnowledgeCardHandlers(registry) {
     ipcMain.handle("app:deleteKnowledgeCard", async (event, cardId) => registry.deleteKnowledgeCardRecord(cardId));
 }
 
-function registerQuickFloatHandlers(registry) {
-    ipcMain.handle("app:getQuickFloatFeatureState", async () => ({
-        enabled: registry.getQuickFloatFeatureEnabled(),
-    }));
-    ipcMain.handle("app:quickFloatCaptureSelectionText", async () => registry.captureSelectedTextFromActiveApp());
-    ipcMain.handle("app:quickTranslateText", async (event, payload) => {
-        const text = typeof payload?.text === "string" ? payload.text : "";
-        const targetLanguage = typeof payload?.targetLanguage === "string" ? payload.targetLanguage : "中文";
-        return registry.runQuickTranslateText(text, targetLanguage);
+function registerCalendarHandlers(registry) {
+    ipcMain.handle("app:loadCalendarPlan", async () => registry.getCalendarPlanData());
+    ipcMain.handle("app:getCalendarDayDetail", async (event, payload) => {
+        const date = typeof payload?.date === "string" ? payload.date : "";
+        return registry.getCalendarDayDetail(date);
     });
-    ipcMain.handle("app:quickExplainText", async (event, payload) => {
-        const text = typeof payload?.text === "string" ? payload.text : "";
-        const targetLanguage = typeof payload?.targetLanguage === "string" ? payload.targetLanguage : "中文";
-        return registry.runQuickExplainText(text, targetLanguage);
+    ipcMain.handle("app:createCalendarTodo", async (event, payload) => registry.createCalendarTodo(payload));
+    ipcMain.handle("app:updateCalendarTodo", async (event, payload) => registry.updateCalendarTodo(payload));
+    ipcMain.handle("app:deleteCalendarTodo", async (event, payload) => {
+        const id = typeof payload?.id === "string" ? payload.id : payload;
+        return registry.deleteCalendarTodo(id);
     });
-    ipcMain.handle("app:quickFloatSetWindowMode", async (event, payload) => {
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (!win || win.isDestroyed()) {
-            return {ok: false};
-        }
-        const expanded = payload?.expanded === true;
-        const widthValue = Number(payload?.width);
-        const heightValue = Number(payload?.height);
-        const width = Number.isFinite(widthValue) ? Math.max(300, Math.floor(widthValue)) : 360;
-        const fallbackHeight = expanded ? 332 : 48;
-        const height = Number.isFinite(heightValue) ? Math.max(28, Math.floor(heightValue)) : fallbackHeight;
-        win.setSize(width, height, true);
-        win.setMinimumSize(width, 28);
-        return {ok: true, width, height, expanded};
-    });
-    ipcMain.handle("app:quickFloatSetInteractionState", async (event, payload) => {
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (!win || win.isDestroyed()) {
-            return {ok: false};
-        }
-        win.__quickFloatInteracting = payload?.interacting === true;
-        return {ok: true};
+    ipcMain.handle("app:listAiDiaries", async (event, payload) => registry.listAiDiaries(payload || {}));
+    ipcMain.handle("app:createAiDiary", async (event, payload) => registry.createAiDiary(payload));
+    ipcMain.handle("app:updateAiDiary", async (event, payload) => registry.updateAiDiary(payload));
+    ipcMain.handle("app:deleteAiDiary", async (event, payload) => {
+        const id = typeof payload?.id === "string" ? payload.id : payload;
+        return registry.deleteAiDiary(id);
     });
 }
 
@@ -241,5 +222,5 @@ module.exports = {
     registerPomodoroHandlers,
     registerClipboardHandlers,
     registerKnowledgeCardHandlers,
-    registerQuickFloatHandlers,
+    registerCalendarHandlers,
 };

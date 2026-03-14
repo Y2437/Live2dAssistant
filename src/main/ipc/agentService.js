@@ -38,6 +38,16 @@ class AgentService {
         this.createPomodoroTask = options.createPomodoroTask;
         this.updatePomodoroTask = options.updatePomodoroTask;
         this.deletePomodoroTask = options.deletePomodoroTask;
+        this.getCalendarDayDetail = options.getCalendarDayDetail;
+        this.listCalendarTodos = options.listCalendarTodos;
+        this.createCalendarTodo = options.createCalendarTodo;
+        this.updateCalendarTodo = options.updateCalendarTodo;
+        this.deleteCalendarTodo = options.deleteCalendarTodo;
+        this.listAiDiaries = options.listAiDiaries;
+        this.createAiDiary = options.createAiDiary;
+        this.updateAiDiary = options.updateAiDiary;
+        this.deleteAiDiary = options.deleteAiDiary;
+        this.currentUserMessage = "";
     }
 
     async ensureReady() {
@@ -348,6 +358,7 @@ class AgentService {
 
     async chatDirect(userMessage, hooks = {}, options = {}) {
         this.ensureNotAborted(hooks.signal);
+        this.currentUserMessage = String(userMessage || "");
         const context = this.getAssistantContext().slice(-8);
         const allowedTools = this.normalizeAllowedTools(options.allowedTools);
         const memories = this.getLongTermMemory().slice(-10).map((item) => ({
@@ -396,154 +407,163 @@ class AgentService {
             }
         }
 
-        const finalContent = await this.streamDirectAnswer({
-            userMessage,
-            context,
-            memories,
-            toolName,
-            toolArgs,
-            toolResult,
-        }, hooks);
+        try {
+            const finalContent = await this.streamDirectAnswer({
+                userMessage,
+                context,
+                memories,
+                toolName,
+                toolArgs,
+                toolResult,
+            }, hooks);
 
-        return {
-            mode: "agent",
-            content: String(finalContent || "").trim() || "我暂时没有生成可用回复。",
-            traces: [],
-        };
+            return {
+                mode: "agent",
+                content: String(finalContent || "").trim() || "我暂时没有生成可用回复。",
+                traces: [],
+            };
+        } finally {
+            this.currentUserMessage = "";
+        }
     }
 
     async chat(userMessage, hooks = {}, options = {}) {
         this.ensureNotAborted(hooks.signal);
+        this.currentUserMessage = String(userMessage || "");
         const traces = [];
         const planningConversation = [];
         const context = this.getAssistantContext().slice(-8);
         const allowedTools = this.normalizeAllowedTools(options.allowedTools);
         const directMode = options.directMode === true;
-        if (directMode) {
-            return await this.chatDirect(userMessage, hooks, options);
-        }
-        const memories = this.getLongTermMemory().slice(-10).map((item) => ({
-            title: item.title,
-            content: summarizeText(item.content, 160),
-        }));
-
-        planningConversation.push({
-            role: "system",
-            content: [
-                {
-                    type: "text",
-                    text: this.buildAgentPlanningSystemPrompt(memories, context, allowedTools),
-                },
-            ],
-        });
-        planningConversation.push({
-            role: "user",
-            content: [{type: "text", text: userMessage}],
-        });
-        await this.emitHook(hooks.onStatus, {phase: "prefetch", message: "Preparing context"});
-        const prefetchPlan = await this.planPrefetchTools(userMessage, context, hooks, allowedTools);
-        await this.runPrefetchTools(userMessage, traces, planningConversation, {
-            plan: prefetchPlan,
-            allowedTools,
-            onTrace: async (trace, nextTraces) => {
-                await this.emitHook(hooks.onTrace, trace, [...nextTraces]);
-            },
-        });
-        this.ensureNotAborted(hooks.signal);
-
-        for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
-            this.ensureNotAborted(hooks.signal);
-            await this.emitHook(hooks.onStatus, {
-                phase: "thinking",
-                step: step + 1,
-                message: `Thinking step ${step + 1}`,
-            });
-            const turn = await this.requestAgentTurn(planningConversation, hooks, {enableThinking: true});
-            const content = turn.content;
-            const action = this.parseAgentResponse(content);
-            await this.pushWorkflowTrace(traces, hooks, this.createThinkingTrace(step, action));
-            if (!action) {
-                return await this.finalizeAgentResponse({
-                    userMessage,
-                    context,
-                    traces,
-                    hooks,
-                    plannerDraft: content || "",
-                    thinkingMode: true,
-                });
+        try {
+            if (directMode) {
+                return await this.chatDirect(userMessage, hooks, options);
             }
-            if (action.type === "final") {
-                return await this.finalizeAgentResponse({
-                    userMessage,
-                    context,
-                    traces,
-                    hooks,
-                    plannerDraft: action.content || content || "",
-                    thinkingMode: true,
-                });
-            }
-            if (action.type !== "tool") {
-                return await this.finalizeAgentResponse({
-                    userMessage,
-                    context,
-                    traces,
-                    hooks,
-                    plannerDraft: content || "",
-                    thinkingMode: true,
-                });
-            }
-
-            const args = normalizeToolArgs(action.args);
-            let toolResult;
-            try {
-                this.ensureNotAborted(hooks.signal);
-                await this.emitHook(hooks.onStatus, {
-                    phase: "tool",
-                    step: step + 1,
-                    tool: action.tool,
-                    message: `Running ${action.tool}`,
-                });
-                toolResult = await this.runTool(action.tool, args, allowedTools);
-                await this.pushWorkflowTrace(traces, hooks, {
-                    tool: action.tool,
-                    status: "success",
-                    input: args,
-                    outputPreview: clampTraceOutput(toolResult),
-                });
-            } catch (error) {
-                toolResult = {
-                    error: error?.message || String(error),
-                };
-                await this.pushWorkflowTrace(traces, hooks, {
-                    tool: action.tool,
-                    status: "error",
-                    input: args,
-                    outputPreview: clampTraceOutput(toolResult),
-                });
-            }
-            this.ensureNotAborted(hooks.signal);
+            const memories = this.getLongTermMemory().slice(-10).map((item) => ({
+                title: item.title,
+                content: summarizeText(item.content, 160),
+            }));
 
             planningConversation.push({
-                role: "assistant",
-                content: [{type: "text", text: JSON.stringify(action)}],
+                role: "system",
+                content: [
+                    {
+                        type: "text",
+                        text: this.buildAgentPlanningSystemPrompt(memories, context, allowedTools),
+                    },
+                ],
             });
             planningConversation.push({
                 role: "user",
-                content: [{
-                    type: "text",
-                    text: `Tool result for ${action.tool}: ${JSON.stringify(toolResult)}`,
-                }],
+                content: [{type: "text", text: userMessage}],
             });
-        }
+            await this.emitHook(hooks.onStatus, {phase: "prefetch", message: "Preparing context"});
+            const prefetchPlan = await this.planPrefetchTools(userMessage, context, hooks, allowedTools);
+            await this.runPrefetchTools(userMessage, traces, planningConversation, {
+                plan: prefetchPlan,
+                allowedTools,
+                onTrace: async (trace, nextTraces) => {
+                    await this.emitHook(hooks.onTrace, trace, [...nextTraces]);
+                },
+            });
+            this.ensureNotAborted(hooks.signal);
 
-        return await this.finalizeAgentResponse({
-            userMessage,
-            context,
-            traces,
-            hooks,
-            plannerDraft: "",
-            thinkingMode: true,
-        });
+            for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
+                this.ensureNotAborted(hooks.signal);
+                await this.emitHook(hooks.onStatus, {
+                    phase: "thinking",
+                    step: step + 1,
+                    message: `Thinking step ${step + 1}`,
+                });
+                const turn = await this.requestAgentTurn(planningConversation, hooks, {enableThinking: true});
+                const content = turn.content;
+                const action = this.parseAgentResponse(content);
+                await this.pushWorkflowTrace(traces, hooks, this.createThinkingTrace(step, action));
+                if (!action) {
+                    return await this.finalizeAgentResponse({
+                        userMessage,
+                        context,
+                        traces,
+                        hooks,
+                        plannerDraft: content || "",
+                        thinkingMode: true,
+                    });
+                }
+                if (action.type === "final") {
+                    return await this.finalizeAgentResponse({
+                        userMessage,
+                        context,
+                        traces,
+                        hooks,
+                        plannerDraft: action.content || content || "",
+                        thinkingMode: true,
+                    });
+                }
+                if (action.type !== "tool") {
+                    return await this.finalizeAgentResponse({
+                        userMessage,
+                        context,
+                        traces,
+                        hooks,
+                        plannerDraft: content || "",
+                        thinkingMode: true,
+                    });
+                }
+
+                const args = normalizeToolArgs(action.args);
+                let toolResult;
+                try {
+                    this.ensureNotAborted(hooks.signal);
+                    await this.emitHook(hooks.onStatus, {
+                        phase: "tool",
+                        step: step + 1,
+                        tool: action.tool,
+                        message: `Running ${action.tool}`,
+                    });
+                    toolResult = await this.runTool(action.tool, args, allowedTools);
+                    await this.pushWorkflowTrace(traces, hooks, {
+                        tool: action.tool,
+                        status: "success",
+                        input: args,
+                        outputPreview: clampTraceOutput(toolResult),
+                    });
+                } catch (error) {
+                    toolResult = {
+                        error: error?.message || String(error),
+                    };
+                    await this.pushWorkflowTrace(traces, hooks, {
+                        tool: action.tool,
+                        status: "error",
+                        input: args,
+                        outputPreview: clampTraceOutput(toolResult),
+                    });
+                }
+                this.ensureNotAborted(hooks.signal);
+
+                planningConversation.push({
+                    role: "assistant",
+                    content: [{type: "text", text: JSON.stringify(action)}],
+                });
+                planningConversation.push({
+                    role: "user",
+                    content: [{
+                        type: "text",
+                        text: `Tool result for ${action.tool}: ${JSON.stringify(toolResult)}`,
+                    }],
+                });
+            }
+
+            return await this.finalizeAgentResponse({
+                userMessage,
+                context,
+                traces,
+                hooks,
+                plannerDraft: "",
+                thinkingMode: true,
+            });
+        } finally {
+            this.currentUserMessage = "";
+        }
     }
 
     async runCapabilitySelfTest(userMessage = "", hooks = {}) {
@@ -558,6 +578,9 @@ class AgentService {
             {tool: "list_card_categories", args: {}},
             {tool: "search_cards", args: {query: userMessage}},
             {tool: "list_pomodoro_tasks", args: {}},
+            {tool: "get_calendar_day_plan", args: {date: new Date().toISOString().slice(0, 10)}},
+            {tool: "list_calendar_todos", args: {}},
+            {tool: "list_ai_diaries", args: {}},
             {tool: "get_clipboard", args: {}},
             {tool: "list_screenshots", args: {}},
             {tool: "get_pomodoro_status", args: {}},
@@ -613,7 +636,7 @@ class AgentService {
                 "",
                 ...results,
                 "",
-                "Skipped state-changing or environment-dependent tools: add_memory, delete_memory, extract_memory, create_card, update_card, delete_card, create_pomodoro_task, update_pomodoro_task, delete_pomodoro_task, capture_screen, analyze_clipboard_image, analyze_image, get_card.",
+                "Skipped state-changing or environment-dependent tools: add_memory, delete_memory, extract_memory, create_card, update_card, delete_card, create_pomodoro_task, update_pomodoro_task, delete_pomodoro_task, create_calendar_todo, update_calendar_todo, delete_calendar_todo, create_ai_diary, update_ai_diary, delete_ai_diary, capture_screen, analyze_clipboard_image, analyze_image, get_card.",
             ].join("\n"),
             traces,
         };
@@ -634,6 +657,62 @@ class AgentService {
 
     getClipboardSnapshot() {
         return visionTools.getClipboardSnapshot();
+    }
+
+    getCurrentTime() {
+        const now = new Date();
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+        const offsetMinutes = -now.getTimezoneOffset();
+        const offsetSign = offsetMinutes >= 0 ? "+" : "-";
+        const absMinutes = Math.abs(offsetMinutes);
+        const offsetHours = String(Math.floor(absMinutes / 60)).padStart(2, "0");
+        const offsetRemainderMinutes = String(absMinutes % 60).padStart(2, "0");
+        const utcOffset = `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`;
+        const localDateTime = new Intl.DateTimeFormat("zh-CN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+        }).format(now);
+
+        return {
+            timestamp: now.getTime(),
+            iso: now.toISOString(),
+            localDateTime,
+            date: localDateTime.slice(0, 10),
+            time: localDateTime.slice(12),
+            timezone,
+            utcOffset,
+        };
+    }
+
+    canGenerateTodayDiaryFromCurrentRequest() {
+        const source = String(this.currentUserMessage || "").trim().toLowerCase();
+        if (!source) {
+            return false;
+        }
+        const hasToday = /(今天|今日|today)/i.test(source);
+        const hasDiary = /ai日记|日记|diary/i.test(source);
+        const hasCreateIntent = /(生成|写|创建|记录|produce|write|create|generate)/i.test(source);
+        const hasExplicitRefusalTarget = /(昨天|昨日|明天|tomorrow|yesterday)/i.test(source);
+        return hasToday && hasDiary && hasCreateIntent && !hasExplicitRefusalTarget;
+    }
+
+    async generateTodayAiDiary(args = {}) {
+        if (!this.canGenerateTodayDiaryFromCurrentRequest()) {
+            throw new Error("Only explicit requests to generate today's AI diary are allowed.");
+        }
+        return await this.createAiDiary({
+            date: new Date().toISOString().slice(0, 10),
+            prompt: typeof args?.prompt === "string" ? args.prompt : "",
+            autoGenerate: true,
+            source: "agent",
+            restrictToTodayContext: true,
+            dedupeByDate: true,
+        });
     }
 
 

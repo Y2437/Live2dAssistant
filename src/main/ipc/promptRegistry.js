@@ -127,6 +127,16 @@ const AGENT_TOOL_SPECS = [
     {name: "create_pomodoro_task", label: "新增番茄钟任务", category: "pomodoro", argsExample: "{\"title\":\"任务\",\"workMinutes\":25,\"restMinutes\":5,\"repeatTimes\":4}", description: "创建番茄钟任务。", mutating: true},
     {name: "update_pomodoro_task", label: "更新番茄钟任务", category: "pomodoro", argsExample: "{\"id\":1,\"title\":\"新任务\",\"workMinutes\":30,\"restMinutes\":5,\"repeatTimes\":4}", description: "更新番茄钟任务。", mutating: true},
     {name: "delete_pomodoro_task", label: "删除番茄钟任务", category: "pomodoro", argsExample: "{\"id\":1}", description: "删除番茄钟任务。", mutating: true},
+    {name: "get_calendar_day_plan", label: "日期详情", category: "calendar", argsExample: "{\"date\":\"2026-03-06\"}", description: "读取某一天的待办、AI日记和节假日详情。", prefetchable: true},
+    {name: "list_calendar_todos", label: "日历待办列表", category: "calendar", argsExample: "{\"date\":\"2026-03-06\"}", description: "按日期或时间区间读取日历待办。", prefetchable: true},
+    {name: "create_calendar_todo", label: "新增日历待办", category: "calendar", argsExample: "{\"title\":\"提交周报\",\"date\":\"2026-03-06\",\"priority\":\"high\"}", description: "创建日历待办。", mutating: true},
+    {name: "update_calendar_todo", label: "更新日历待办", category: "calendar", argsExample: "{\"id\":\"todo-1\",\"status\":\"done\"}", description: "更新日历待办。", mutating: true},
+    {name: "delete_calendar_todo", label: "删除日历待办", category: "calendar", argsExample: "{\"id\":\"todo-1\"}", description: "删除日历待办。", mutating: true},
+    {name: "list_ai_diaries", label: "AI日记列表", category: "calendar", argsExample: "{\"date\":\"2026-03-06\"}", description: "按日期读取 AI 自有日记。", prefetchable: true},
+    {name: "generate_today_ai_diary", label: "生成今日日记", category: "calendar", argsExample: "{\"prompt\":\"可选补充提示\"}", description: "仅当用户明确要求生成或写今天的 AI 日记时使用，自动写入日程安排模块。", mutating: true},
+    {name: "update_ai_diary", label: "更新AI日记", category: "calendar", argsExample: "{\"id\":\"diary-1\",\"title\":\"新标题\"}", description: "更新 AI 日记。", mutating: true},
+    {name: "delete_ai_diary", label: "删除AI日记", category: "calendar", argsExample: "{\"id\":\"diary-1\"}", description: "删除 AI 日记。", mutating: true},
+    {name: "get_current_time", label: "当前时间", category: "system", argsExample: "{}", description: "读取当前本地时间、日期、时区和 ISO 时间。", prefetchable: true},
     {name: "get_clipboard", label: "剪贴板", category: "clipboard", argsExample: "{}", description: "读取剪贴板文字与图片状态。", prefetchable: true},
     {name: "analyze_clipboard_image", label: "分析剪贴板图片", category: "vision", argsExample: "{\"prompt\":\"optional\"}", description: "分析剪贴板中的图片。"},
     {name: "web_search", label: "联网搜索", category: "web", argsExample: "{\"query\":\"keyword\"}", description: "搜索网页并返回标题、摘要和正文摘录。", prefetchable: true},
@@ -137,6 +147,17 @@ const AGENT_TOOL_SPECS = [
 ];
 
 const VISION_ANALYSIS_SYSTEM_PROMPT = "你是图像分析工具。请只输出简洁、客观、准确的中文观察结果，不要编造。";
+const AI_DIARY_WRITER_SYSTEM_PROMPT = [
+    "你是 Live2D 助手 Hiyori 的日记记录器。",
+    "你的任务是根据给定日期与上下文写一段 AI 自己的日记，不是用户日记。",
+    "只输出 JSON，不要输出额外解释。",
+    "格式必须是：{\"title\":\"...\",\"content\":\"...\",\"mood\":\"...\"}",
+    "要求：",
+    "1. title 8~24 字，像自然日记标题。",
+    "2. content 80~260 字，第一人称“我”，语气自然，不要编造不可验证事实。",
+    "3. mood 使用 1~2 个中文词，如“平静”“兴奋”“疲惫”。",
+    "4. 如果上下文不足，也要写出简洁且诚实的日记，不要空内容。",
+].join("\n");
 const DEFAULT_IMAGE_ANALYSIS_PROMPT = "请描述这张图片中的关键信息。";
 const DEFAULT_CLIPBOARD_IMAGE_PROMPT = "请分析剪贴板中的这张图片。";
 const NO_RECENT_CONTEXT_TEXT = "没有最近对话上下文。";
@@ -412,11 +433,33 @@ function buildMemoryExtractionMessages(contextItems = []) {
     ];
 }
 
+function buildAiDiaryWriterMessages({
+    date = "",
+    prompt = "",
+    contextText = "无额外上下文。",
+} = {}) {
+    return [
+        {
+            role: "system",
+            message: AI_DIARY_WRITER_SYSTEM_PROMPT,
+        },
+        {
+            role: "user",
+            message: [
+                `日期：${date || "未知日期"}`,
+                `补充提示：${prompt || "无"}`,
+                `上下文：${contextText || "无额外上下文。"}`,
+            ].join("\n"),
+        },
+    ];
+}
+
 module.exports = {
     ASSISTANT_PERSONA_PROMPT,
     ASSISTANT_FINAL_ANSWER_RULES,
     AGENT_TOOL_SPECS,
     VISION_ANALYSIS_SYSTEM_PROMPT,
+    AI_DIARY_WRITER_SYSTEM_PROMPT,
     DEFAULT_IMAGE_ANALYSIS_PROMPT,
     DEFAULT_CLIPBOARD_IMAGE_PROMPT,
     NO_RECENT_CONTEXT_TEXT,
@@ -436,4 +479,5 @@ module.exports = {
     buildAgentDirectFinalPrompt,
     buildKnowledgeCardSummaryMessages,
     buildMemoryExtractionMessages,
+    buildAiDiaryWriterMessages,
 };

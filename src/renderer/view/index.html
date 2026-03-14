@@ -10,6 +10,7 @@
     <script type="module" src="../js/cards/index.js" defer></script>
     <script type="module" src="../js/pomodoro/index.js" defer></script>
     <script type="module" src="../js/clipboard/index.js" defer></script>
+    <script type="module" src="../js/calendar/index.js" defer></script>
     <script type="module" src="../js/shell/app.js" defer></script>
     <link rel="stylesheet" href="../css/theme/light.css">
     <link rel="stylesheet" href="../css/theme/dark.css">
@@ -20,6 +21,7 @@
     <link rel="stylesheet" href="../css/style/pomodoro.css">
     <link rel="stylesheet" href="../css/style/cards.css">
     <link rel="stylesheet" href="../css/style/clipboard.css">
+    <link rel="stylesheet" href="../css/style/calendar.css">
 </head>
 <body>
 <div class="shell">
@@ -29,6 +31,7 @@
             <button class="nav__btn" type="button" data-view="assistant">看板娘</button>
             <button class="nav__btn" type="button" data-view="pomodoro">番茄钟</button>
             <button class="nav__btn" type="button" data-view="cards">知识卡片箱</button>
+            <button class="nav__btn" type="button" data-view="calendar">日历计划</button>
             <button class="nav__btn" type="button" data-view="clipboard">剪贴板管理器</button>
         </div>
         <div class="nav__footer">
@@ -135,7 +138,7 @@
                             <button type="button" class="assistant-actionBtn" data-action="pomodoro">番茄钟</button>
                             <button type="button" class="assistant-actionBtn" data-action="cards">知识卡片</button>
                             <button type="button" class="assistant-actionBtn" data-action="clipboard">剪贴板</button>
-                            <button type="button" class="assistant-actionBtn" data-action="quickFloat">悬浮翻译窗</button>
+                            <button type="button" class="assistant-actionBtn" data-local-view="calendar">日历计划</button>
                             <button type="button" class="assistant-actionBtn" data-local-view="settings">记忆设置</button>
                         </div>
                     </div>
@@ -382,6 +385,82 @@
                 </div>
             </div>
         </section>
+        <section class="view" data-view="calendar">
+            <div class="view__mount" data-mount>
+                <div class="calendar-root">
+                    <section class="placeholder-card calendar-shell">
+                        <header class="calendar-head">
+                            <div class="calendar-titleWrap">
+                                <p class="calendar-eyebrow">Calendar Plan</p>
+                                <h3 class="calendar-title" data-role="calendar-title">日历计划</h3>
+                                <p class="calendar-desc">点击日期查看当日待办、AI 日记和节假日信息。徽章会直接标识当日状态。</p>
+                            </div>
+                            <div class="calendar-jump">
+                                <label class="calendar-jump__field">
+                                    <span class="calendar-jump__label">快速跳转日期</span>
+                                    <input type="date" class="calendar-jump__input" data-role="calendar-jump-date" />
+                                </label>
+                                <div class="calendar-jump__actions">
+                                    <button type="button" class="calendar-btn calendar-btn--small" data-role="calendar-jump-today">今天</button>
+                                    <button type="button" class="calendar-btn calendar-btn--small" data-role="calendar-jump-date-btn">跳转</button>
+                                </div>
+                            </div>
+                        </header>
+                        <div class="calendar-legend">
+                            <span class="calendar-legend__item calendar-badge calendar-badge--todo">待办</span>
+                            <span class="calendar-legend__item calendar-badge calendar-badge--diary">AI日记</span>
+                            <span class="calendar-legend__item calendar-badge calendar-badge--holiday">节假日</span>
+                        </div>
+                        <section class="calendar-stage">
+                            <button type="button" class="calendar-monthArrow calendar-monthArrow--left" data-role="calendar-prev-month" aria-label="上个月">
+                                <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+                                    <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5"/>
+                                </svg>
+                            </button>
+                            <section class="calendar-panel">
+                                <div class="calendar-gridHead" data-role="calendar-grid-head"></div>
+                                <div class="calendar-grid" data-role="calendar-grid"></div>
+                            </section>
+                            <button type="button" class="calendar-monthArrow calendar-monthArrow--right" data-role="calendar-next-month" aria-label="下个月">
+                                <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+                                    <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5"/>
+                                </svg>
+                            </button>
+                        </section>
+                    </section>
+                    <div class="calendar-modal" data-role="calendar-modal" hidden>
+                        <div class="calendar-modal__backdrop" data-role="calendar-close"></div>
+                        <article class="calendar-modal__dialog" aria-modal="true" role="dialog" aria-label="日历日期详情">
+                            <button type="button" class="calendar-modal__close" data-role="calendar-close" aria-label="关闭详情">
+                                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                    <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                            </button>
+                            <header class="calendar-modal__head">
+                                <h4 class="calendar-modal__title" data-role="calendar-modal-title"></h4>
+                                <p class="calendar-modal__meta" data-role="calendar-modal-meta"></p>
+                                <div class="calendar-modal__badges" data-role="calendar-modal-badges"></div>
+                            </header>
+                            <div class="calendar-modal__layout">
+                                <section class="calendar-modal__section">
+                                    <div class="calendar-modal__sectionHead">
+                                        <h5 class="calendar-modal__sectionTitle">用户待办</h5>
+                                        <button type="button" class="calendar-btn calendar-btn--small" data-role="calendar-add-todo">新增待办</button>
+                                    </div>
+                                    <div class="calendar-modal__list" data-role="calendar-todo-list"></div>
+                                </section>
+                                <section class="calendar-modal__section">
+                                    <div class="calendar-modal__sectionHead">
+                                        <h5 class="calendar-modal__sectionTitle">AI 日记</h5>
+                                    </div>
+                                    <div class="calendar-modal__list" data-role="calendar-diary-list"></div>
+                                </section>
+                            </div>
+                        </article>
+                    </div>
+                </div>
+            </div>
+        </section>
         <section class="view" data-view="clipboard">
             <h2 class="view__title">剪贴板管理器</h2>
             <div class="view__mount" data-mount>
@@ -430,6 +509,7 @@
                                         <option value="assistant">看板娘</option>
                                         <option value="pomodoro">番茄钟</option>
                                         <option value="cards">知识卡片箱</option>
+                                        <option value="calendar">日历计划</option>
                                         <option value="clipboard">剪贴板管理器</option>
                                         <option value="settings">设置</option>
                                     </select>

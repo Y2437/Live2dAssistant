@@ -11,6 +11,7 @@ const AI_LONG_TERM_MEMORY_JSON_PATH = path.join(app.getPath("userData"), "assist
 const KNOWLEDGE_CARDS_JSON_PATH = path.join(app.getPath("userData"), "knowledge-cards.json");
 const AI_MEMORY_ROUTINE_JSON_PATH = path.join(app.getPath("userData"), "assistant-memory-routine.json");
 const CLIPBOARD_HISTORY_JSON_PATH = path.join(app.getPath("userData"), "clipboard-history.json");
+const CALENDAR_PLAN_JSON_PATH = path.join(app.getPath("userData"), "calendar-plan.json");
 const AGENT_SCREENSHOT_DIR_PATH = path.join(app.getPath("userData"), "agent-screenshots");
 const PROJECT_ROOT = path.resolve(__dirname, "../../..");
 const WINDOW_KEYS = [
@@ -18,7 +19,6 @@ const WINDOW_KEYS = [
     'pomodoro',
     'cards',
     'clipboard',
-    'quickFloat',
     'devShell',  //作为测试模式的主窗口
 ]
 const WINDOW_FILE_MAP = {
@@ -26,7 +26,6 @@ const WINDOW_FILE_MAP = {
     pomodoro: path.join(__dirname, "../../renderer/view/pomodoro.html"),
     cards: path.join(__dirname, "../../renderer/view/cards.html"),
     clipboard: path.join(__dirname, "../../renderer/view/clipboard.html"),
-    quickFloat: path.join(__dirname, "../../renderer/view/quickFloat.html"),
     devShell: path.join(__dirname, "../../renderer/view/index.html"),
 };
 const AI_TOUCH_RESPONSE = {
@@ -112,6 +111,31 @@ const AI_TOUCH_RESPONSE = {
     }
 }
 const AI_CHAT_SYSTEM_PROMPT = ASSISTANT_PERSONA_PROMPT;
+const IPC_RUNTIME_CONFIG = {
+    emotionLogPrefix: "[emotion-pipeline]",
+    maxContextMessages: 128,
+    clipboardMaxItems: 120,
+    memoryExtractionContextWindow: 16,
+    aiDiaryContextWindow: 8,
+    modelParams: {
+        memoryExtraction: {
+            temperature: 0.2,
+            maxTokens: 512,
+        },
+        emotionExtraction: {
+            temperature: 0,
+            maxTokens: 180,
+        },
+        knowledgeCardSummary: {
+            temperature: 0.2,
+            maxTokens: 96,
+        },
+        aiDiary: {
+            temperature: 0.45,
+            maxTokens: 1000,
+        },
+    },
+};
 module.exports = {
     WIDTH,
     HEIGHT,
@@ -126,7 +150,9 @@ module.exports = {
     KNOWLEDGE_CARDS_JSON_PATH,
     AI_MEMORY_ROUTINE_JSON_PATH,
     CLIPBOARD_HISTORY_JSON_PATH,
+    CALENDAR_PLAN_JSON_PATH,
     AGENT_SCREENSHOT_DIR_PATH,
     PROJECT_ROOT,
     ENV_CONFIG,
+    IPC_RUNTIME_CONFIG,
 };

@@ -361,6 +361,19 @@ function renderBubble(text, type = "chat", options = {}) {
     toggleBubbleVisibility(true);
 }
 
+function formatChatTimestamp(value = new Date()) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+    return new Intl.DateTimeFormat("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+    }).format(date);
+}
+
 function makeChatEntry(role, initialText = "", status = "") {
     if (!dom.chatLog) {
         return {
@@ -370,10 +383,14 @@ function makeChatEntry(role, initialText = "", status = "") {
     }
     const entry = document.createElement("article");
     entry.className = "assistant-chatEntry";
+    const timestampText = formatChatTimestamp();
     entry.innerHTML = `
         <div class="assistant-chatEntry__meta">
             <span class="assistant-chatEntry__role">${role}</span>
-            <span class="assistant-chatEntry__status">${status}</span>
+            <div class="assistant-chatEntry__metaRight">
+                <span class="assistant-chatEntry__time" title="${timestampText}">${timestampText}</span>
+                <span class="assistant-chatEntry__status">${status}</span>
+            </div>
         </div>
         <div class="assistant-chatEntry__content"></div>
     `;

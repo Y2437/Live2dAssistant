@@ -5,6 +5,7 @@ const {buildAssistantChatMessages} = require("./assistantPrompt");
 const {
     buildKnowledgeCardSummaryMessages: buildKnowledgeCardSummaryPromptMessages,
     buildMemoryExtractionMessages: buildMemoryExtractionPromptMessages,
+    buildAiDiaryWriterMessages: buildAiDiaryWriterPromptMessages,
 } = require("./promptRegistry");
 const {
     normalizeAssistantContext,
@@ -30,7 +31,7 @@ const {
     registerPomodoroHandlers,
     registerClipboardHandlers,
     registerKnowledgeCardHandlers,
-    registerQuickFloatHandlers,
+    registerCalendarHandlers,
 } = require("./ipcRegisterHandlers");
 const {
     ensurePomodoroJson,
@@ -40,6 +41,19 @@ const {
     deletePomodoroTaskRecord,
 } = require("./pomodoroStore");
 const {createClipboardStore} = require("./clipboardStore");
+const {
+    ensureCalendarPlanJson,
+    readCalendarData,
+    listCalendarTodos,
+    createCalendarTodoRecord,
+    updateCalendarTodoRecord,
+    deleteCalendarTodoRecord,
+    listAiDiaries,
+    createAiDiaryRecord,
+    updateAiDiaryRecord,
+    deleteAiDiaryRecord,
+    getCalendarDayDetail,
+} = require("./calendarStore");
 const fs = require("fs/promises");
 const {execFile} = require("child_process");
 const {promisify} = require("util");
@@ -53,11 +67,13 @@ const {
     KNOWLEDGE_CARDS_JSON_PATH,
     AI_MEMORY_ROUTINE_JSON_PATH,
     CLIPBOARD_HISTORY_JSON_PATH,
+    CALENDAR_PLAN_JSON_PATH,
     ENV_CONFIG,
+    IPC_RUNTIME_CONFIG,
 } = require('../config');
 // Main-process IPC orchestration for chat, memory, cards, and agent wiring.
 class IpcRegister{
-    static EMOTION_LOG_PREFIX = "[emotion-pipeline]";
+    static EMOTION_LOG_PREFIX = IPC_RUNTIME_CONFIG.emotionLogPrefix;
     static assistantContext = [];
     static assistantLongTermMemory = [];
     static longTermMemoryFingerprintIndex = new Map();
@@ -72,9 +88,9 @@ class IpcRegister{
         dataPath: CLIPBOARD_HISTORY_JSON_PATH,
         clipboard,
         nativeImage,
-        maxItems: 120,
+        maxItems: IPC_RUNTIME_CONFIG.clipboardMaxItems,
     });
-    static MAX_CONTEXT_MESSAGES = 48;
+    static MAX_CONTEXT_MESSAGES = IPC_RUNTIME_CONFIG.maxContextMessages;
     static agentService = null;
     static memoryRoutineMeta = {
         lastExtractionDate: "",
@@ -85,7 +101,6 @@ class IpcRegister{
         lastError: "",
     };
     static execFileAsync = promisify(execFile);
-    static quickFloatFeatureEnabled = true;
     constructor(ipc){
     }
     static buildAiChatMessages(message){
@@ -340,7 +355,7 @@ class IpcRegister{
         }
     }
     static async extractLongTermMemoriesFromContext(){
-        const contextItems = this.assistantContext.slice(-16);
+        const contextItems = this.assistantContext.slice(-IPC_RUNTIME_CONFIG.memoryExtractionContextWindow);
         if(!contextItems.length){
             this.memoryRoutineMeta = {
                 ...this.memoryRoutineMeta,
@@ -364,8 +379,7 @@ class IpcRegister{
         }
         const response = await aiChatWithModel(this.buildMemoryExtractionMessages(contextItems), {
             model,
-            temperature: 0.2,
-            maxTokens: 512,
+            ...IPC_RUNTIME_CONFIG.modelParams.memoryExtraction,
         });
         const raw = this.getAssistantReplyContent(response);
         const parsed = this.parseJsonObject(raw);
@@ -471,10 +485,46 @@ class IpcRegister{
     static getAssistantReplyContent(response){
         return response?.choices?.[0]?.message?.content ?? "";
     }
+    static createAssistantContextRecord(role, message, createdAt = new Date().toISOString()){
+        return {
+            role,
+            message: String(message || "").trim(),
+            createdAt: typeof createdAt === "string" ? createdAt : new Date(createdAt).toISOString(),
+        };
+    }
+    static getLocalDateKey(value = new Date()){
+        const date = value instanceof Date ? value : new Date(value);
+        if(Number.isNaN(date.getTime())){
+            return "";
+        }
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    }
+    static shiftDateKey(dateKey, offsetDays = 0){
+        const [year, month, day] = String(dateKey || "").split("-").map((item)=>Number(item));
+        const date = new Date(year, (month || 1) - 1, day || 1);
+        date.setDate(date.getDate() + Number(offsetDays || 0));
+        return this.getLocalDateKey(date);
+    }
+    static getAssistantContextByDate(dateKey){
+        const targetDate = String(dateKey || "").trim();
+        if(!targetDate){
+            return [];
+        }
+        return this.assistantContext.filter((item)=>{
+            if(typeof item?.createdAt !== "string" || !item.createdAt){
+                return false;
+            }
+            return this.getLocalDateKey(item.createdAt) === targetDate;
+        });
+    }
     static async recordAssistantExchange(userMessage, assistantMessage){
-        this.assistantContext.push({role: "user", message: userMessage});
+        const createdAt = new Date().toISOString();
+        this.assistantContext.push(this.createAssistantContextRecord("user", userMessage, createdAt));
         if(assistantMessage){
-            this.assistantContext.push({role: "assistant", message: assistantMessage});
+            this.assistantContext.push(this.createAssistantContextRecord("assistant", assistantMessage, createdAt));
         }
         this.trimAssistantContext();
         await this.saveAssistantContext();
@@ -549,159 +599,6 @@ class IpcRegister{
                 // ignore unsupported format writes
             }
         }
-    }
-    static async triggerSystemCopyShortcut(){
-        if(process.platform !== "win32"){
-            return;
-        }
-        const script = "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('^c')";
-        await this.execFileAsync("powershell", ["-NoProfile", "-Command", script], {windowsHide: true});
-    }
-    static normalizeSelectedText(value){
-        return String(value || "")
-            .replace(/\r/g, "")
-            .replace(/\u0000/g, "")
-            .trim();
-    }
-    static async captureSelectedTextFromUiAutomation(){
-        if(process.platform !== "win32"){
-            return {text: "", source: "unsupported-platform", anchor: null};
-        }
-        const script = [
-            "Add-Type -AssemblyName UIAutomationClient",
-            "$focused=[System.Windows.Automation.AutomationElement]::FocusedElement",
-            "if($null -eq $focused){",
-            "$obj=@{text='';anchor=$null}; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Write-Output ($obj | ConvertTo-Json -Compress); return",
-            "}",
-            "$text=''",
-            "$anchor=$null",
-            "try {",
-            "$pattern=$focused.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)",
-            "if($null -ne $pattern){",
-            "$ranges=$pattern.GetSelection()",
-            "if($null -ne $ranges -and $ranges.Length -gt 0){",
-            "$range=$ranges[0]",
-            "$text=$range.GetText(-1)",
-            "$rects=$range.GetBoundingRectangles()",
-            "if($null -ne $rects -and $rects.Length -ge 4){",
-            "$lastBlock=[math]::Floor(($rects.Length / 4) - 1)",
-            "$i=[int]($lastBlock * 4)",
-            "$x=[double]$rects[$i]",
-            "$y=[double]$rects[$i+1]",
-            "$w=[double]$rects[$i+2]",
-            "$h=[double]$rects[$i+3]",
-            "$anchor=@{ x=[int][math]::Round($x + $w); y=[int][math]::Round($y + $h) }",
-            "}",
-            "}",
-            "}",
-            "} catch {}",
-            "$obj=@{text=$text;anchor=$anchor}",
-            "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8",
-            "Write-Output ($obj | ConvertTo-Json -Compress -Depth 4)",
-        ].join("; ");
-        try{
-            const {stdout} = await this.execFileAsync("powershell", ["-NoProfile", "-Command", script], {
-                windowsHide: true,
-                maxBuffer: 1024 * 1024,
-            });
-            const raw = String(stdout || "").trim();
-            let parsed = {};
-            if(raw){
-                try{
-                    parsed = JSON.parse(raw);
-                }catch(err){
-                    parsed = {text: raw, anchor: null};
-                }
-            }
-            const anchor = parsed?.anchor && Number.isFinite(Number(parsed.anchor.x)) && Number.isFinite(Number(parsed.anchor.y))
-                ? {x: Number(parsed.anchor.x), y: Number(parsed.anchor.y)}
-                : null;
-            return {
-                text: this.normalizeSelectedText(parsed?.text || ""),
-                source: "uia-selection",
-                anchor,
-            };
-        }catch(err){
-            return {text: "", source: "uia-error", anchor: null};
-        }
-    }
-    static async captureSelectedTextFromActiveApp(){
-        const uiSelection = await this.captureSelectedTextFromUiAutomation();
-        if(uiSelection.text){
-            return uiSelection;
-        }
-        throw new Error("No selected text detected by UIAutomation.");
-    }
-    static setQuickFloatFeatureEnabled(enabled){
-        this.quickFloatFeatureEnabled = enabled !== false;
-        return this.quickFloatFeatureEnabled;
-    }
-    static toggleQuickFloatFeatureEnabled(){
-        this.quickFloatFeatureEnabled = !this.quickFloatFeatureEnabled;
-        return this.quickFloatFeatureEnabled;
-    }
-    static getQuickFloatFeatureEnabled(){
-        return this.quickFloatFeatureEnabled;
-    }
-    static buildQuickTranslateMessages(text, targetLanguage = "中文"){
-        const source = String(text || "").trim();
-        const target = String(targetLanguage || "").trim() || "中文";
-        if(!source){
-            throw new Error("Text is required.");
-        }
-        return [
-            {
-                role: "system",
-                content: "你是翻译助手。只输出翻译结果本身，不要解释，不要加前后缀,不要使用md格式。",
-            },
-            {
-                role: "user",
-                content: `请把下面文本翻译成${target}：\n${source}`,
-            },
-        ];
-    }
-    static buildQuickExplainMessages(text, targetLanguage = "中文"){
-        const source = String(text || "").trim();
-        const target = String(targetLanguage || "").trim() || "中文";
-        if(!source){
-            throw new Error("Text is required.");
-        }
-        return [
-            {
-                role: "system",
-                content: "你是解释助手。给出简洁、易懂的解释，可包含关键词释义。不要编造来源,不要使用md格式",
-            },
-            {
-                role: "user",
-                content: `请用${target}解释下面文本的含义，并保持简洁：\n${source}`,
-            },
-        ];
-    }
-    static async runQuickTranslateText(text, targetLanguage = "中文"){
-        const messages = this.buildQuickTranslateMessages(text, targetLanguage);
-        const response = await aiChatWithModel(messages, {
-            model: ENV_CONFIG.AI_MODEL,
-            temperature: 0.1,
-            maxTokens: 1024,
-        });
-        return {
-            text: this.getAssistantReplyContent(response).trim(),
-            model: ENV_CONFIG.AI_MODEL,
-            mode: "translate",
-        };
-    }
-    static async runQuickExplainText(text, targetLanguage = "中文"){
-        const messages = this.buildQuickExplainMessages(text, targetLanguage);
-        const response = await aiChatWithModel(messages, {
-            model: ENV_CONFIG.AI_MODEL,
-            temperature: 0.2,
-            maxTokens: 1024,
-        });
-        return {
-            text: this.getAssistantReplyContent(response).trim(),
-            model: ENV_CONFIG.AI_MODEL,
-            mode: "explain",
-        };
     }
     static parseEmotionExtractionJson(text){
         const value = String(text || "").trim();
@@ -806,8 +703,7 @@ class IpcRegister{
                 },
             ], {
                 model,
-                temperature: 0,
-                maxTokens: 180,
+                ...IPC_RUNTIME_CONFIG.modelParams.emotionExtraction,
             });
             const raw = this.getAssistantReplyContent(response);
             console.log(`${this.EMOTION_LOG_PREFIX} step3 model-raw`, raw);
@@ -876,8 +772,7 @@ class IpcRegister{
             });
             const response = await aiChatWithModel(this.buildKnowledgeCardSummaryMessages(data), {
                 model,
-                temperature: 0.2,
-                maxTokens: 96,
+                ...IPC_RUNTIME_CONFIG.modelParams.knowledgeCardSummary,
             });
             const summary = this.getAssistantReplyContent(response)
                 .replace(/\s+/g, " ")
@@ -975,6 +870,151 @@ class IpcRegister{
         this.touchKnowledgeCardsCache();
         return this.getKnowledgeCardsData();
     }
+    static async ensureCalendarPlanJson(dataPath){
+        return await ensureCalendarPlanJson(dataPath);
+    }
+    static async getCalendarPlanData(){
+        return await readCalendarData(CALENDAR_PLAN_JSON_PATH);
+    }
+    static async getCalendarDayDetail(date){
+        return await getCalendarDayDetail(CALENDAR_PLAN_JSON_PATH, date);
+    }
+    static async listCalendarTodos(filters = {}){
+        return await listCalendarTodos(CALENDAR_PLAN_JSON_PATH, filters);
+    }
+    static async createCalendarTodo(payload = {}){
+        return await createCalendarTodoRecord(CALENDAR_PLAN_JSON_PATH, payload);
+    }
+    static async updateCalendarTodo(payload = {}){
+        return await updateCalendarTodoRecord(CALENDAR_PLAN_JSON_PATH, payload);
+    }
+    static async deleteCalendarTodo(id){
+        return await deleteCalendarTodoRecord(CALENDAR_PLAN_JSON_PATH, id);
+    }
+    static async listAiDiaries(filters = {}){
+        return await listAiDiaries(CALENDAR_PLAN_JSON_PATH, filters);
+    }
+    static async findAiDiaryByDate(date){
+        const result = await this.listAiDiaries({date});
+        return Array.isArray(result?.items) && result.items.length ? result.items[0] : null;
+    }
+    static buildAiDiaryWriterMessages(payload = {}){
+        const date = typeof payload?.date === "string" && payload.date.trim()
+            ? payload.date.trim()
+            : new Date().toISOString().slice(0, 10);
+        const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : "";
+        const sourceContextItems = Array.isArray(payload?.contextItems)
+            ? payload.contextItems
+            : (
+                payload?.restrictToTodayContext === true
+                    ? this.getAssistantContextByDate(this.getLocalDateKey(new Date()))
+                    : this.assistantContext.slice(-IPC_RUNTIME_CONFIG.aiDiaryContextWindow)
+            );
+        const contextText = sourceContextItems
+            .map((item)=>{
+                const timePart = typeof item?.createdAt === "string" && item.createdAt
+                    ? `[${this.getLocalDateKey(item.createdAt)} ${new Date(item.createdAt).toLocaleTimeString("zh-CN", {hour12: false})}] `
+                    : "";
+                return `${timePart}${item.role}: ${item.message}`;
+            })
+            .join("\n") || "无额外上下文。";
+        return buildAiDiaryWriterPromptMessages({
+            date,
+            prompt,
+            contextText,
+        });
+    }
+    static async resolveAiDiaryContent(payload = {}){
+        const directContent = typeof payload?.content === "string" ? payload.content.trim() : "";
+        if(directContent && payload?.autoGenerate !== true){
+            return {
+                title: typeof payload?.title === "string" ? payload.title.trim() : "AI 日记",
+                content: directContent,
+                mood: typeof payload?.mood === "string" ? payload.mood.trim() : "",
+            };
+        }
+        const model = ENV_CONFIG.AI_SUMMARY_MODEL || ENV_CONFIG.AI_MODEL;
+        if(!model){
+            throw new Error("Missing model configuration for AI diary.");
+        }
+        const response = await aiChatWithModel(this.buildAiDiaryWriterMessages(payload), {
+            model,
+            ...IPC_RUNTIME_CONFIG.modelParams.aiDiary,
+        });
+        const raw = this.getAssistantReplyContent(response);
+        const parsed = this.parseJsonObject(raw);
+        if(parsed && typeof parsed === "object"){
+            const title = typeof parsed?.title === "string" && parsed.title.trim()
+                ? parsed.title.trim()
+                : (typeof payload?.title === "string" && payload.title.trim() ? payload.title.trim() : "AI 日记");
+            const content = typeof parsed?.content === "string" && parsed.content.trim()
+                ? parsed.content.trim()
+                : raw.trim();
+            const mood = typeof parsed?.mood === "string" ? parsed.mood.trim() : (typeof payload?.mood === "string" ? payload.mood.trim() : "");
+            if(!content){
+                throw new Error("AI diary generation returned empty content.");
+            }
+            return {title, content, mood};
+        }
+        if(!raw.trim()){
+            throw new Error("AI diary generation returned empty content.");
+        }
+        return {
+            title: typeof payload?.title === "string" && payload.title.trim() ? payload.title.trim() : "AI 日记",
+            content: raw.trim(),
+            mood: typeof payload?.mood === "string" ? payload.mood.trim() : "",
+        };
+    }
+    static async createAiDiary(payload = {}){
+        const date = typeof payload?.date === "string" && payload.date.trim()
+            ? payload.date.trim()
+            : new Date().toISOString().slice(0, 10);
+        if(payload?.dedupeByDate === true){
+            const existing = await this.findAiDiaryByDate(date);
+            if(existing){
+                return {
+                    item: existing,
+                    data: await readCalendarData(CALENDAR_PLAN_JSON_PATH, {useRemote: false}),
+                    reused: true,
+                };
+            }
+        }
+        const resolved = await this.resolveAiDiaryContent(payload);
+        return await createAiDiaryRecord(CALENDAR_PLAN_JSON_PATH, {
+            ...payload,
+            date,
+            title: resolved.title,
+            content: resolved.content,
+            mood: resolved.mood,
+        });
+    }
+    static async maybeGenerateYesterdayAiDiaryOnStartup(){
+        const today = this.getLocalDateKey(new Date());
+        const yesterday = this.shiftDateKey(today, -1);
+        const yesterdayContext = this.getAssistantContextByDate(yesterday);
+        if(!yesterdayContext.length){
+            return {ok: true, skipped: "no-context", date: yesterday};
+        }
+        const existing = await this.findAiDiaryByDate(yesterday);
+        if(existing){
+            return {ok: true, skipped: "already-exists", date: yesterday, diaryId: existing.id};
+        }
+        const result = await this.createAiDiary({
+            date: yesterday,
+            autoGenerate: true,
+            dedupeByDate: true,
+            source: "startup-routine",
+            prompt: "请根据昨天的真实对话记录生成一篇 AI 日记，内容要诚实、自然，并与昨天发生的交流一致。",
+            contextItems: yesterdayContext,
+        });
+        return {ok: true, created: true, date: yesterday, diaryId: result?.item?.id || ""};
+    }
+    static async updateAiDiary(payload = {}){
+        return await updateAiDiaryRecord(CALENDAR_PLAN_JSON_PATH, payload);
+    }
+    static async deleteAiDiary(id){
+        return await deleteAiDiaryRecord(CALENDAR_PLAN_JSON_PATH, id);
+    }
     static async createPomodoroTaskRecord(data){
         return await createPomodoroTaskRecord(POMODORO_JSON_PATH, data);
     }
@@ -1039,8 +1079,8 @@ class IpcRegister{
     static registerKnowledgeCards(){
         registerKnowledgeCardHandlers(this);
     }
-    static registerQuickFloat(){
-        registerQuickFloatHandlers(this);
+    static registerCalendar(){
+        registerCalendarHandlers(this);
     }
 
     static async registerAll(){
@@ -1049,6 +1089,7 @@ class IpcRegister{
         await this.loadKnowledgeCards();
         await this.loadMemoryRoutineMeta();
         await this.loadClipboardHistory();
+        await this.ensureCalendarPlanJson(CALENDAR_PLAN_JSON_PATH);
         this.agentService = new AgentService({
             getAssistantContext: ()=>[...this.assistantContext],
             getLongTermMemory: ()=>[...this.assistantLongTermMemory],
@@ -1064,9 +1105,23 @@ class IpcRegister{
             createPomodoroTask: async (data)=>await this.createPomodoroTaskRecord(data),
             updatePomodoroTask: async (data)=>await this.updatePomodoroTaskRecord(data),
             deletePomodoroTask: async (taskId)=>await this.deletePomodoroTaskRecord(taskId),
+            getCalendarDayDetail: async (date)=>await this.getCalendarDayDetail(date),
+            listCalendarTodos: async (filters)=>await this.listCalendarTodos(filters),
+            createCalendarTodo: async (data)=>await this.createCalendarTodo(data),
+            updateCalendarTodo: async (data)=>await this.updateCalendarTodo(data),
+            deleteCalendarTodo: async (id)=>await this.deleteCalendarTodo(id),
+            listAiDiaries: async (filters)=>await this.listAiDiaries(filters),
+            createAiDiary: async (data)=>await this.createAiDiary(data),
+            updateAiDiary: async (data)=>await this.updateAiDiary(data),
+            deleteAiDiary: async (id)=>await this.deleteAiDiary(id),
         });
         await this.agentService.ensureReady();
         await this.maybeRunDailyMemoryExtraction();
+        try{
+            await this.maybeGenerateYesterdayAiDiaryOnStartup();
+        }catch(err){
+            console.warn("[ai-diary] startup generation failed:", err?.message || err);
+        }
         this.registerPing();
         this.registerAiChat();
         this.registerEmotionTools();
@@ -1075,11 +1130,9 @@ class IpcRegister{
         this.registerPomodoroJson();
         this.registerClipboard();
         this.registerKnowledgeCards();
-        this.registerQuickFloat();
+        this.registerCalendar();
     }
 
 }
 const ipcRegister = IpcRegister;
 module.exports = {ipcRegister, IpcRegister};
-
-

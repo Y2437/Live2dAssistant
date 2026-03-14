@@ -246,6 +246,7 @@ async function runTool(service, toolName, args) {
     case "get_memory": return {items: service.getLongTermMemory()};
     case "search_memory": return service.searchMemory(args?.query);
     case "get_memory_routine_status": return service.getMemoryRoutineMeta();
+    case "get_current_time": return service.getCurrentTime();
     case "add_memory": return service.addLongTermMemory(args);
     case "delete_memory": return service.deleteLongTermMemory(args?.id);
     case "extract_memory": return service.extractLongTermMemories();
@@ -261,6 +262,15 @@ async function runTool(service, toolName, args) {
     case "create_pomodoro_task": return service.createPomodoroTask(args);
     case "update_pomodoro_task": return service.updatePomodoroTask(args);
     case "delete_pomodoro_task": return service.deletePomodoroTask(args?.id);
+    case "get_calendar_day_plan": return service.getCalendarDayDetail(args?.date);
+    case "list_calendar_todos": return service.listCalendarTodos(args);
+    case "create_calendar_todo": return service.createCalendarTodo(args);
+    case "update_calendar_todo": return service.updateCalendarTodo(args);
+    case "delete_calendar_todo": return service.deleteCalendarTodo(args?.id);
+    case "list_ai_diaries": return service.listAiDiaries(args);
+    case "generate_today_ai_diary": return service.generateTodayAiDiary(args);
+    case "update_ai_diary": return service.updateAiDiary(args);
+    case "delete_ai_diary": return service.deleteAiDiary(args?.id);
     case "get_clipboard": return service.getClipboardSnapshot();
     case "analyze_clipboard_image": return service.analyzeClipboardImage(args);
     case "web_search": return service.webSearch(args?.query);
