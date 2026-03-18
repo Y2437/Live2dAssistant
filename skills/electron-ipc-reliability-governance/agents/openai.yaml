@@ -1,0 +1,4 @@
+interface:
+  display_name: "Electron IPC Reliability"
+  short_description: "Harden IPC contracts, validation, and stream safety"
+  default_prompt: "Use $electron-ipc-reliability-governance to review and harden IPC handlers and contracts."

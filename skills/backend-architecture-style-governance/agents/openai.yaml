@@ -1,0 +1,4 @@
+interface:
+  display_name: "Backend Architecture Governance"
+  short_description: "Optimize and standardize Electron main-process backend JS"
+  default_prompt: "Use $backend-architecture-style-governance to optimize and normalize backend JS in this project."
