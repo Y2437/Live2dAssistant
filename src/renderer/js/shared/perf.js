@@ -1,4 +1,26 @@
 const PERF_PREFIX = "[perf]";
+const PERF_STORAGE_KEY = "debug.perf.v1";
+let perfEnabledCache = null;
+
+function isPerfEnabled() {
+    try {
+        if (typeof window === "undefined") {
+            return false;
+        }
+        if (window.__ENABLE_PERF_LOGS__ === true) {
+            return true;
+        }
+        if (perfEnabledCache != null) {
+            return perfEnabledCache;
+        }
+        perfEnabledCache = window.localStorage?.getItem(PERF_STORAGE_KEY) === "true";
+        return perfEnabledCache;
+    } catch (error) {
+        // Ignore storage access errors.
+        perfEnabledCache = false;
+    }
+    return false;
+}
 
 function nowMs() {
     if (typeof performance !== "undefined" && typeof performance.now === "function") {
@@ -22,6 +44,9 @@ function safeStringify(meta) {
 }
 
 export function logPerf(label, durationMs, meta = null) {
+    if (!isPerfEnabled()) {
+        return;
+    }
     const value = Number.isFinite(durationMs) ? durationMs.toFixed(2) : String(durationMs);
     const metaText = safeStringify(meta);
     if (metaText) {
@@ -48,4 +73,3 @@ export async function measureAsync(label, fn, meta = null) {
         logPerf(label, nowMs() - start, meta);
     }
 }
-

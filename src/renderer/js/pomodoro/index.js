@@ -59,6 +59,14 @@ const pomodoroState = {
         handle: null
     }
 };
+const runDisplayCache = {
+    phase: "",
+    status: "",
+    cycleCur: -1,
+    cycleTotal: -1,
+    minute: -1,
+    second: -1
+};
 
 function parseMinutesToMs(minutes) {
     return Math.max(0, Number(minutes) || 0) * 60000;
@@ -119,6 +127,7 @@ function switchPage(page) {
     measureSync("pomodoro.switchPage", () => {
         dom.root.dataset.page = page;
         pomodoroState.page = page;
+        dom.runCard?.__pomoWave?.setActive(page === "run");
     }, {page});
 }
 
@@ -179,9 +188,9 @@ function updateCycleInput(value) {
     dom.inputCycles.value = String(clampNumber(Number(value) || 1, 1, 99));
 }
 
-function updateCycleDisplay() {
-    dom.cycleCur.textContent = String(pomodoroState.timer.cycleCur || 0);
-    dom.cycleTotal.textContent = String(pomodoroState.timer.cycleTotal || 0);
+function updateCycleDisplay(cycleCur, cycleTotal) {
+    dom.cycleCur.textContent = String(cycleCur || 0);
+    dom.cycleTotal.textContent = String(cycleTotal || 0);
 }
 
 function lockEditingTask() {
@@ -216,6 +225,7 @@ function clearTimerHandle() {
 function renderTaskList() {
     measureSync("pomodoro.renderTaskList", () => {
         dom.taskList.innerHTML = "";
+        const fragment = document.createDocumentFragment();
 
         pomodoroState.taskList.forEach((task) => {
             const li = document.createElement("li");
@@ -223,54 +233,55 @@ function renderTaskList() {
             li.dataset.taskId = String(task.id);
             li.draggable = false;
 
-        if (pomodoroState.selectedTaskId === task.id) {
-            li.classList.add("selected");
-        }
+            if (pomodoroState.selectedTaskId === task.id) {
+                li.classList.add("selected");
+            }
 
-        const handle = document.createElement("button");
-        handle.type = "button";
-        handle.className = "pomoItem__handle";
-        handle.dataset.action = "drag";
-        handle.innerHTML = `
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                <path fill="currentColor" d="M20 9H4v2h16V9zM4 15h16v-2H4v2z"></path>
-            </svg>
-        `;
+            const handle = document.createElement("button");
+            handle.type = "button";
+            handle.className = "pomoItem__handle";
+            handle.dataset.action = "drag";
+            handle.innerHTML = `
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                    <path fill="currentColor" d="M20 9H4v2h16V9zM4 15h16v-2H4v2z"></path>
+                </svg>
+            `;
 
-        const title = document.createElement("span");
-        title.className = "pomoItem__title";
-        title.textContent = task.title;
+            const title = document.createElement("span");
+            title.className = "pomoItem__title";
+            title.textContent = task.title;
 
-        const editBtn = document.createElement("button");
-        editBtn.type = "button";
-        editBtn.className = "pomoIconBtn";
-        editBtn.dataset.action = "edit";
-        editBtn.innerHTML = `
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path d="M4 20h4l10-10-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="2"></path>
-                <path d="M14 6l4 4" fill="none" stroke="currentColor" stroke-width="2"></path>
-            </svg>
-        `;
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.className = "pomoIconBtn";
+            editBtn.dataset.action = "edit";
+            editBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path d="M4 20h4l10-10-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    <path d="M14 6l4 4" fill="none" stroke="currentColor" stroke-width="2"></path>
+                </svg>
+            `;
 
-        const deleteBtn = document.createElement("button");
-        deleteBtn.type = "button";
-        deleteBtn.className = "pomoIconBtn";
-        deleteBtn.dataset.action = "delete";
-        deleteBtn.innerHTML = `
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="2"></path>
-                <path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2"></path>
-                <path d="M6 7l1-3h10l1 3" fill="none" stroke="currentColor" stroke-width="2"></path>
-                <path d="M7 7l1 14h8l1-14" fill="none" stroke="currentColor" stroke-width="2"></path>
-            </svg>
-        `;
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className = "pomoIconBtn";
+            deleteBtn.dataset.action = "delete";
+            deleteBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    <path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    <path d="M6 7l1-3h10l1 3" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    <path d="M7 7l1 14h8l1-14" fill="none" stroke="currentColor" stroke-width="2"></path>
+                </svg>
+            `;
 
             li.appendChild(handle);
             li.appendChild(title);
             li.appendChild(editBtn);
             li.appendChild(deleteBtn);
-            dom.taskList.appendChild(li);
+            fragment.appendChild(li);
         });
+        dom.taskList.appendChild(fragment);
 
         const hasTasks = pomodoroState.taskList.length > 0;
         const hasSelectedTask = !!getTaskById(pomodoroState.selectedTaskId);
@@ -375,10 +386,29 @@ function deleteTask(taskId) {
 function updateRunDisplay() {
     const remain = pomodoroState.timer.phaseRemainMs;
     const time = parseMs(remain);
-    switchPhase(pomodoroState.timer.phase);
-    switchStatus(pomodoroState.timer.status);
-    updateCycleDisplay();
-    setRunTimeDigits(time.minute, time.second);
+    const phase = pomodoroState.timer.phase;
+    const status = pomodoroState.timer.status;
+    const cycleCur = pomodoroState.timer.cycleCur || 0;
+    const cycleTotal = pomodoroState.timer.cycleTotal || 0;
+
+    if (runDisplayCache.phase !== phase) {
+        switchPhase(phase);
+        runDisplayCache.phase = phase;
+    }
+    if (runDisplayCache.status !== status) {
+        switchStatus(status);
+        runDisplayCache.status = status;
+    }
+    if (runDisplayCache.cycleCur !== cycleCur || runDisplayCache.cycleTotal !== cycleTotal) {
+        updateCycleDisplay(cycleCur, cycleTotal);
+        runDisplayCache.cycleCur = cycleCur;
+        runDisplayCache.cycleTotal = cycleTotal;
+    }
+    if (runDisplayCache.minute !== time.minute || runDisplayCache.second !== time.second) {
+        setRunTimeDigits(time.minute, time.second);
+        runDisplayCache.minute = time.minute;
+        runDisplayCache.second = time.second;
+    }
 
     if (dom.runCard.__pomoWave && pomodoroState.timer.phaseTotalMs > 0) {
         dom.runCard.__pomoWave.setProgress(remain / pomodoroState.timer.phaseTotalMs);
@@ -479,6 +509,12 @@ function resumeRunningTask() {
 }
 
 function resetRunDisplay() {
+    runDisplayCache.phase = "";
+    runDisplayCache.status = "";
+    runDisplayCache.cycleCur = -1;
+    runDisplayCache.cycleTotal = -1;
+    runDisplayCache.minute = -1;
+    runDisplayCache.second = -1;
     pomodoroState.timer.phase = "idle";
     pomodoroState.timer.status = "idle";
     pomodoroState.timer.cycleCur = 0;
@@ -771,6 +807,8 @@ class PomoWaveEngine {
         this.lastNow = null;
         this.W = 0;
         this.H = 0;
+        this.active = false;
+        this.rafId = 0;
         this.COLORS = ["#ff0055", "#ff6600", "#ffcc00", "#00ff99", "#0099ff", "#cc33ff", "#ff0055"];
         this.LAYERS = [
             {
@@ -806,12 +844,49 @@ class PomoWaveEngine {
         ];
 
         this.resize();
-        new ResizeObserver(() => this.resize()).observe(cardEl);
-        requestAnimationFrame((time) => this.tick(time));
+        this.resizeObserver = new ResizeObserver(() => this.resize());
+        this.resizeObserver.observe(cardEl);
+        this.visibilityHandler = () => {
+            if (document.hidden) {
+                this.lastNow = null;
+                this.stopLoop();
+                return;
+            }
+            if (this.active) {
+                this.startLoop();
+            }
+        };
+        document.addEventListener("visibilitychange", this.visibilityHandler);
+        this.setActive(false);
     }
 
     setProgress(progress) {
         this.target = clampNumber(progress, 0, 1);
+    }
+
+    setActive(active) {
+        this.active = Boolean(active);
+        if (!this.active) {
+            this.stopLoop();
+            return;
+        }
+        this.lastNow = null;
+        this.startLoop();
+    }
+
+    startLoop() {
+        if (this.rafId || !this.active || document.hidden) {
+            return;
+        }
+        this.rafId = requestAnimationFrame((time) => this.tick(time));
+    }
+
+    stopLoop() {
+        if (!this.rafId) {
+            return;
+        }
+        cancelAnimationFrame(this.rafId);
+        this.rafId = 0;
     }
 
     resize() {
@@ -915,6 +990,10 @@ class PomoWaveEngine {
     }
 
     tick(now) {
+        this.rafId = 0;
+        if (!this.active || document.hidden) {
+            return;
+        }
         if (!this.lastNow) this.lastNow = now;
         const dt = Math.min((now - this.lastNow) / 1000, 0.05);
         this.lastNow = now;
@@ -922,6 +1001,10 @@ class PomoWaveEngine {
         this.progress += (this.target - this.progress) * Math.min(dt * 6, 1);
 
         const { ctx, H, W } = this;
+        if (!W || !H) {
+            this.startLoop();
+            return;
+        }
         ctx.clearRect(0, 0, W, H);
 
         const baseY = (1 - this.progress) * H;
@@ -942,6 +1025,6 @@ class PomoWaveEngine {
         this.LAYERS.forEach((layer, index) => this.drawLayer(layer, layerPoints[index]));
         this.syncClip(master);
 
-        requestAnimationFrame((time) => this.tick(time));
+        this.startLoop();
     }
 }

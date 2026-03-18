@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Architecture Governance"
+  short_description: "Enforce frontend architecture and JS/CSS style conventions"
+  default_prompt: "Use $frontend-architecture-style-governance to review and improve frontend architecture and code style in this repository."

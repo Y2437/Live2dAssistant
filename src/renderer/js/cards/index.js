@@ -18,9 +18,12 @@ const cardsState = {
     loaded: false,
     lastSyncedAt: 0,
     syncTimer: null,
+    searchTimer: null,
+    previewFrameId: 0,
 };
 const VIEW_TRANSITION_MS = 180;
 const CARD_SYNC_THROTTLE_MS = 4000;
+const SEARCH_DEBOUNCE_MS = 140;
 
 const cardsDom = {
     root: document.querySelector(".cards-root"),
@@ -274,6 +277,16 @@ function renderEditorPreview() {
                 ${renderCardMarkdown(content)}
             </article>
         `;
+    });
+}
+
+function scheduleEditorPreview() {
+    if (cardsState.previewFrameId) {
+        return;
+    }
+    cardsState.previewFrameId = window.requestAnimationFrame(() => {
+        cardsState.previewFrameId = 0;
+        renderEditorPreview();
     });
 }
 
@@ -659,9 +672,15 @@ function wireFilters() {
 function wireSearch() {
     cardsDom.search?.addEventListener("input", (event) => {
         cardsState.query = event.target.value || "";
-        cardsState.currentPage = 1;
-        renderGrid();
-        paintSelection();
+        if (cardsState.searchTimer) {
+            clearTimeout(cardsState.searchTimer);
+        }
+        cardsState.searchTimer = window.setTimeout(() => {
+            cardsState.searchTimer = null;
+            cardsState.currentPage = 1;
+            renderGrid();
+            paintSelection();
+        }, SEARCH_DEBOUNCE_MS);
     });
 }
 
@@ -735,7 +754,7 @@ function wireCategoryPicker() {
 
 function wireComposer() {
     const syncPreview = () => {
-        renderEditorPreview();
+        scheduleEditorPreview();
         if (cardsDom.formStatus && cardsState.pageMode === "editor") {
             cardsDom.formStatus.textContent = cardsState.editorMode === "edit" ? COPY.editingUpdate : COPY.editingCreate;
         }

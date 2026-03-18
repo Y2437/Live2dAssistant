@@ -1,10 +1,18 @@
-import { $, $$ } from "../shared/dom.js";
+import { $, $$, escapeHtml } from "../shared/dom.js";
 import { measureAsync, measureSync } from "../shared/perf.js";
 
 const AUTO_CAPTURE_STORAGE_KEY = "clipboard.autoCapture.v1";
 const AUTO_CAPTURE_INTERVAL_MS = 1400;
 const VIEW_TRANSITION_MS = 180;
 const CLIPBOARD_SYNC_THROTTLE_MS = 2500;
+const SEARCH_DEBOUNCE_MS = 120;
+const CLIPBOARD_DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+});
 
 const clipboardState = {
     mounted: false,
@@ -19,6 +27,8 @@ const clipboardState = {
     standalone: false,
     syncTimer: null,
     lastSyncedAt: 0,
+    searchDebounceTimer: null,
+    captureInFlight: false,
 };
 
 const clipboardDom = {
@@ -41,13 +51,7 @@ function formatDate(value = "") {
     if (Number.isNaN(date.getTime())) {
         return "未知时间";
     }
-    return new Intl.DateTimeFormat("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-    }).format(date);
+    return CLIPBOARD_DATE_FORMATTER.format(date);
 }
 
 function setStatus(text) {
@@ -105,12 +109,23 @@ function renderList() {
         const items = getVisibleItems();
         clipboardDom.list.innerHTML = items.map((item) => {
             const typeLabel = item.type === "mixed" ? "文本+图片" : (item.type === "image" ? "图片" : "文本");
+            const textPreview = item.textPreview
+                ? `<p class="clipboard-item__text">${escapeHtml(item.textPreview)}</p>`
+                : `<p class="clipboard-item__text clipboard-item__text--muted">（无文本内容）</p>`;
+            const imagePreview = item.hasImage && item.imageDataUrl
+                ? `
+                        <div class="clipboard-item__imageWrap">
+                            <img class="clipboard-item__image" src="${escapeHtml(item.imageDataUrl)}" alt="clipboard-image-preview" />
+                            <span class="clipboard-item__imageMeta">${item.imageWidth || 0} × ${item.imageHeight || 0}</span>
+                        </div>
+                    `
+                : "";
             return `
-                <article class="clipboard-item" data-item-id="${item.id}">
+                <article class="clipboard-item" data-item-id="${escapeHtml(item.id)}">
                     <div class="clipboard-item__head">
                         <div class="clipboard-item__meta">
-                            <span class="clipboard-item__type">${typeLabel}</span>
-                            <span class="clipboard-item__time">${formatDate(item.createdAt)}</span>
+                            <span class="clipboard-item__type">${escapeHtml(typeLabel)}</span>
+                            <span class="clipboard-item__time">${escapeHtml(formatDate(item.createdAt))}</span>
                         </div>
                         <div class="clipboard-item__actions">
                             <button type="button" class="clipboard-item__btn" data-action="copy">复制</button>
@@ -118,13 +133,8 @@ function renderList() {
                             <button type="button" class="clipboard-item__btn clipboard-item__btn--danger" data-action="delete">删除</button>
                         </div>
                     </div>
-                    ${item.textPreview ? `<p class="clipboard-item__text">${item.textPreview}</p>` : `<p class="clipboard-item__text clipboard-item__text--muted">（无文本内容）</p>`}
-                    ${item.hasImage && item.imageDataUrl ? `
-                        <div class="clipboard-item__imageWrap">
-                            <img class="clipboard-item__image" src="${item.imageDataUrl}" alt="clipboard-image-preview" />
-                            <span class="clipboard-item__imageMeta">${item.imageWidth || 0} × ${item.imageHeight || 0}</span>
-                        </div>
-                    ` : ""}
+                    ${textPreview}
+                    ${imagePreview}
                 </article>
             `;
         }).join("");
@@ -167,16 +177,23 @@ async function captureNow(source = "manual") {
     if (!window.api?.captureClipboard) {
         return;
     }
-    const result = await window.api.captureClipboard({source});
-    if (result?.reason === "empty") {
-        setStatus("剪贴板为空，未记录。");
-    } else if (result?.reason === "duplicate") {
-        setStatus("重复内容已刷新到顶部。");
-    } else if (result?.inserted) {
-        setStatus("已记录剪贴板内容。");
+    if (clipboardState.captureInFlight) {
+        return;
     }
-    await refreshHistory();
-    await refreshSnapshot();
+    clipboardState.captureInFlight = true;
+    try {
+        const result = await window.api.captureClipboard({source});
+        if (result?.reason === "empty") {
+            setStatus("剪贴板为空，未记录。");
+        } else if (result?.reason === "duplicate") {
+            setStatus("重复内容已刷新到顶部。");
+        } else if (result?.inserted) {
+            setStatus("已记录剪贴板内容。");
+        }
+        await Promise.all([refreshHistory(), refreshSnapshot()]);
+    } finally {
+        clipboardState.captureInFlight = false;
+    }
 }
 
 function stopAutoCapture() {
@@ -264,7 +281,13 @@ function wireEvents() {
     });
     clipboardDom.search?.addEventListener("input", (event) => {
         clipboardState.query = event.target.value || "";
-        renderList();
+        if (clipboardState.searchDebounceTimer) {
+            clearTimeout(clipboardState.searchDebounceTimer);
+        }
+        clipboardState.searchDebounceTimer = window.setTimeout(() => {
+            clipboardState.searchDebounceTimer = null;
+            renderList();
+        }, SEARCH_DEBOUNCE_MS);
     });
     clipboardDom.filters?.addEventListener("click", (event) => {
         const btn = event.target.closest("[data-filter]");
@@ -346,8 +369,7 @@ function buildClipboardMarkup() {
 
 async function syncAll() {
     await measureAsync("clipboard.syncAll", async () => {
-        await refreshHistory();
-        await refreshSnapshot();
+        await Promise.all([refreshHistory(), refreshSnapshot()]);
         clipboardState.lastSyncedAt = Date.now();
     });
 }

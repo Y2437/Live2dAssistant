@@ -1,7 +1,7 @@
 ﻿import { CONFIG } from "../core/config.js";
 import { marked } from "../../vendor/marked/lib/marked.esm.js";
 import { $ } from "../shared/dom.js";
-import { measureAsync, measureSync } from "../shared/perf.js";
+import { logPerf, measureAsync, measureSync } from "../shared/perf.js";
 const dom = {
     root: $(".assistant-root"),
     stage: $('[data-role="assistant-live2d-stage"]'),
@@ -61,12 +61,15 @@ const assistantState = {
     runtimeStatus: null,
     runtimeTraces: [],
     runPanelExpanded: false,
+    runPanelSyncFrameId: 0,
+    runTimelineCacheKey: "",
     alwaysAllowedTools: [],
     availableTools: [],
     selectedTools: [],
     scopeModule: "",
     scopeOpen: false,
     directMode: false,
+    chatScrollFrameId: 0,
 };
 
 const TIMEOUT_MS = CONFIG.LIVE2D_CONFIG.TIMEOUT_MS;
@@ -110,6 +113,35 @@ const ASSISTANT_DIRECT_MODE_STORAGE_KEY = "assistant.directMode.v1";
 const LIVE2D_IDLE_MOTION_COUNT = 9;
 const LIVE2D_TAPBODY_MOTION_COUNT = 1;
 const EMOTION_LOG_PREFIX = "[emotion-client]";
+const CHAT_TIME_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+});
+const EMOTION_DEBUG_STORAGE_KEY = "assistant.emotion.debug.v1";
+
+function isEmotionDebugEnabled() {
+    try {
+        return window.localStorage?.getItem(EMOTION_DEBUG_STORAGE_KEY) === "true";
+    } catch (error) {
+        return false;
+    }
+}
+
+function emotionLog(...args) {
+    if (!isEmotionDebugEnabled()) {
+        return;
+    }
+    console.log(...args);
+}
+
+function emotionWarn(...args) {
+    if (!isEmotionDebugEnabled()) {
+        return;
+    }
+    console.warn(...args);
+}
 
 function dispatchNavigate(viewKey) {
     window.dispatchEvent(new CustomEvent("shell:navigate", { detail: { viewKey } }));
@@ -345,9 +377,11 @@ function renderBubble(text, type = "chat", options = {}) {
             ? CONFIG.ASSISTANT_CONFIG.BUBBLE_LABEL_TOUCH
             : CONFIG.ASSISTANT_CONFIG.BUBBLE_LABEL_RESPONSE;
     }
-    dom.bubble.classList.remove("is-updating");
-    void dom.bubble.offsetWidth;
-    dom.bubble.classList.add("is-updating");
+    if (options.streaming !== true) {
+        dom.bubble.classList.remove("is-updating");
+        void dom.bubble.offsetWidth;
+        dom.bubble.classList.add("is-updating");
+    }
     const bubbleTarget = dom.bubbleBody || dom.bubble;
     if (options.streaming === true) {
         renderPlainText(bubbleTarget, text);
@@ -367,12 +401,7 @@ function formatChatTimestamp(value = new Date()) {
     if (Number.isNaN(date.getTime())) {
         return "";
     }
-    return new Intl.DateTimeFormat("zh-CN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-    }).format(date);
+    return CHAT_TIME_FORMATTER.format(date);
 }
 
 function makeChatEntry(role, initialText = "", status = "") {
@@ -483,17 +512,18 @@ function resetRuntimeState() {
     assistantState.runtimeStatus = null;
     assistantState.runtimeTraces = [];
     assistantState.runPanelExpanded = false;
-    syncRunPanel();
+    assistantState.runTimelineCacheKey = "";
+    scheduleRunPanelSync();
 }
 
 function setRuntimeStatus(status) {
     assistantState.runtimeStatus = status || null;
-    syncRunPanel();
+    scheduleRunPanelSync();
 }
 
 function setRuntimeTraces(traces) {
     assistantState.runtimeTraces = Array.isArray(traces) ? traces : [];
-    syncRunPanel();
+    scheduleRunPanelSync();
 }
 
 function createRunStepCard({title, badge, pills = [], preview = ""}) {
@@ -534,6 +564,30 @@ function createRunStepCard({title, badge, pills = [], preview = ""}) {
     return article;
 }
 
+function toRunPreviewText(value) {
+    if (value == null) {
+        return CONFIG.ASSISTANT_CONFIG.RUN_PANEL_EMPTY;
+    }
+    if (typeof value === "string") {
+        return value || CONFIG.ASSISTANT_CONFIG.RUN_PANEL_EMPTY;
+    }
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch (error) {
+        return String(value);
+    }
+}
+
+function scheduleRunPanelSync() {
+    if (assistantState.runPanelSyncFrameId) {
+        return;
+    }
+    assistantState.runPanelSyncFrameId = window.requestAnimationFrame(() => {
+        assistantState.runPanelSyncFrameId = 0;
+        syncRunPanel();
+    });
+}
+
 function syncRunPanel() {
     const runPanelStart = performance.now();
     if (!dom.runPanel || !dom.runTimeline || !dom.runStatus || !dom.runSummary || !dom.runToggle || !dom.runBody) return;
@@ -555,8 +609,24 @@ function syncRunPanel() {
     dom.runBody.hidden = !assistantState.runPanelExpanded;
 
     if (!assistantState.runPanelExpanded) {
+        assistantState.runTimelineCacheKey = "";
         return;
     }
+
+    const timelineKey = traces.map((trace, index) => {
+        const title = trace?.title || "";
+        const label = trace?.label || trace?.tool || "";
+        const kind = trace?.kind || "";
+        const phase = trace?.phase || "";
+        const status = trace?.status || "";
+        const preview = toRunPreviewText(trace?.outputPreview || "");
+        return `${index}|${title}|${label}|${kind}|${phase}|${status}|${preview}`;
+    }).join("||");
+
+    if (assistantState.runTimelineCacheKey === timelineKey) {
+        return;
+    }
+    assistantState.runTimelineCacheKey = timelineKey;
 
     dom.runTimeline.innerHTML = "";
     traces.forEach((trace, index) => {
@@ -568,10 +638,10 @@ function syncRunPanel() {
             title: trace.title || `${CONFIG.ASSISTANT_CONFIG.TRACE_STEP_LABEL} ${index + 1}`,
             badge: trace.label || trace.tool || CONFIG.ASSISTANT_CONFIG.TRACE_DEFAULT_TOOL,
             pills,
-            preview: trace.outputPreview || CONFIG.ASSISTANT_CONFIG.RUN_PANEL_EMPTY,
+            preview: toRunPreviewText(trace.outputPreview),
         }));
     });
-    console.log(`[perf] assistant.syncRunPanel ${(performance.now() - runPanelStart).toFixed(2)}ms`, {
+    logPerf("assistant.syncRunPanel", performance.now() - runPanelStart, {
         traceCount: traces.length,
         expanded: assistantState.runPanelExpanded,
     });
@@ -909,24 +979,24 @@ function normalizeMotionHint(signal = {}) {
 async function playLive2dMotion(motion = {group: "Idle", index: 0}) {
     const live2d = assistantState.live2d;
     if (!live2d) {
-        console.log(`${EMOTION_LOG_PREFIX} step5 no-live2d-instance`);
+        emotionLog(`${EMOTION_LOG_PREFIX} step5 no-live2d-instance`);
         return;
     }
     try {
         if (typeof live2d.motion === "function") {
-            console.log(`${EMOTION_LOG_PREFIX} step5 play-motion`, motion);
+            emotionLog(`${EMOTION_LOG_PREFIX} step5 play-motion`, motion);
             await live2d.motion(motion.group, motion.index);
-            console.log(`${EMOTION_LOG_PREFIX} step6 motion-done`, motion);
+            emotionLog(`${EMOTION_LOG_PREFIX} step6 motion-done`, motion);
             return;
         }
     } catch (error) {
-        console.warn(`${EMOTION_LOG_PREFIX} step5 motion(group,index) failed, fallback`, error?.message || error);
+        emotionWarn(`${EMOTION_LOG_PREFIX} step5 motion(group,index) failed, fallback`, error?.message || error);
     }
     try {
         if (typeof live2d.motion === "function") {
-            console.log(`${EMOTION_LOG_PREFIX} step5b play-motion-fallback-group`, motion.group);
+            emotionLog(`${EMOTION_LOG_PREFIX} step5b play-motion-fallback-group`, motion.group);
             await live2d.motion(motion.group);
-            console.log(`${EMOTION_LOG_PREFIX} step6 motion-fallback-done`, motion.group);
+            emotionLog(`${EMOTION_LOG_PREFIX} step6 motion-fallback-done`, motion.group);
         }
     } catch (error) {
         console.error(`${EMOTION_LOG_PREFIX} stepX motion-failed`, error);
@@ -935,22 +1005,22 @@ async function playLive2dMotion(motion = {group: "Idle", index: 0}) {
 
 async function syncEmotionMotionFromText(text) {
     if (!text || !assistantState.live2d) {
-        console.log(`${EMOTION_LOG_PREFIX} step0 skip`, {
+        emotionLog(`${EMOTION_LOG_PREFIX} step0 skip`, {
             hasText: Boolean(text),
             hasLive2d: Boolean(assistantState.live2d),
         });
         return;
     }
     try {
-        console.log(`${EMOTION_LOG_PREFIX} step1 start`, {textLength: text.length});
+        emotionLog(`${EMOTION_LOG_PREFIX} step1 start`, {textLength: text.length});
         const signal = window.api.extractEmotionForLive2d
             ? await window.api.extractEmotionForLive2d(text)
             : {emotion: "neutral", motionHint: {group: "Idle", index: hashText(text) % LIVE2D_IDLE_MOTION_COUNT}};
-        console.log(`${EMOTION_LOG_PREFIX} step2 signal`, signal);
+        emotionLog(`${EMOTION_LOG_PREFIX} step2 signal`, signal);
         const motion = normalizeMotionHint(signal);
-        console.log(`${EMOTION_LOG_PREFIX} step3 mapped-motion`, motion);
+        emotionLog(`${EMOTION_LOG_PREFIX} step3 mapped-motion`, motion);
         await playLive2dMotion(motion);
-        console.log(`${EMOTION_LOG_PREFIX} step4 done`);
+        emotionLog(`${EMOTION_LOG_PREFIX} step4 done`);
     } catch (error) {
         console.error(`${EMOTION_LOG_PREFIX} stepX failed`, error);
     }
@@ -1073,7 +1143,7 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
             updateAssistantContent(responseText);
         }
         if (responseText) {
-            console.log(`${EMOTION_LOG_PREFIX} trigger-after-response`, {length: responseText.length});
+            emotionLog(`${EMOTION_LOG_PREFIX} trigger-after-response`, {length: responseText.length});
             void syncEmotionMotionFromText(responseText);
         }
         if (!directMode && (!assistantState.runtimeTraces || !assistantState.runtimeTraces.length) && Array.isArray(response?.traces) && response.traces.length) {
@@ -1120,7 +1190,7 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
         clearRequestTimeout();
         assistantState.activeRequest = null;
         syncRequestControls();
-        console.log(`[perf] assistant.handleChat ${(performance.now() - chatStart).toFixed(2)}ms`, {
+        logPerf("assistant.handleChat", performance.now() - chatStart, {
             inputLength: String(text || "").length,
             directMode,
             expanded: assistantState.expanded,
@@ -1273,8 +1343,14 @@ function wireChatLayout() {
     }
     if (dom.chatLog) {
         dom.chatLog.addEventListener("scroll", () => {
-            assistantState.shouldStickToBottom = isNearBottom();
-            updateScrollBottomButton();
+            if (assistantState.chatScrollFrameId) {
+                return;
+            }
+            assistantState.chatScrollFrameId = window.requestAnimationFrame(() => {
+                assistantState.chatScrollFrameId = 0;
+                assistantState.shouldStickToBottom = isNearBottom();
+                updateScrollBottomButton();
+            });
         });
     }
     if (dom.scrollBottom) {
