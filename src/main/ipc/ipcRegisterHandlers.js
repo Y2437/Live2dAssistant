@@ -70,6 +70,12 @@ function registerContextHandlers(registry) {
     ipcMain.handle("app:deleteLongTermMemory", async (event, memoryId) => registry.deleteLongTermMemory(memoryId));
 }
 
+function registerModelProviderHandlers(registry) {
+    ipcMain.handle("app:getModelProviderSettings", async () => registry.getModelProviderSettingsData());
+    ipcMain.handle("app:updateModelProviderSettings", async (event, payload) => registry.updateModelProviderSettings(payload || {}));
+    ipcMain.handle("app:testModelProviderPrompt", async (event, payload) => registry.testModelProviderPrompt(payload || {}));
+}
+
 function registerAgentHandlers(registry) {
     ipcMain.handle("app:getAgentCapabilities", async () => ensureAgentService(registry).getCapabilities());
     ipcMain.handle("app:runAgentSelfTest", async (event, payload) => {
@@ -245,6 +251,7 @@ module.exports = {
     registerAiChatHandlers,
     registerEmotionHandlers,
     registerContextHandlers,
+    registerModelProviderHandlers,
     registerAgentHandlers,
     registerPomodoroHandlers,
     registerClipboardHandlers,

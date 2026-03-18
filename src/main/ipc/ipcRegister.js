@@ -27,12 +27,14 @@ const {
     registerAiChatHandlers,
     registerEmotionHandlers,
     registerContextHandlers,
+    registerModelProviderHandlers,
     registerAgentHandlers,
     registerPomodoroHandlers,
     registerClipboardHandlers,
     registerKnowledgeCardHandlers,
     registerCalendarHandlers,
 } = require("./ipcRegisterHandlers");
+const {listModelProviders, findModelProvider} = require("./modelProviderCatalog");
 const {
     ensurePomodoroJson,
     savePomodoroTaskList,
@@ -65,6 +67,7 @@ const {
     AI_CONTEXT_JSON_PATH,
     AI_CONVERSATION_LOG_JSONL_PATH,
     AI_LONG_TERM_MEMORY_JSON_PATH,
+    AI_MODEL_SETTINGS_JSON_PATH,
     KNOWLEDGE_CARDS_JSON_PATH,
     AI_MEMORY_ROUTINE_JSON_PATH,
     CLIPBOARD_HISTORY_JSON_PATH,
@@ -101,6 +104,21 @@ class IpcRegister{
         lastSkippedCount: 0,
         lastError: "",
     };
+    static modelProviderDefaults = {
+        providerId: String(ENV_CONFIG.AI_PROVIDER || "").trim().toLowerCase(),
+        chatModel: String(ENV_CONFIG.AI_MODEL || "").trim(),
+        summaryModel: String(ENV_CONFIG.AI_SUMMARY_MODEL || "").trim(),
+        visionModel: String(ENV_CONFIG.AI_VISION_MODEL || ENV_CONFIG.VISION_MODEL || "").trim(),
+        fallbackApiKey: String(ENV_CONFIG.API_KEY || "").trim(),
+    };
+    static modelProviderSettings = {
+        providerId: "",
+        chatModel: "",
+        summaryModel: "",
+        visionModel: "",
+        apiKeys: {},
+        updatedAt: "",
+    };
     static conversationLogEntriesCache = null;
     static execFileAsync = promisify(execFile);
     constructor(ipc){
@@ -130,6 +148,233 @@ class IpcRegister{
                 this.assistantContext = [];
                 await this.saveAssistantContext();
                 return;
+            }
+            throw err;
+        }
+    }
+    static listModelProviders(){
+        return listModelProviders();
+    }
+    static resolveProviderModelPool(pool = []){
+        return Array.isArray(pool)
+            ? pool
+                .map((item)=>({
+                    id: String(item?.id || "").trim(),
+                    label: String(item?.label || item?.id || "").trim(),
+                }))
+                .filter((item)=>item.id)
+            : [];
+    }
+    static resolveModelFromPool(value, pool = [], fallback = ""){
+        const list = this.resolveProviderModelPool(pool);
+        const normalized = String(value || "").trim();
+        if(normalized && list.some((item)=>item.id === normalized)){
+            return normalized;
+        }
+        const fallbackId = String(fallback || "").trim();
+        if(fallbackId && list.some((item)=>item.id === fallbackId)){
+            return fallbackId;
+        }
+        return list[0]?.id || "";
+    }
+    static resolveProvider(providerId = ""){
+        const requested = findModelProvider(providerId);
+        if(requested){
+            return requested;
+        }
+        const defaultProvider = findModelProvider(this.modelProviderDefaults.providerId);
+        if(defaultProvider){
+            return defaultProvider;
+        }
+        const providers = this.listModelProviders();
+        return providers[0] || null;
+    }
+    static normalizeModelProviderSettings(data = {}){
+        const provider = this.resolveProvider(data?.providerId);
+        const chatModels = this.resolveProviderModelPool(provider?.chatModels);
+        const summaryModels = this.resolveProviderModelPool(provider?.summaryModels);
+        const visionModels = this.resolveProviderModelPool(provider?.visionModels);
+        const apiKeys = {};
+        if(data?.apiKeys && typeof data.apiKeys === "object"){
+            for(const [providerId, rawKey] of Object.entries(data.apiKeys)){
+                const key = String(rawKey || "").trim();
+                if(key){
+                    apiKeys[String(providerId || "").trim().toLowerCase()] = key;
+                }
+            }
+        }
+        const chatModel = this.resolveModelFromPool(
+            data?.chatModel,
+            chatModels,
+            this.modelProviderDefaults.chatModel,
+        );
+        const summaryModel = this.resolveModelFromPool(
+            data?.summaryModel,
+            summaryModels.length ? summaryModels : chatModels,
+            this.modelProviderDefaults.summaryModel || chatModel,
+        );
+        const visionModel = this.resolveModelFromPool(
+            data?.visionModel,
+            visionModels.length ? visionModels : chatModels,
+            this.modelProviderDefaults.visionModel || chatModel,
+        );
+        return {
+            providerId: provider?.id || "",
+            chatModel,
+            summaryModel,
+            visionModel,
+            apiKeys,
+            updatedAt: typeof data?.updatedAt === "string" ? data.updatedAt : "",
+        };
+    }
+    static resolveModelProviderSettings(data = this.modelProviderSettings){
+        const normalized = this.normalizeModelProviderSettings(data);
+        const provider = this.resolveProvider(normalized.providerId);
+        const providerId = provider?.id || normalized.providerId;
+        const apiKey = normalized.apiKeys[providerId] || this.modelProviderDefaults.fallbackApiKey;
+        return {
+            ...normalized,
+            providerId,
+            providerName: provider?.name || providerId,
+            baseUrl: provider?.baseUrl || ENV_CONFIG.BASE_URL,
+            apiPath: provider?.apiPath || ENV_CONFIG.AI_API_PATH || "/chat/completions",
+            requestFormat: provider?.requestFormat || ENV_CONFIG.AI_REQUEST_FORMAT || "openai",
+            hasCustomApiKey: Boolean(normalized.apiKeys[providerId]),
+            apiKeySource: normalized.apiKeys[providerId] ? "custom" : (apiKey ? "env" : "missing"),
+            apiKey,
+        };
+    }
+    static applyModelProviderRuntime(data = this.modelProviderSettings){
+        const resolved = this.resolveModelProviderSettings(data);
+        ENV_CONFIG.AI_PROVIDER = resolved.providerId;
+        ENV_CONFIG.AI_MODEL = resolved.chatModel;
+        ENV_CONFIG.AI_SUMMARY_MODEL = resolved.summaryModel || resolved.chatModel;
+        ENV_CONFIG.AI_VISION_MODEL = resolved.visionModel || "";
+        ENV_CONFIG.VISION_MODEL = resolved.visionModel || "";
+        ENV_CONFIG.BASE_URL = resolved.baseUrl;
+        ENV_CONFIG.AI_API_PATH = resolved.apiPath;
+        ENV_CONFIG.AI_REQUEST_FORMAT = resolved.requestFormat;
+        ENV_CONFIG.API_KEY = resolved.apiKey;
+        return resolved;
+    }
+    static async saveModelProviderSettings(){
+        await fs.writeFile(AI_MODEL_SETTINGS_JSON_PATH, JSON.stringify(this.modelProviderSettings, null, 2), "utf-8");
+    }
+    static async loadModelProviderSettings(){
+        try{
+            const raw = await fs.readFile(AI_MODEL_SETTINGS_JSON_PATH, "utf8");
+            this.modelProviderSettings = this.normalizeModelProviderSettings(JSON.parse(raw));
+        }catch(err){
+            if(err.code === "ENOENT"){
+                this.modelProviderSettings = this.normalizeModelProviderSettings({
+                    providerId: this.modelProviderDefaults.providerId,
+                    chatModel: this.modelProviderDefaults.chatModel,
+                    summaryModel: this.modelProviderDefaults.summaryModel,
+                    visionModel: this.modelProviderDefaults.visionModel,
+                    apiKeys: {},
+                    updatedAt: new Date().toISOString(),
+                });
+                await this.saveModelProviderSettings();
+            }else{
+                throw err;
+            }
+        }
+        this.applyModelProviderRuntime();
+    }
+    static getModelProviderSettingsData(){
+        const providers = this.listModelProviders();
+        const resolved = this.resolveModelProviderSettings();
+        return {
+            providers,
+            current: {
+                providerId: resolved.providerId,
+                chatModel: resolved.chatModel,
+                summaryModel: resolved.summaryModel,
+                visionModel: resolved.visionModel,
+                hasCustomApiKey: resolved.hasCustomApiKey,
+                updatedAt: this.modelProviderSettings.updatedAt || "",
+            },
+            resolved: {
+                providerId: resolved.providerId,
+                providerName: resolved.providerName,
+                chatModel: resolved.chatModel,
+                summaryModel: resolved.summaryModel,
+                visionModel: resolved.visionModel,
+                baseUrl: resolved.baseUrl,
+                apiPath: resolved.apiPath,
+                requestFormat: resolved.requestFormat,
+                apiKeySource: resolved.apiKeySource,
+            },
+        };
+    }
+    static async updateModelProviderSettings(payload = {}){
+        const provider = this.resolveProvider(payload?.providerId || this.modelProviderSettings.providerId);
+        if(!provider){
+            throw new Error("No model provider available.");
+        }
+        const next = this.normalizeModelProviderSettings({
+            ...this.modelProviderSettings,
+            providerId: provider.id,
+            chatModel: payload?.chatModel,
+            summaryModel: payload?.summaryModel,
+            visionModel: payload?.visionModel,
+        });
+        const apiKey = typeof payload?.apiKey === "string" ? payload.apiKey.trim() : "";
+        if(apiKey){
+            next.apiKeys = {
+                ...(next.apiKeys || {}),
+                [provider.id]: apiKey,
+            };
+        }
+        next.updatedAt = new Date().toISOString();
+        this.modelProviderSettings = next;
+        this.applyModelProviderRuntime(next);
+        await this.saveModelProviderSettings();
+        return this.getModelProviderSettingsData();
+    }
+    static async testModelProviderPrompt(payload = {}){
+        const text = typeof payload === "string"
+            ? String(payload || "").trim()
+            : String(payload?.prompt || "").trim();
+        if(!text){
+            throw new Error("Prompt is required.");
+        }
+        const saved = this.resolveModelProviderSettings();
+        const requestedProvider = this.resolveProvider(payload?.providerId || saved.providerId);
+        const runtime = {
+            ...saved,
+            providerId: requestedProvider?.id || saved.providerId,
+            providerName: requestedProvider?.name || saved.providerName,
+            baseUrl: requestedProvider?.baseUrl || saved.baseUrl,
+            apiPath: requestedProvider?.apiPath || saved.apiPath,
+            requestFormat: requestedProvider?.requestFormat || saved.requestFormat,
+            chatModel: String(payload?.model || saved.chatModel).trim(),
+            apiKey: String(payload?.apiKey || "").trim() || saved.apiKey,
+        };
+        try{
+            const response = await aiChatWithModel([
+                {role: "user", content: text},
+            ], {
+                providerId: runtime.providerId,
+                baseUrl: runtime.baseUrl,
+                apiPath: runtime.apiPath,
+                requestFormat: runtime.requestFormat,
+                apiKey: runtime.apiKey,
+                model: runtime.chatModel,
+            });
+            return {
+                providerId: runtime.providerId,
+                providerName: runtime.providerName,
+                model: runtime.chatModel,
+                content: this.getAssistantReplyContent(response),
+            };
+        }catch(err){
+            const rawMessage = String(err?.message || err);
+            if(/Not found the model|Permission denied|resource_not_found_error/i.test(rawMessage)){
+                throw new Error(
+                    `模型调用失败：${runtime.providerName}/${runtime.chatModel}。` +
+                    "该模型可能尚未开通权限，或 API Key 不属于该厂商；请先用该厂商最基础模型验证 Key。"
+                );
             }
             throw err;
         }
@@ -1187,6 +1432,9 @@ class IpcRegister{
     static registerAiContextManager(){
         registerContextHandlers(this);
     }
+    static registerModelProvider(){
+        registerModelProviderHandlers(this);
+    }
     static registerAgent(){
         registerAgentHandlers(this);
     }
@@ -1208,6 +1456,7 @@ class IpcRegister{
 
     static async registerAll(){
         await this.loadAssistantContext();
+        await this.loadModelProviderSettings();
         await this.loadLongTermMemory();
         await this.loadKnowledgeCards();
         await this.loadMemoryRoutineMeta();
@@ -1304,6 +1553,7 @@ class IpcRegister{
         this.registerAiChat();
         this.registerEmotionTools();
         this.registerAiContextManager();
+        this.registerModelProvider();
         this.registerAgent();
         this.registerPomodoroJson();
         this.registerClipboard();

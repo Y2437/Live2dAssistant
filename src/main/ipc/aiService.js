@@ -1,32 +1,92 @@
 const {ENV_CONFIG} = require("../config");
 
-function buildBigModelRequestBody(message, options = {}, stream = false) {
-    const temperature = options.temperature ?? 0;
-    const maxTokens = options.maxTokens ?? 65536;
-    const thinkingType = options.enableThinking ? "enabled" : "disabled";
+function normalizeMessageContent(item = {}) {
+    if (Array.isArray(item.content)) {
+        return item.content;
+    }
+    return item.message ?? item.content ?? "";
+}
+
+function normalizeApiPath(apiPath = "") {
+    const raw = String(apiPath || "").trim();
+    if (!raw) {
+        return "/chat/completions";
+    }
+    return raw.startsWith("/") ? raw : `/${raw}`;
+}
+
+function joinUrl(baseUrl, apiPath) {
+    const normalizedBase = String(baseUrl || "").trim().replace(/\/+$/, "");
+    return `${normalizedBase}${normalizeApiPath(apiPath)}`;
+}
+
+function resolveProviderRuntime(options = {}) {
+    const providerId = String(options.providerId || ENV_CONFIG.AI_PROVIDER || "").trim().toLowerCase();
+    const requestFormatRaw = String(options.requestFormat || ENV_CONFIG.AI_REQUEST_FORMAT || "").trim().toLowerCase();
+    const requestFormat = requestFormatRaw || (providerId === "zhipu" ? "zhipu" : "openai");
+
     return {
+        providerId,
+        requestFormat,
+        baseUrl: options.baseUrl || ENV_CONFIG.BASE_URL,
+        apiPath: options.apiPath || ENV_CONFIG.AI_API_PATH || "/chat/completions",
+        apiKey: options.apiKey || ENV_CONFIG.API_KEY,
         model: options.model || ENV_CONFIG.AI_MODEL,
-        messages: message.map((item) => ({
-            role: item.role,
-            content: Array.isArray(item.content)
-                ? item.content
-                : (item.message ?? item.content ?? ""),
-        })),
-        stream,
-        do_sample: false,
-        temperature,
-        max_tokens: maxTokens,
-        thinking: {
-            type: thinkingType,
-            clear_thinking: true,
-        },
     };
 }
 
-function buildBigModelRequestOptions(message, options = {}, stream = false) {
-    const model = options.model || ENV_CONFIG.AI_MODEL;
-    const baseUrl = ENV_CONFIG.BASE_URL;
-    const apiKey = ENV_CONFIG.API_KEY;
+function buildChatRequestBody(message, runtime, options = {}, stream = false) {
+    const basePayload = {
+        model: runtime.model,
+        messages: message.map((item) => ({
+            role: item.role,
+            content: normalizeMessageContent(item),
+        })),
+        stream,
+    };
+    if (options.temperature != null) {
+        basePayload.temperature = options.temperature;
+    }
+    if (options.maxTokens != null) {
+        basePayload.max_tokens = options.maxTokens;
+    }
+
+    const isMoonshotK25 = runtime.providerId === "moonshot"
+        && /^kimi-k2\.5($|[-_])/i.test(String(runtime.model || "").trim());
+    if (isMoonshotK25) {
+        // Moonshot official constraint:
+        // thinking enabled => temperature must be 1.0
+        // thinking disabled => temperature must be 0.6
+        // omit temperature/thinking to use service defaults.
+        if (typeof options.enableThinking === "boolean") {
+            basePayload.thinking = {
+                type: options.enableThinking ? "enabled" : "disabled",
+            };
+            basePayload.temperature = options.enableThinking ? 1 : 0.6;
+        } else if ("temperature" in basePayload) {
+            delete basePayload.temperature;
+        }
+    }
+
+    if (runtime.requestFormat === "zhipu") {
+        return {
+            ...basePayload,
+            do_sample: false,
+            thinking: {
+                type: options.enableThinking ? "enabled" : "disabled",
+                clear_thinking: true,
+            },
+        };
+    }
+
+    return basePayload;
+}
+
+function buildChatRequestOptions(message, options = {}, stream = false) {
+    const runtime = resolveProviderRuntime(options);
+    const model = runtime.model;
+    const baseUrl = runtime.baseUrl;
+    const apiKey = runtime.apiKey;
 
     if (!apiKey) {
         throw new Error("Missing API_KEY environment variable");
@@ -34,10 +94,13 @@ function buildBigModelRequestOptions(message, options = {}, stream = false) {
     if (!model) {
         throw new Error("Missing AI model configuration");
     }
+    if (!baseUrl) {
+        throw new Error("Missing BASE_URL environment variable");
+    }
 
-    const url = baseUrl.replace(/\/$/, "") + "/api/paas/v4/chat/completions";
-    const body = buildBigModelRequestBody(message, options, stream);
-    return {url, body, apiKey, model};
+    const url = joinUrl(baseUrl, runtime.apiPath);
+    const body = buildChatRequestBody(message, runtime, options, stream);
+    return {url, body, apiKey, model, providerId: runtime.providerId, requestFormat: runtime.requestFormat};
 }
 
 function extractStreamText(payload) {
@@ -66,8 +129,8 @@ function extractStreamText(payload) {
     return "";
 }
 
-async function chatCompletionsBigModel(message, options = {}) {
-    const {url, body, apiKey, model} = buildBigModelRequestOptions(message, options, false);
+async function chatCompletions(message, options = {}) {
+    const {url, body, apiKey, model, providerId} = buildChatRequestOptions(message, options, false);
 
     let response;
     try {
@@ -81,19 +144,19 @@ async function chatCompletionsBigModel(message, options = {}) {
             body: JSON.stringify(body),
         });
     } catch (error) {
-        throw new Error(`BigModel fetch failed url=${url} model=${model} reason=${error?.message || error}`);
+        throw new Error(`AI fetch failed provider=${providerId || "unknown"} url=${url} model=${model} reason=${error?.message || error}`);
     }
 
     if (!response.ok) {
         const text = await response.text();
-        throw new Error(`BigModel request failed status=${response.status} body=${text}`);
+        throw new Error(`AI request failed provider=${providerId || "unknown"} status=${response.status} body=${text}`);
     }
 
     return await response.json();
 }
 
-async function chatCompletionsBigModelStream(message, options = {}, handlers = {}) {
-    const {url, body, apiKey, model} = buildBigModelRequestOptions(message, options, true);
+async function chatCompletionsStream(message, options = {}, handlers = {}) {
+    const {url, body, apiKey, model, providerId} = buildChatRequestOptions(message, options, true);
 
     let response;
     try {
@@ -107,16 +170,16 @@ async function chatCompletionsBigModelStream(message, options = {}, handlers = {
             body: JSON.stringify(body),
         });
     } catch (error) {
-        throw new Error(`BigModel stream fetch failed url=${url} model=${model} reason=${error?.message || error}`);
+        throw new Error(`AI stream fetch failed provider=${providerId || "unknown"} url=${url} model=${model} reason=${error?.message || error}`);
     }
 
     if (!response.ok) {
         const text = await response.text();
-        throw new Error(`BigModel stream request failed status=${response.status} body=${text}`);
+        throw new Error(`AI stream request failed provider=${providerId || "unknown"} status=${response.status} body=${text}`);
     }
 
     if (!response.body) {
-        throw new Error("BigModel stream response body is unavailable");
+        throw new Error("AI stream response body is unavailable");
     }
 
     const reader = response.body.getReader();
@@ -186,21 +249,21 @@ async function chatCompletionsBigModelStream(message, options = {}, handlers = {
 
 module.exports = {
     aiChat(message, options) {
-        return chatCompletionsBigModel(message, options);
+        return chatCompletions(message, options);
     },
     aiChatWithContent(message, options) {
-        return chatCompletionsBigModel(message, options);
+        return chatCompletions(message, options);
     },
     aiChatWithModel(message, options) {
-        return chatCompletionsBigModel(message, options);
+        return chatCompletions(message, options);
     },
     aiChatStream(message, options, handlers) {
-        return chatCompletionsBigModelStream(message, options, handlers);
+        return chatCompletionsStream(message, options, handlers);
     },
     aiChatWithContentStream(message, options, handlers) {
-        return chatCompletionsBigModelStream(message, options, handlers);
+        return chatCompletionsStream(message, options, handlers);
     },
     aiChatWithModelStream(message, options, handlers) {
-        return chatCompletionsBigModelStream(message, options, handlers);
+        return chatCompletionsStream(message, options, handlers);
     },
 };

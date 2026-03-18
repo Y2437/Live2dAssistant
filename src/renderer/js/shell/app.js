@@ -7,6 +7,7 @@ import {
     renderAgentToolList,
     renderContextList,
     renderMemoryList,
+    renderModelPromptResult,
 } from "../settings/view.js";
 
 const DEFAULT_VIEW = CONFIG.DEFAULT_VIEW;
@@ -36,8 +37,22 @@ const settingsDom = {
     startViewSelect: $('[data-role="settings-start-view"]'),
     directModeDefaultToggle: $('[data-role="settings-direct-mode-default"]'),
     clipboardAutoDefaultToggle: $('[data-role="settings-clipboard-auto-default"]'),
+    aiProviderSelect: $('[data-role="settings-ai-provider"]'),
+    aiChatModelSelect: $('[data-role="settings-ai-chat-model"]'),
+    aiSummaryModelSelect: $('[data-role="settings-ai-summary-model"]'),
+    aiVisionModelSelect: $('[data-role="settings-ai-vision-model"]'),
+    aiApiKeyInput: $('[data-role="settings-ai-api-key"]'),
+    saveAiConfigBtn: $('[data-role="settings-save-ai-config"]'),
+    aiConfigStatus: $('[data-role="settings-ai-config-status"]'),
+    aiPromptInput: $('[data-role="settings-ai-prompt-input"]'),
+    runAiPromptBtn: $('[data-role="settings-run-ai-prompt"]'),
+    aiPromptResultList: $('[data-role="settings-ai-prompt-result-list"]'),
     prefStatus: $('[data-role="settings-pref-status"]'),
     selfTestResult: null,
+};
+const settingsState = {
+    modelProviders: [],
+    modelSettings: null,
 };
 const VIEW_TRANSITION_MS = 180;
 let settingsSyncTimer = null;
@@ -68,6 +83,91 @@ function setPreferenceStatus(text) {
     if (settingsDom.prefStatus) {
         settingsDom.prefStatus.textContent = text;
     }
+}
+
+function setAiConfigStatus(text) {
+    if (settingsDom.aiConfigStatus) {
+        settingsDom.aiConfigStatus.textContent = text;
+    }
+}
+
+function renderSelectOptions(selectEl, list = [], selectedValue = "") {
+    if (!selectEl) {
+        return;
+    }
+    const nextSelected = String(selectedValue || "");
+    selectEl.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+    list.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.id;
+        option.textContent = item.label || item.id;
+        fragment.appendChild(option);
+    });
+    selectEl.appendChild(fragment);
+    if (nextSelected && list.some((item) => item.id === nextSelected)) {
+        selectEl.value = nextSelected;
+        return;
+    }
+    if (list.length) {
+        selectEl.value = list[0].id;
+    }
+}
+
+function getSelectedProvider(providerId = "") {
+    const targetId = String(providerId || "").trim();
+    return settingsState.modelProviders.find((item) => item.id === targetId) || settingsState.modelProviders[0] || null;
+}
+
+function syncAiModelSelects(providerId = "", selectedModels = {}) {
+    const provider = getSelectedProvider(providerId);
+    if (!provider) {
+        return;
+    }
+    if (settingsDom.aiProviderSelect) {
+        settingsDom.aiProviderSelect.value = provider.id;
+    }
+    renderSelectOptions(settingsDom.aiChatModelSelect, provider.chatModels || [], selectedModels.chatModel || "");
+    renderSelectOptions(settingsDom.aiSummaryModelSelect, provider.summaryModels || provider.chatModels || [], selectedModels.summaryModel || "");
+    renderSelectOptions(settingsDom.aiVisionModelSelect, provider.visionModels || provider.chatModels || [], selectedModels.visionModel || "");
+}
+
+function syncAiPromptResult(result = null) {
+    if (!settingsDom.aiPromptResultList) {
+        return;
+    }
+    settingsDom.aiPromptResultList.innerHTML = renderModelPromptResult(result);
+}
+
+function syncAiProviderControls(data = null) {
+    if (!data || !Array.isArray(data.providers) || !data.providers.length) {
+        setAiConfigStatus("模型配置不可用。");
+        syncAiPromptResult(null);
+        return;
+    }
+    settingsState.modelProviders = data.providers;
+    settingsState.modelSettings = data;
+    renderSelectOptions(settingsDom.aiProviderSelect, data.providers, data.current?.providerId || "");
+    syncAiModelSelects(data.current?.providerId || "", {
+        chatModel: data.current?.chatModel || "",
+        summaryModel: data.current?.summaryModel || "",
+        visionModel: data.current?.visionModel || "",
+    });
+    if (settingsDom.aiApiKeyInput) {
+        settingsDom.aiApiKeyInput.value = "";
+        settingsDom.aiApiKeyInput.placeholder = data.current?.hasCustomApiKey
+            ? "已保存当前厂商 API Key；留空表示不改动"
+            : "可选：输入当前厂商 API Key";
+    }
+    const providerName = data.resolved?.providerName || data.current?.providerId || "未知厂商";
+    const summary = [
+        `当前：${providerName}`,
+        `主模型 ${data.current?.chatModel || "未设置"}`,
+        `副模型 ${data.current?.summaryModel || "未设置"}`,
+        `读图模型 ${data.current?.visionModel || "未设置"}`,
+    ];
+    setAiConfigStatus(summary.join(" | "));
+    syncAiPromptResult(null);
 }
 
 function resolveTheme(value) {
@@ -263,18 +363,19 @@ async function syncSettingsData() {
     return await measureAsync("settings.syncSettingsData.body", async () => {
         if (!window.api.getAiContextData || !window.api.getLongTermMemoryData) return;
 
-        const jobs = [
+        const [
+            contextData,
+            memoryData,
+            memoryRoutineMeta,
+            agentCapabilities,
+            modelProviderSettings,
+        ] = await Promise.all([
             window.api.getAiContextData(),
             window.api.getLongTermMemoryData(),
-        ];
-        if (window.api.getMemoryRoutineMeta) {
-            jobs.push(window.api.getMemoryRoutineMeta());
-        }
-        if (window.api.getAgentCapabilities) {
-            jobs.push(window.api.getAgentCapabilities());
-        }
-
-        const [contextData, memoryData, memoryRoutineMeta, agentCapabilities] = await Promise.all(jobs);
+            window.api.getMemoryRoutineMeta ? window.api.getMemoryRoutineMeta() : Promise.resolve(null),
+            window.api.getAgentCapabilities ? window.api.getAgentCapabilities() : Promise.resolve(null),
+            window.api.getModelProviderSettings ? window.api.getModelProviderSettings() : Promise.resolve(null),
+        ]);
 
         if (settingsDom.contextMeta) {
             settingsDom.contextMeta.textContent = `Saved context: ${contextData.messageCount}`;
@@ -306,6 +407,7 @@ async function syncSettingsData() {
         if (settingsDom.agentToolsList) {
             settingsDom.agentToolsList.innerHTML = renderAgentToolList(agentCapabilities?.tools || []);
         }
+        syncAiProviderControls(modelProviderSettings);
         syncSelfTestView();
     });
 }
@@ -373,6 +475,72 @@ async function handleRunAgentSelfTest() {
     }
 }
 
+async function handleSaveAiProviderSettings() {
+    if (!window.api.updateModelProviderSettings || !settingsDom.saveAiConfigBtn) {
+        return;
+    }
+    const providerId = String(settingsDom.aiProviderSelect?.value || "").trim();
+    const chatModel = String(settingsDom.aiChatModelSelect?.value || "").trim();
+    const summaryModel = String(settingsDom.aiSummaryModelSelect?.value || "").trim();
+    const visionModel = String(settingsDom.aiVisionModelSelect?.value || "").trim();
+    if (!providerId || !chatModel || !summaryModel || !visionModel) {
+        setAiConfigStatus("请先完整选择同一厂商下的主/副/读图模型。");
+        return;
+    }
+
+    settingsDom.saveAiConfigBtn.disabled = true;
+    setAiConfigStatus("正在保存模型配置...");
+    try {
+        const payload = {providerId, chatModel, summaryModel, visionModel};
+        const apiKey = String(settingsDom.aiApiKeyInput?.value || "").trim();
+        if (apiKey) {
+            payload.apiKey = apiKey;
+        }
+        const data = await window.api.updateModelProviderSettings(payload);
+        syncAiProviderControls(data);
+        setPreferenceStatus(`模型配置已更新：${providerId} / ${chatModel}`);
+    } catch (error) {
+        console.error(error);
+        setAiConfigStatus(`保存失败：${error?.message || error}`);
+    } finally {
+        settingsDom.saveAiConfigBtn.disabled = false;
+    }
+}
+
+async function handleTestAiPrompt() {
+    if (!window.api.testModelProviderPrompt || !settingsDom.runAiPromptBtn) {
+        return;
+    }
+    const prompt = String(settingsDom.aiPromptInput?.value || "").trim();
+    if (!prompt) {
+        setAiConfigStatus("请输入提示词后再测试。");
+        return;
+    }
+
+    settingsDom.runAiPromptBtn.disabled = true;
+    setAiConfigStatus("正在请求模型...");
+    try {
+        const result = await window.api.testModelProviderPrompt({
+            prompt,
+            providerId: String(settingsDom.aiProviderSelect?.value || "").trim(),
+            model: String(settingsDom.aiChatModelSelect?.value || "").trim(),
+            apiKey: String(settingsDom.aiApiKeyInput?.value || "").trim(),
+        });
+        syncAiPromptResult(result);
+        setAiConfigStatus(`测试成功：${result.providerName || result.providerId} / ${result.model}`);
+    } catch (error) {
+        console.error(error);
+        syncAiPromptResult({
+            providerName: "调用失败",
+            model: "N/A",
+            content: error?.message || String(error),
+        });
+        setAiConfigStatus(`测试失败：${error?.message || error}`);
+    } finally {
+        settingsDom.runAiPromptBtn.disabled = false;
+    }
+}
+
 function wireSettingsActions() {
     if (settingsDom.clearContextBtn && window.api.clearAiContext) {
         settingsDom.clearContextBtn.addEventListener("click", async () => {
@@ -424,6 +592,24 @@ function wireSettingsActions() {
 
     if (settingsDom.clipboardAutoDefaultToggle) {
         settingsDom.clipboardAutoDefaultToggle.addEventListener("change", saveBehaviorPreferencesFromControls);
+    }
+
+    if (settingsDom.aiProviderSelect) {
+        settingsDom.aiProviderSelect.addEventListener("change", () => {
+            syncAiModelSelects(settingsDom.aiProviderSelect.value);
+        });
+    }
+
+    if (settingsDom.saveAiConfigBtn) {
+        settingsDom.saveAiConfigBtn.addEventListener("click", async () => {
+            await handleSaveAiProviderSettings();
+        });
+    }
+
+    if (settingsDom.runAiPromptBtn) {
+        settingsDom.runAiPromptBtn.addEventListener("click", async () => {
+            await handleTestAiPrompt();
+        });
     }
 }
 

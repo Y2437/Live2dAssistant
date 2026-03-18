@@ -89,6 +89,12 @@
     line-height: 1.2;
 }
 
+.settings-field__control--textarea{
+    min-height: 80px;
+    line-height: 1.55;
+    resize: vertical;
+}
+
 .settings-toggle{
     border: 1px solid var(--c-border);
     background: var(--c-bg);
@@ -181,6 +187,11 @@
     align-content: start;
     gap: 8px;
     padding-right: 4px;
+}
+
+.settings-recordList--compact{
+    min-height: 72px;
+    max-height: 180px;
 }
 
 .settings-record{

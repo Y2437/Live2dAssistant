@@ -9,6 +9,7 @@ const POMODORO_JSON_PATH =path.join(app.getPath("userData"), "pomodoro.json");
 const AI_CONTEXT_JSON_PATH = path.join(app.getPath("userData"), "assistant-context.json");
 const AI_CONVERSATION_LOG_JSONL_PATH = path.join(app.getPath("userData"), "assistant-conversation-log.jsonl");
 const AI_LONG_TERM_MEMORY_JSON_PATH = path.join(app.getPath("userData"), "assistant-long-term-memory.json");
+const AI_MODEL_SETTINGS_JSON_PATH = path.join(app.getPath("userData"), "assistant-model-settings.json");
 const KNOWLEDGE_CARDS_JSON_PATH = path.join(app.getPath("userData"), "knowledge-cards.json");
 const AI_MEMORY_ROUTINE_JSON_PATH = path.join(app.getPath("userData"), "assistant-memory-routine.json");
 const CLIPBOARD_HISTORY_JSON_PATH = path.join(app.getPath("userData"), "clipboard-history.json");
@@ -149,6 +150,7 @@ module.exports = {
     AI_CONTEXT_JSON_PATH,
     AI_CONVERSATION_LOG_JSONL_PATH,
     AI_LONG_TERM_MEMORY_JSON_PATH,
+    AI_MODEL_SETTINGS_JSON_PATH,
     KNOWLEDGE_CARDS_JSON_PATH,
     AI_MEMORY_ROUTINE_JSON_PATH,
     CLIPBOARD_HISTORY_JSON_PATH,

@@ -108,3 +108,20 @@ export function renderAgentSelfTestList(result) {
         `;
     }).join("");
 }
+
+export function renderModelPromptResult(result) {
+    if (!result?.content) {
+        return renderEmptyRecord("No model response yet.");
+    }
+    return `
+        <article class="settings-record">
+            <div class="settings-record__head">
+                <div class="settings-record__headBlock">
+                    <h5 class="settings-record__title">${escapeHtml(result.providerName || result.providerId || "Provider")}</h5>
+                    <span class="settings-record__meta">${escapeHtml(result.model || "unknown-model")}</span>
+                </div>
+            </div>
+            <p class="settings-record__body">${escapeHtml(result.content)}</p>
+        </article>
+    `;
+}

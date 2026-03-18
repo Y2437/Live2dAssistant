@@ -522,6 +522,38 @@
                                     <input type="checkbox" data-role="settings-clipboard-auto-default">
                                     <span class="settings-toggle__text">剪贴板管理器默认开启自动记录</span>
                                 </label>
+                                <label class="settings-field">
+                                    <span class="settings-field__label">模型厂商</span>
+                                    <select class="settings-field__control" data-role="settings-ai-provider"></select>
+                                </label>
+                                <label class="settings-field">
+                                    <span class="settings-field__label">主模型（对话）</span>
+                                    <select class="settings-field__control" data-role="settings-ai-chat-model"></select>
+                                </label>
+                                <label class="settings-field">
+                                    <span class="settings-field__label">副模型（提炼/摘要）</span>
+                                    <select class="settings-field__control" data-role="settings-ai-summary-model"></select>
+                                </label>
+                                <label class="settings-field">
+                                    <span class="settings-field__label">读图模型（Vision）</span>
+                                    <select class="settings-field__control" data-role="settings-ai-vision-model"></select>
+                                </label>
+                                <label class="settings-field">
+                                    <span class="settings-field__label">当前厂商 API Key（可选）</span>
+                                    <input class="settings-field__control" data-role="settings-ai-api-key" type="password" placeholder="可选：输入后保存" autocomplete="off" />
+                                </label>
+                                <div class="settings-actions">
+                                    <button type="button" class="settings-btn" data-role="settings-save-ai-config">保存模型配置</button>
+                                    <span class="settings-inlineMeta" data-role="settings-ai-config-status">模型配置加载中...</span>
+                                </div>
+                                <label class="settings-field">
+                                    <span class="settings-field__label">模型测试提示词</span>
+                                    <textarea class="settings-field__control settings-field__control--textarea" data-role="settings-ai-prompt-input" rows="4" placeholder="输入提示词后点击“测试当前模型”"></textarea>
+                                </label>
+                                <div class="settings-actions">
+                                    <button type="button" class="settings-btn" data-role="settings-run-ai-prompt">测试当前模型</button>
+                                </div>
+                                <div class="settings-recordList settings-recordList--compact" data-role="settings-ai-prompt-result-list"></div>
                             </div>
                             <p class="settings-inlineMeta" data-role="settings-pref-status">偏好设置已加载。</p>
                         </section>
