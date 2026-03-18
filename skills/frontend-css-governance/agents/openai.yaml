@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend CSS Governance"
+  short_description: "Normalize and govern project CSS styles"
+  default_prompt: "Use $frontend-css-governance to audit and normalize CSS in this project."
