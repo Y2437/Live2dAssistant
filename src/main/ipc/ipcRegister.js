@@ -101,6 +101,7 @@ class IpcRegister{
         lastSkippedCount: 0,
         lastError: "",
     };
+    static conversationLogEntriesCache = null;
     static execFileAsync = promisify(execFile);
     constructor(ipc){
     }
@@ -263,7 +264,8 @@ class IpcRegister{
     static getMemoryRoutineMeta(){
         return {...this.memoryRoutineMeta};
     }
-    static async addLongTermMemory(data){
+    static async addLongTermMemory(data, options = {}){
+        const persist = options?.persist !== false;
         const title = typeof data?.title === "string" ? data.title.trim() : "";
         const content = typeof data?.content === "string" ? data.content.trim() : "";
         if(!title){
@@ -305,13 +307,17 @@ class IpcRegister{
             const merged = this.assistantLongTermMemory.splice(duplicateIndex, 1)[0];
             this.assistantLongTermMemory.unshift(merged);
             this.rebuildLongTermMemoryIndex();
-            await this.saveLongTermMemory();
+            if(persist){
+                await this.saveLongTermMemory();
+            }
             return merged;
         }
         record.createdAt = now;
         this.assistantLongTermMemory.unshift(record);
         this.rebuildLongTermMemoryIndex();
-        await this.saveLongTermMemory();
+        if(persist){
+            await this.saveLongTermMemory();
+        }
         return record;
     }
     static async deleteLongTermMemory(memoryId){
@@ -330,8 +336,11 @@ class IpcRegister{
     static buildMemoryExtractionMessages(contextItems){
         return buildMemoryExtractionPromptMessages(contextItems);
     }
-    static parseJsonObject(text){
+    static parseLooseJson(text){
         const value = String(text || "").trim();
+        if(!value){
+            return null;
+        }
         try{
             return JSON.parse(value);
         }catch(err){
@@ -354,6 +363,9 @@ class IpcRegister{
             }
             return null;
         }
+    }
+    static parseJsonObject(text){
+        return this.parseLooseJson(text);
     }
     static async extractLongTermMemoriesFromContext(){
         const contextItems = this.assistantContext.slice(-IPC_RUNTIME_CONFIG.memoryExtractionContextWindow);
@@ -408,7 +420,10 @@ class IpcRegister{
                 category: item?.category,
                 tags: item?.tags,
                 confidence: item?.confidence,
-            }));
+            }, {persist: false}));
+        }
+        if(added.length){
+            await this.saveLongTermMemory();
         }
         this.memoryRoutineMeta = {
             ...this.memoryRoutineMeta,
@@ -451,7 +466,7 @@ class IpcRegister{
         if(this.knowledgeCardsCache.version !== this.knowledgeCardsVersion){
             const categoriesSet = new Set();
             const sortedItems = [...this.knowledgeCards].sort((a, b)=>{
-                return String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt), "zh-CN");
+                return this.compareText(b.updatedAt || b.createdAt, a.updatedAt || a.createdAt);
             });
             const items = sortedItems.map((item)=>{
                 categoriesSet.add(item.category);
@@ -509,6 +524,14 @@ class IpcRegister{
         date.setDate(date.getDate() + Number(offsetDays || 0));
         return this.getLocalDateKey(date);
     }
+    static compareText(left, right){
+        const a = String(left || "");
+        const b = String(right || "");
+        if(a === b){
+            return 0;
+        }
+        return a < b ? -1 : 1;
+    }
     static getAssistantContextByDate(dateKey){
         const targetDate = String(dateKey || "").trim();
         if(!targetDate){
@@ -527,11 +550,17 @@ class IpcRegister{
     static async appendConversationLog(entry = {}){
         const line = `${JSON.stringify(entry)}\n`;
         await fs.appendFile(AI_CONVERSATION_LOG_JSONL_PATH, line, "utf-8");
+        if(Array.isArray(this.conversationLogEntriesCache)){
+            this.conversationLogEntriesCache.push(entry);
+        }
     }
     static async readConversationLogEntries(){
+        if(Array.isArray(this.conversationLogEntriesCache)){
+            return [...this.conversationLogEntriesCache];
+        }
         try{
             const raw = await fs.readFile(AI_CONVERSATION_LOG_JSONL_PATH, "utf8");
-            return raw
+            const entries = raw
                 .split(/\r?\n/)
                 .map((line)=>line.trim())
                 .filter(Boolean)
@@ -543,8 +572,11 @@ class IpcRegister{
                     }
                 })
                 .filter((item)=>item && typeof item === "object");
+            this.conversationLogEntriesCache = entries;
+            return [...entries];
         }catch(err){
             if(err.code === "ENOENT"){
+                this.conversationLogEntriesCache = [];
                 return [];
             }
             throw err;
@@ -554,10 +586,32 @@ class IpcRegister{
         const runId = typeof args?.runId === "string" ? args.runId.trim() : "";
         const allowEmpty = args?.allowEmpty === true;
         const entries = await this.readConversationLogEntries();
-        const agentEntries = entries.filter((item)=>item?.type === "assistant-exchange" && item?.mode === "agent");
-        const target = runId
-            ? agentEntries.find((item)=>String(item?.run?.runId || item?.runId || "").trim() === runId)
-            : [...agentEntries].reverse().find((item)=>Boolean(item?.run?.runId || item?.runId));
+        let target = null;
+        const availableRunIds = [];
+        const availableSet = new Set();
+        for(let index = entries.length - 1; index >= 0; index -= 1){
+            const item = entries[index];
+            if(item?.type !== "assistant-exchange" || item?.mode !== "agent"){
+                continue;
+            }
+            const itemRunId = String(item?.run?.runId || item?.runId || "").trim();
+            if(itemRunId && !availableSet.has(itemRunId) && availableRunIds.length < 24){
+                availableSet.add(itemRunId);
+                availableRunIds.unshift(itemRunId);
+            }
+            if(!target){
+                if(runId){
+                    if(itemRunId === runId){
+                        target = item;
+                    }
+                }else if(itemRunId){
+                    target = item;
+                }
+            }
+            if(target && availableRunIds.length >= 24){
+                break;
+            }
+        }
         if(!target){
             if(allowEmpty){
                 return {
@@ -575,11 +629,6 @@ class IpcRegister{
         }
         const traces = Array.isArray(target?.run?.traces) ? target.run.traces : [];
         const callChain = Array.isArray(target?.run?.callChain) ? target.run.callChain : [];
-        const availableRunIds = agentEntries
-            .map((item)=>String(item?.run?.runId || item?.runId || "").trim())
-            .filter(Boolean)
-            .filter((item, index, array)=>array.indexOf(item) === index)
-            .slice(-24);
         return {
             runId: String(target?.run?.runId || target?.runId || "").trim(),
             createdAt: typeof target?.createdAt === "string" ? target.createdAt : "",
@@ -700,32 +749,7 @@ class IpcRegister{
         }
     }
     static parseEmotionExtractionJson(text){
-        const value = String(text || "").trim();
-        if(!value){
-            return null;
-        }
-        try{
-            return JSON.parse(value);
-        }catch(err){
-            const match = value.match(/```json\s*([\s\S]*?)```/i) || value.match(/```([\s\S]*?)```/);
-            if(match){
-                try{
-                    return JSON.parse(match[1].trim());
-                }catch(innerErr){
-                    return null;
-                }
-            }
-            const start = value.indexOf("{");
-            const end = value.lastIndexOf("}");
-            if(start !== -1 && end > start){
-                try{
-                    return JSON.parse(value.slice(start, end + 1));
-                }catch(innerErr){
-                    return null;
-                }
-            }
-        }
-        return null;
+        return this.parseLooseJson(text);
     }
     static ruleBasedEmotionSignal(text){
         const source = String(text || "").toLowerCase();

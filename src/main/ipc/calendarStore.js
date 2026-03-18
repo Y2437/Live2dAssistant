@@ -152,13 +152,22 @@ function getSeedYears(aroundYear = new Date().getFullYear()) {
     return [aroundYear - 1, aroundYear, aroundYear + 1, aroundYear + 2];
 }
 
+function compareDateText(left, right) {
+    const a = String(left || "");
+    const b = String(right || "");
+    if (a === b) {
+        return 0;
+    }
+    return a < b ? -1 : 1;
+}
+
 function sortHolidayItems(items = []) {
     return [...items].sort((a, b) => {
-        const startCompare = String(a.startDate || a.date).localeCompare(String(b.startDate || b.date), "zh-CN");
+        const startCompare = compareDateText(a.startDate || a.date, b.startDate || b.date);
         if (startCompare !== 0) {
             return startCompare;
         }
-        return String(a.endDate || a.date).localeCompare(String(b.endDate || b.date), "zh-CN");
+        return compareDateText(a.endDate || a.date, b.endDate || b.date);
     });
 }
 
@@ -294,7 +303,7 @@ function parseRemoteHolidayDays(payload, year) {
             target,
         });
     }
-    return items.sort((a, b) => a.date.localeCompare(b.date, "zh-CN"));
+    return items.sort((a, b) => compareDateText(a.date, b.date));
 }
 
 function isRemoteWorkdayEntry(raw = {}) {
@@ -328,7 +337,7 @@ function parseRemoteWorkdayDays(payload, year) {
             target,
         });
     }
-    return items.sort((a, b) => a.date.localeCompare(b.date, "zh-CN"));
+    return items.sort((a, b) => compareDateText(a.date, b.date));
 }
 
 function buildRemoteRanges(days = [], {kind = "holiday", defaultName = "节假日", type = "public"} = {}) {
@@ -515,7 +524,7 @@ function normalizeCalendarData(data = {}) {
             }
         })
         .filter(Boolean)
-        .sort((a, b) => String(a.date).localeCompare(String(b.date), "zh-CN") || String(a.updatedAt).localeCompare(String(b.updatedAt), "zh-CN"));
+        .sort((a, b) => compareDateText(a.date, b.date) || compareDateText(a.updatedAt, b.updatedAt));
 
     const normalizedDiaries = aiDiaries
         .map((item) => {
@@ -526,7 +535,7 @@ function normalizeCalendarData(data = {}) {
             }
         })
         .filter(Boolean)
-        .sort((a, b) => String(a.date).localeCompare(String(b.date), "zh-CN") || String(b.updatedAt).localeCompare(String(a.updatedAt), "zh-CN"));
+        .sort((a, b) => compareDateText(a.date, b.date) || compareDateText(b.updatedAt, a.updatedAt));
 
     const normalizedWorkdays = workdays
         .map((item) => {
@@ -537,7 +546,7 @@ function normalizeCalendarData(data = {}) {
             }
         })
         .filter(Boolean)
-        .sort((a, b) => String(a.startDate || a.date).localeCompare(String(b.startDate || b.date), "zh-CN") || String(a.endDate || a.date).localeCompare(String(b.endDate || b.date), "zh-CN"));
+        .sort((a, b) => compareDateText(a.startDate || a.date, b.startDate || b.date) || compareDateText(a.endDate || a.date, b.endDate || b.date));
 
     return {
         version: CALENDAR_SCHEMA_VERSION,

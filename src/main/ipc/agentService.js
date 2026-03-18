@@ -202,7 +202,9 @@ class AgentService {
     }
 
     ensureToolAllowed(toolName, allowedTools = null) {
-        const allowedSet = new Set(this.normalizeAllowedTools(allowedTools));
+        const allowedSet = allowedTools instanceof Set
+            ? allowedTools
+            : new Set(this.normalizeAllowedTools(allowedTools));
         if (!allowedSet.has(toolName)) {
             throw new Error(`Tool not allowed for this request: ${toolName}`);
         }
@@ -411,6 +413,7 @@ class AgentService {
         const runStartedAt = new Date().toISOString();
         const context = this.getAssistantContext().slice(-8);
         const allowedTools = this.normalizeAllowedTools(options.allowedTools);
+        const allowedToolSet = new Set(allowedTools);
         const memories = this.getLongTermMemory().slice(-10).map((item) => ({
             title: item.title,
             content: summarizeText(item.content, 160),
@@ -457,7 +460,7 @@ class AgentService {
             toolName = plannerAction.tool;
             toolArgs = normalizeToolArgs(plannerAction.args);
             try {
-                toolResult = await this.runTool(toolName, toolArgs, allowedTools);
+                toolResult = await this.runTool(toolName, toolArgs, allowedToolSet);
                 callChain.push({
                     phase: "direct-tool",
                     tool: toolName,
@@ -531,6 +534,7 @@ class AgentService {
         const planningConversation = [];
         const context = this.getAssistantContext().slice(-8);
         const allowedTools = this.normalizeAllowedTools(options.allowedTools);
+        const allowedToolSet = new Set(allowedTools);
         const directMode = options.directMode === true;
         try {
             if (directMode) {
@@ -558,7 +562,7 @@ class AgentService {
             const prefetchPlan = await this.planPrefetchTools(userMessage, context, hooks, allowedTools);
             await this.runPrefetchTools(userMessage, traces, planningConversation, {
                 plan: prefetchPlan,
-                allowedTools,
+                allowedTools: allowedToolSet,
                 onTrace: async (trace, nextTraces) => {
                     callChain.push({
                         phase: trace?.phase || "prefetch",
@@ -660,7 +664,7 @@ class AgentService {
                         tool: action.tool,
                         message: `Running ${action.tool}`,
                     });
-                    toolResult = await this.runTool(action.tool, args, allowedTools);
+                    toolResult = await this.runTool(action.tool, args, allowedToolSet);
                     const successTrace = {
                         tool: action.tool,
                         status: "success",

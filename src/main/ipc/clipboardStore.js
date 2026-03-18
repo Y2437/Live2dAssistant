@@ -112,7 +112,12 @@ function createClipboardStore({dataPath, clipboard, nativeImage, maxItems = 120}
     }
 
     function getClipboardHistoryData() {
-        const pinnedCount = history.filter((item) => item.pinned).length;
+        let pinnedCount = 0;
+        for (const item of history) {
+            if (item?.pinned) {
+                pinnedCount += 1;
+            }
+        }
         return {
             count: history.length,
             pinnedCount,
@@ -124,10 +129,26 @@ function createClipboardStore({dataPath, clipboard, nativeImage, maxItems = 120}
         if (history.length <= maxItems) {
             return;
         }
-        const pinnedItems = history.filter((item) => item.pinned);
-        const normalItems = history.filter((item) => !item.pinned);
-        const keepNormalCount = Math.max(0, maxItems - pinnedItems.length);
-        history = [...pinnedItems, ...normalItems.slice(0, keepNormalCount)];
+        let pinnedCount = 0;
+        for (const item of history) {
+            if (item?.pinned) {
+                pinnedCount += 1;
+            }
+        }
+        const keepNormalCount = Math.max(0, maxItems - pinnedCount);
+        const next = [];
+        let keptNormal = 0;
+        for (const item of history) {
+            if (item?.pinned) {
+                next.push(item);
+                continue;
+            }
+            if (keptNormal < keepNormalCount) {
+                next.push(item);
+                keptNormal += 1;
+            }
+        }
+        history = next;
     }
 
     async function captureClipboardRecord(options = {}) {
