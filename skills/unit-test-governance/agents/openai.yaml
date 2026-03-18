@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unit Test Governance"
+  short_description: "Standardize and integrate deterministic unit tests for this project"
+  default_prompt: "Use $unit-test-governance to design and implement unit tests with project-aligned conventions."
