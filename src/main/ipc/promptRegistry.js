@@ -108,7 +108,7 @@ const ASSISTANT_FINAL_ANSWER_RULES = [
 ];
 
 const AGENT_TOOL_SPECS = [
-    {name: "get_context", label: "最近对话", category: "context", argsExample: "{}", description: "读取最近对话上下文。", prefetchable: true},
+    {name: "get_agent_call_chain", label: "调用链记录", category: "agent", argsExample: "{\"runId\":\"optional-run-id\"}", description: "读取某次 Agent 请求的完整调用链，不传 runId 时默认返回最近一次。"},
     {name: "get_memory", label: "长期记忆", category: "memory", argsExample: "{}", description: "读取全部长期记忆。"},
     {name: "search_memory", label: "搜索记忆", category: "memory", argsExample: "{\"query\":\"keyword\"}", description: "搜索长期记忆，返回匹配内容与片段。", prefetchable: true},
     {name: "get_memory_routine_status", label: "记忆状态", category: "memory", argsExample: "{}", description: "读取记忆提炼任务状态。", prefetchable: true},
@@ -132,6 +132,10 @@ const AGENT_TOOL_SPECS = [
     {name: "create_calendar_todo", label: "新增日历待办", category: "calendar", argsExample: "{\"title\":\"提交周报\",\"date\":\"2026-03-06\",\"priority\":\"high\"}", description: "创建日历待办。", mutating: true},
     {name: "update_calendar_todo", label: "更新日历待办", category: "calendar", argsExample: "{\"id\":\"todo-1\",\"status\":\"done\"}", description: "更新日历待办。", mutating: true},
     {name: "delete_calendar_todo", label: "删除日历待办", category: "calendar", argsExample: "{\"id\":\"todo-1\"}", description: "删除日历待办。", mutating: true},
+    {name: "list_todo_items", label: "待办查询", category: "calendar", argsExample: "{\"date\":\"2026-03-06\"}", description: "查询待办列表（支持 date/startDate/endDate/status）。", prefetchable: true},
+    {name: "create_todo_item", label: "待办新增", category: "calendar", argsExample: "{\"title\":\"提交周报\",\"date\":\"2026-03-06\"}", description: "新增待办；未传 date 时默认今天。", mutating: true},
+    {name: "update_todo_item", label: "待办更新", category: "calendar", argsExample: "{\"id\":\"todo-1\",\"title\":\"新标题\",\"status\":\"done\"}", description: "更新待办标题或状态。", mutating: true},
+    {name: "delete_todo_item", label: "待办删除", category: "calendar", argsExample: "{\"id\":\"todo-1\"}", description: "删除待办。", mutating: true},
     {name: "list_ai_diaries", label: "AI日记列表", category: "calendar", argsExample: "{\"date\":\"2026-03-06\"}", description: "按日期读取 AI 自有日记。", prefetchable: true},
     {name: "generate_today_ai_diary", label: "生成今日日记", category: "calendar", argsExample: "{\"prompt\":\"可选补充提示\"}", description: "仅当用户明确要求生成或写今天的 AI 日记时使用，自动写入日程安排模块。", mutating: true},
     {name: "update_ai_diary", label: "更新AI日记", category: "calendar", argsExample: "{\"id\":\"diary-1\",\"title\":\"新标题\"}", description: "更新 AI 日记。", mutating: true},
@@ -213,7 +217,9 @@ function formatAssistantContextItems(contextItems = []) {
             const role = item?.role || "unknown";
             const roleText = role === "user" ? "用户" : (role === "assistant" ? "助手" : role);
             const text = String(item?.message ?? item?.content ?? "").trim() || EMPTY_PROMPT_VALUE;
-            return `${roleText}: ${text}`;
+            const createdAt = typeof item?.createdAt === "string" ? item.createdAt.trim() : "";
+            const timestamp = createdAt ? `[${createdAt}] ` : "";
+            return `${roleText}: ${timestamp}${text}`;
         })
         .join("\n");
 }

@@ -55,6 +55,7 @@
     line-height: 1;
     font-weight: 800;
     cursor: pointer;
+    transition: transform 120ms var(--ease-out), border-color 120ms var(--ease-out), background-color 120ms var(--ease-out), opacity 120ms var(--ease-out);
 }
 
 .clipboard-btn:hover{
@@ -63,7 +64,7 @@
 }
 
 .clipboard-btn--danger{
-    color: #cf3d3d;
+    color: var(--c-danger);
 }
 
 .clipboard-btn[data-enabled="true"]{
@@ -118,6 +119,7 @@
     color: var(--c-text);
     padding: 8px 10px;
     font-size: 12px;
+    transition: border-color 120ms var(--ease-out), background-color 120ms var(--ease-out);
 }
 
 .clipboard-filters{
@@ -137,6 +139,7 @@
     line-height: 1;
     font-weight: 800;
     cursor: pointer;
+    transition: transform 120ms var(--ease-out), border-color 120ms var(--ease-out), background-color 120ms var(--ease-out), opacity 120ms var(--ease-out);
 }
 
 .clipboard-filter.is-active{
@@ -209,10 +212,32 @@
     line-height: 1;
     font-weight: 800;
     cursor: pointer;
+    transition: transform 120ms var(--ease-out), border-color 120ms var(--ease-out), background-color 120ms var(--ease-out), opacity 120ms var(--ease-out);
 }
 
 .clipboard-item__btn--danger{
-    color: #cf3d3d;
+    color: var(--c-danger);
+}
+
+.clipboard-btn:active,
+.clipboard-filter:active,
+.clipboard-item__btn:active{
+    transform: translateY(0);
+    opacity: 0.96;
+}
+
+.clipboard-filter:hover,
+.clipboard-item__btn:hover{
+    border-color: var(--c-border-strong);
+    transform: translateY(-1px);
+}
+
+.clipboard-btn:focus-visible,
+.clipboard-search:focus,
+.clipboard-filter:focus-visible,
+.clipboard-item__btn:focus-visible{
+    outline: var(--c-focus) solid 2px;
+    outline-offset: 2px;
 }
 
 .clipboard-item__text{
@@ -220,7 +245,7 @@
     font-size: 12px;
     line-height: 1.55;
     white-space: pre-wrap;
-    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .clipboard-item__text--muted{
@@ -253,7 +278,7 @@
     font-size: 12px;
 }
 
-@media (max-width: 920px){
+@media (width <= 920px){
     .clipboard-head{
         display: grid;
     }

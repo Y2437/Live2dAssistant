@@ -14,47 +14,36 @@
 .pomo{
     --pomo-pad: 20px;
     --pomo-gap: 12px;
-
     --pomo-line: var(--c-border);
     --pomo-line-strong: var(--c-border-strong);
-
     --pomo-btn-bg: var(--c-btn);
     --pomo-btn-hover: var(--c-btn-hover);
-
     --pomo-text: var(--c-text);
     --pomo-muted: var(--c-muted);
-
     --pomo-card-bg: var(--c-panel);
-
     --pomo-focus: var(--c-focus);
-
     --pomo-digit-w: 86px;
     --pomo-digit-h: 120px;
     --pomo-cell-h: 120px;
 
     /* 彩虹流体颜色定义 */
-    --pomo-rainbow-1: #ff0055;
-    --pomo-rainbow-2: #0099ff;
-    --pomo-rainbow-3: #ffcc00;
-    --pomo-rainbow-4: #00ff99;
-    --pomo-rainbow-5: #cc33ff;
+    --pomo-rainbow-1: #f05;
+    --pomo-rainbow-2: #09f;
+    --pomo-rainbow-3: #fc0;
+    --pomo-rainbow-4: #0f9;
+    --pomo-rainbow-5: #c3f;
 
     width: min(560px, 100%);
     aspect-ratio: 1 / 1;
     margin: 0 auto;
-
     border-style: solid;
     border-width: 1px;
     border-color: var(--pomo-line);
-
     box-shadow: var(--shadow-1);
-
     position: relative;
     overflow: hidden;
     isolation: isolate;
-
     color: var(--pomo-text);
-
     user-select: none;
     text-align: center;
 }
@@ -111,9 +100,11 @@
     grid-template-rows: auto 1fr auto;
     height: 100%;
 }
+
 .pomoLayout--list{
     grid-template-rows: auto 1fr auto;
 }
+
 .pomoLayout--run{
     grid-template-rows: 1fr;
     padding: 0;
@@ -126,22 +117,17 @@
 .pomoBtn {
     height: 50px; /* 统一高度 */
     width: 100%;
-
     border-style: solid;
     border-width: 1px;
     border-color: var(--pomo-line);
-
     background: var(--pomo-btn-bg);
     color: var(--pomo-text);
-
     font-size: 15px;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-
     border-radius: 0; /* 保持硬朗风格 */
     cursor: pointer;
-
     display: grid;
     place-items: center;
 
@@ -153,7 +139,7 @@
     background: var(--pomo-btn-hover);
     border-color: var(--pomo-line-strong);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
 }
 
 .pomoBtn:active {
@@ -161,26 +147,35 @@
     box-shadow: none;
 }
 
+.pomoBtn:focus-visible {
+    outline: 2px solid var(--pomo-focus);
+    outline-offset: 2px;
+}
+
 /* Specific overrides */
 .pomoBtn--go {
     width: min(340px, 100%);
     justify-self: center;
 }
+
 .pomoBtn--primary {
     /* 确认按钮 */
     max-width: 200px; /* 限制最大宽度 */
     justify-self: center;
 }
+
 .pomoBtn--run {
     /* 暂停按钮 */
     height: 60px; /* Run 页面按钮稍大 */
-    background: rgba(255,255,255,0.05);
+    background: rgb(255 255 255 / 5%);
     backdrop-filter: blur(5px);
 }
+
 .pomoBtn.disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
 /* =========================================
    Header Styling
    ========================================= */
@@ -201,9 +196,10 @@
     color: var(--pomo-muted);
     cursor: pointer; transition: all 0.2s; z-index: 5;
 }
+
 .pomoIconBtn--ghost:hover {
     color: var(--c-text);
-    background: rgba(125, 125, 125, 0.05);
+    background: rgb(125 125 125 / 5%);
 }
 
 .pomoNameWrap {
@@ -256,15 +252,13 @@
     align-items: center;
     gap: 8px; /* 输入框和按钮的间距 */
 }
+
 /* 悬停时的微交互 */
 
 /* 方框输入框 */
 .pomoCycleInput {
     height: 50px;
     width: 60px;
-
-    background: var(--pomo-card-bg);
-
     font-size: 24px;
     font-weight: 900;
     text-align: center;
@@ -273,26 +267,30 @@
     background: linear-gradient(145deg, var(--pomo-side-bg), var(--pomo-card-bg));
 
     /* 边框：保持极细的边界定义 */
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border: 1px solid rgb(0 0 0 / 5%);
 
     /* 关键：双重内阴影实现“凹槽”感 */
+
     /* 深色阴影在左上，浅色在右下 (凹陷效果) 或反之 */
     box-shadow:
-            inset 3px 3px 6px rgba(0, 0, 0, 0.15), /* 左上深色内阴影 */
-            inset -2px -2px 5px rgba(255, 255, 255, 0.6); /* 右下高光内阴影 */
+            inset 3px 3px 6px rgb(0 0 0 / 15%), /* 左上深色内阴影 */
+            inset -2px -2px 5px rgb(255 255 255 / 60%); /* 右下高光内阴影 */
 
     position: relative;
     overflow: hidden;
     cursor: pointer;
     transition: box-shadow 0.2s ease, transform 0.2s ease;
+
     /* 移除默认箭头 */
     -moz-appearance: textfield;
 }
-.pomoDigit:hover {
+
+.pomoCycleInput:hover {
     box-shadow:
-            inset 4px 4px 8px rgba(0, 0, 0, 0.18),
-            inset -3px -3px 6px rgba(255, 255, 255, 0.8);
+            inset 4px 4px 8px rgb(0 0 0 / 18%),
+            inset -3px -3px 6px rgb(255 255 255 / 80%);
 }
+
 .pomoCycleInput::-webkit-inner-spin-button,
 .pomoCycleInput::-webkit-outer-spin-button {
     -webkit-appearance: none; margin: 0;
@@ -300,8 +298,8 @@
 
 .pomoCycleInput:focus {
     box-shadow:
-            inset 4px 4px 8px rgba(0, 0, 0, 0.18),
-            inset -3px -3px 6px rgba(255, 255, 255, 0.8);
+            inset 4px 4px 8px rgb(0 0 0 / 18%),
+            inset -3px -3px 6px rgb(255 255 255 / 80%);
 }
 
 /* 右侧按钮组 */
@@ -317,24 +315,31 @@
     display: flex;
     align-items: center;
     justify-content: center;
-
-
     border: 1px solid var(--pomo-line);
     background: var(--pomo-btn-bg);
-    background: var(--pomo-btn-bg);
     color: var(--pomo-muted);
-
     cursor: pointer;
     transition: all 0.1s;
 }
+
 .pomoMiniBtn:hover {
     background: var(--pomo-btn-hover);
     color: var(--c-text);
     border-color: var(--pomo-line-strong);
 }
+
 .pomoMiniBtn:active {
     background: var(--c-focus);
     color: #fff;
+}
+
+.pomoMiniBtn:focus-visible,
+.pomoIconBtn:focus-visible,
+.pomoIconBtn--ghost:focus-visible,
+.pomoCycleInput:focus-visible,
+.pomoName:focus-visible {
+    outline: 2px solid var(--pomo-focus);
+    outline-offset: 2px;
 }
 
 /* --- 2. Times Section (Restored Texture) --- */
@@ -384,14 +389,16 @@
     background: linear-gradient(145deg, var(--pomo-side-bg), var(--pomo-card-bg));
 
     /* 边框：保持极细的边界定义 */
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    /*border-radius: 6px; !* 稍微加一点圆角让光影更自然 *!*/
+    border: 1px solid rgb(0 0 0 / 5%);
+
+    /* border-radius: 6px; !* 稍微加一点圆角让光影更自然 *! */
 
     /* 关键：双重内阴影实现“凹槽”感 */
+
     /* 深色阴影在左上，浅色在右下 (凹陷效果) 或反之 */
     box-shadow:
-            inset 3px 3px 6px rgba(0, 0, 0, 0.15), /* 左上深色内阴影 */
-            inset -2px -2px 5px rgba(255, 255, 255, 0.6); /* 右下高光内阴影 */
+            inset 3px 3px 6px rgb(0 0 0 / 15%), /* 左上深色内阴影 */
+            inset -2px -2px 5px rgb(255 255 255 / 60%); /* 右下高光内阴影 */
 
     position: relative;
     overflow: hidden;
@@ -402,9 +409,10 @@
 /* 悬停时的微交互 */
 .pomoDigit:hover {
     box-shadow:
-            inset 4px 4px 8px rgba(0, 0, 0, 0.18),
-            inset -3px -3px 6px rgba(255, 255, 255, 0.8);
+            inset 4px 4px 8px rgb(0 0 0 / 18%),
+            inset -3px -3px 6px rgb(255 255 255 / 80%);
 }
+
 /* 让滚轮只显示一格 */
 .pomoDigit__viewport{
     height: var(--pomo-cell-h);
@@ -435,23 +443,25 @@
     opacity: 0.85;
 
     /* 关键：文字浮雕立体感 */
+
     /* 上方高光 + 下方投影 = 凸起感 */
     text-shadow:
-            -1px -1px 2px rgba(255, 255, 255, 0.8), /* 上方高光 */
-            2px 2px 4px rgba(0, 0, 0, 0.2);       /* 下方投影 */
+            -1px -1px 2px rgb(255 255 255 / 80%), /* 上方高光 */
+            2px 2px 4px rgb(0 0 0 / 20%);       /* 下方投影 */
 
     pointer-events: none;
 }
 
 /* 适配移动端小尺寸 */
-@media (max-width: 520px){
+@media (width <= 520px){
     .pomoDigit__cell {
         font-size: 60px;
         text-shadow:
-                -1px -1px 1px rgba(255, 255, 255, 0.6),
-                1px 1px 2px rgba(0, 0, 0, 0.2);
+                -1px -1px 1px rgb(255 255 255 / 60%),
+                1px 1px 2px rgb(0 0 0 / 20%);
     }
 }
+
 /* =========================================
    Footer (Confirm Button)
    ========================================= */
@@ -460,21 +470,24 @@
     place-items: center; /* 底部居中 */
     padding-bottom: 10px;
 }
+
 /* Confirm Button uses .pomoBtn + .pomoBtn--primary */
 
 /* =========================================
    List & Run Pages (Support)
    ========================================= */
 .pomoTopbar{
-    display: grid; grid-template-columns: 1fr 1fr 1fr; alignItems: center; gap: 8px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: 8px;
     padding: 10px; border: 1px solid var(--pomo-line); background: var(--pomo-card-bg);
 }
+
 .pomoIconBtn{
     height: 40px; width: 40px; display: grid; place-items: center;
     border: 1px solid var(--pomo-line); background: var(--pomo-btn-bg);
     cursor: pointer; transition: all 0.2s ease;
 }
-/*添加按钮禁用效果*/
+
+/* 添加按钮禁用效果 */
 .pomoIconBtn.disabled{
     opacity: 0.5;
     cursor: not-allowed;
@@ -489,6 +502,7 @@
     background: var(--pomo-card-bg); overflow: hidden;
 }
 .pomoList{ margin: 0; padding: 12px; display: grid; gap: 10px; height: 100%; overflow: auto; list-style: none; align-content: start; }
+
 .pomoEmpty{
     position: absolute; inset: 0; display: grid; place-items: center;
     font-size: 12px; font-weight: 800; color: var(--pomo-muted); opacity: 0; pointer-events: none;
@@ -499,16 +513,20 @@
     display: grid; grid-template-columns: 36px 1fr 40px 40px; align-items: center; gap: 10px;
     height: 52px; padding: 0 10px; border: 1px solid var(--pomo-line); background: var(--pomo-side-bg); cursor: pointer;
 }
+
 .pomoItem.selected{
     background: var(--pomo-focus);
 }
 .pomoItem:hover{ border-color: var(--pomo-line-strong); transform: translateY(-1px); }
 .pomoItem__title{ font-size: 13px; font-weight: 900; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pomoItem__handle{ height: 32px; width: 32px; display: grid; place-items: center; border: 1px solid var(--pomo-line); background: var(--pomo-btn-bg); cursor: grab; }
+
 .pomoItem.dragging {
     background: var(--pomo-focus);
 }
+
 /* Run Page Rainbow */
+
 /* =========================
    Pomodoro — Rainbow Progress Border (Canvas Wave版)
 
@@ -537,7 +555,7 @@
 .pomoRunCard__rainbow-bg {
     position: absolute; inset: 0;
     padding: 10px;
-    background: rgba(255,255,255,0.06);
+    background: rgb(255 255 255 / 6%);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
@@ -553,7 +571,7 @@
     padding: 10px;
     background: conic-gradient(
             from -90deg,
-            #ff0055, #ff6600, #ffcc00, #00ff99, #0099ff, #cc33ff, #ff0055
+            #f05, #f60, #fc0, #0f9, #09f, #c3f, #f05
     );
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
@@ -589,7 +607,7 @@
     padding: 24px;
     gap: 20px;
 }
-.pomoRunTop { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; justify-items: center; width: 100%; }
+.pomoRunTop { display: grid; grid-template-columns: 40px 1fr 40px; place-items: center center; width: 100%; }
 .pomoPhaseDisplay { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--pomo-muted); }
 .pomoPhase { font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.2px; }
 .pomoCycleRow { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--c-text); }
@@ -597,6 +615,7 @@
 .pomoDigitGroup--mm, .pomoDigitGroup--ss { gap: 8px; }
 
 .pomoColon { font-size: 60px; font-weight: 900; color: var(--pomo-text); padding-bottom: 10px; animation: blink 1s steps(1) infinite; }
+
 @keyframes blink { 50% { opacity: 0; } }
 .pomoConfetti{ position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 10; }
 
@@ -604,12 +623,12 @@
     position: absolute;
     width: 10px;
     height: 18px;
-    background: var(--color, #ff0055);
+    background: var(--color, #f05);
     opacity: 0;
     transform: translate3d(0, 0, 0) rotate(0deg);
     animation: pomoConfettiFall 1.2s ease-out forwards;
     animation-delay: var(--delay, 0ms);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 18%);
 }
 
 @keyframes pomoConfettiFall {
@@ -617,16 +636,18 @@
         opacity: 0;
         transform: translate3d(0, 0, 0) rotate(0deg) scale(0.8);
     }
+
     10% {
         opacity: 1;
     }
+
     100% {
         opacity: 0;
-        transform: translate3d(var(--dx, 0px), var(--dy, 220px), 0) rotate(var(--rot, 180deg)) scale(1);
+        transform: translate3d(var(--dx, 0), var(--dy, 220px), 0) rotate(var(--rot, 180deg)) scale(1);
     }
 }
 
-@media (max-width: 520px){
+@media (width <= 520px){
     .pomo{ --pomo-digit-w: 60px; --pomo-digit-h: 90px; --pomo-cell-h: 90px; }
     .pomoDigit__cell { font-size: 60px; }
 }

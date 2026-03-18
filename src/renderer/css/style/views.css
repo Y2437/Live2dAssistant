@@ -15,7 +15,7 @@
 }
 
 .view__title{
-    margin: 14px 14px;
+    margin: 14px;
     font-size: 18px;
     font-weight: 850;
     letter-spacing: 0.25px;
@@ -38,14 +38,10 @@
 .placeholder-card{
     display: grid;
     gap: 12px;
-
     padding: 16px;
-
     border-style: solid;
     border-width: 1px;
-
     border-radius: 0;
-
     box-shadow: var(--shadow-1);
 }
 
@@ -64,10 +60,8 @@
 
 .placeholder-slot{
     min-height: 160px;
-
     border-style: dashed;
     border-width: 1px;
-
     border-radius: 0;
 }
 
@@ -78,19 +72,14 @@
 .shell__main > .view{
     position: absolute;
     inset: 0;
-
     overflow: auto;
-
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-
     transform: translateY(14px) scale(0.992);
-
     transition: opacity 220ms var(--ease-out),
     transform 220ms var(--ease-out),
     visibility 0ms linear 220ms;
-
     will-change: opacity, transform;
 }
 
@@ -98,9 +87,7 @@
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-
     transform: translateY(0) scale(1);
-
     transition: opacity 220ms var(--ease-out),
     transform 220ms var(--ease-out),
     visibility 0ms linear 0ms;

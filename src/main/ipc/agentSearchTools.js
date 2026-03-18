@@ -16,6 +16,14 @@ const {
 } = require("./promptRegistry");
 // Search, prompt, and tool-planning helpers for the agent loop.
 
+function formatContextItemWithTimestamp(item = {}) {
+    const role = String(item?.role || "unknown");
+    const createdAt = typeof item?.createdAt === "string" ? item.createdAt.trim() : "";
+    const message = summarizeText(item?.message ?? item?.content ?? "", 120);
+    const timestamp = createdAt ? `[${createdAt}] ` : "";
+    return `${role}: ${timestamp}${message}`;
+}
+
 function rankByNeedle(items, buildHaystack, needle, limit = 16) {
     const value = String(needle || "").trim().toLowerCase();
     const variants = buildSearchVariants(value);
@@ -204,7 +212,14 @@ async function runPrefetchTools(service, userMessage, traces, conversation, opti
     for (const item of plan) {
         try {
             const result = await service.runTool(item.tool, item.args, options.allowedTools);
-            const trace = {tool: item.tool, status: "success", input: item.args, outputPreview: clampTraceOutput(result), phase: "prefetch"};
+            const trace = {
+                tool: item.tool,
+                status: "success",
+                input: item.args,
+                output: result,
+                outputPreview: clampTraceOutput(result),
+                phase: "prefetch",
+            };
             traces.push(trace);
             if (options.onTrace) {
                 await options.onTrace(trace, traces);
@@ -214,11 +229,13 @@ async function runPrefetchTools(service, userMessage, traces, conversation, opti
                 content: [{type: "text", text: `Prefetched tool result for ${item.tool}: ${JSON.stringify(result)}`}],
             });
         } catch (error) {
+            const errorPayload = {error: error?.message || String(error)};
             const trace = {
                 tool: item.tool,
                 status: "error",
                 input: item.args,
-                outputPreview: clampTraceOutput({error: error?.message || String(error)}),
+                output: errorPayload,
+                outputPreview: clampTraceOutput(errorPayload),
                 phase: "prefetch",
             };
             traces.push(trace);
@@ -231,7 +248,7 @@ async function runPrefetchTools(service, userMessage, traces, conversation, opti
 
 function buildAgentPlanningSystemPrompt(memories, context, allowedTools = null, options = {}) {
     const memoryText = memories.length ? memories.map((item, index) => `${index + 1}. ${item.title}: ${item.content}`).join("\n") : NO_LONG_TERM_MEMORY_TEXT;
-    const contextText = context.length ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n") : NO_RECENT_CONTEXT_TEXT;
+    const contextText = context.length ? context.map((item) => formatContextItemWithTimestamp(item)).join("\n") : NO_RECENT_CONTEXT_TEXT;
     return buildPlanningPromptTemplate({
         contextText,
         memoryText,
@@ -240,9 +257,22 @@ function buildAgentPlanningSystemPrompt(memories, context, allowedTools = null, 
     });
 }
 
+function normalizeTodoCreateArgs(args = {}) {
+    const today = new Date().toISOString().slice(0, 10);
+    const title = String(args?.title || "").trim();
+    return {
+        ...args,
+        title,
+        date: String(args?.date || today).trim() || today,
+        status: String(args?.status || "todo").trim() || "todo",
+        priority: String(args?.priority || "medium").trim() || "medium",
+        description: String(args?.description || "").trim(),
+    };
+}
+
 async function runTool(service, toolName, args) {
     switch (toolName) {
-    case "get_context": return {items: service.getAssistantContext().slice(-16)};
+    case "get_agent_call_chain": return await service.getAgentCallChain(args);
     case "get_memory": return {items: service.getLongTermMemory()};
     case "search_memory": return service.searchMemory(args?.query);
     case "get_memory_routine_status": return service.getMemoryRoutineMeta();
@@ -267,6 +297,10 @@ async function runTool(service, toolName, args) {
     case "create_calendar_todo": return service.createCalendarTodo(args);
     case "update_calendar_todo": return service.updateCalendarTodo(args);
     case "delete_calendar_todo": return service.deleteCalendarTodo(args?.id);
+    case "list_todo_items": return service.listCalendarTodos(args || {});
+    case "create_todo_item": return service.createCalendarTodo(normalizeTodoCreateArgs(args));
+    case "update_todo_item": return service.updateCalendarTodo(args || {});
+    case "delete_todo_item": return service.deleteCalendarTodo(args?.id);
     case "list_ai_diaries": return service.listAiDiaries(args);
     case "generate_today_ai_diary": return service.generateTodayAiDiary(args);
     case "update_ai_diary": return service.updateAiDiary(args);

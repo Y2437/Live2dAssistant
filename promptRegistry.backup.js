@@ -108,7 +108,7 @@ const ASSISTANT_FINAL_ANSWER_RULES = [
 ];
 
 const AGENT_TOOL_SPECS = [
-    {name: "get_context", label: "最近对话", category: "context", argsExample: "{}", description: "读取最近对话上下文。", prefetchable: true},
+    {name: "get_agent_call_chain", label: "调用链记录", category: "agent", argsExample: "{\"runId\":\"optional-run-id\"}", description: "读取某次 Agent 请求的完整调用链，不传 runId 时默认返回最近一次。"},
     {name: "get_memory", label: "长期记忆", category: "memory", argsExample: "{}", description: "读取全部长期记忆。"},
     {name: "search_memory", label: "搜索记忆", category: "memory", argsExample: "{\"query\":\"keyword\"}", description: "搜索长期记忆，返回匹配内容与片段。", prefetchable: true},
     {name: "get_memory_routine_status", label: "记忆状态", category: "memory", argsExample: "{}", description: "读取记忆提炼任务状态。", prefetchable: true},
@@ -187,7 +187,9 @@ function formatAssistantContextItems(contextItems = []) {
             const role = item?.role || "unknown";
             const roleText = role === "user" ? "用户" : (role === "assistant" ? "助手" : role);
             const text = String(item?.message ?? item?.content ?? "").trim() || EMPTY_PROMPT_VALUE;
-            return `${roleText}: ${text}`;
+            const createdAt = typeof item?.createdAt === "string" ? item.createdAt.trim() : "";
+            const timestamp = createdAt ? `[${createdAt}] ` : "";
+            return `${roleText}: ${timestamp}${text}`;
         })
         .join("\n");
 }

@@ -3,6 +3,7 @@ import { escapeHtml } from "../shared/dom.js";
 const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
 const VIEW_TRANSITION_MS = 180;
 const CALENDAR_SYNC_THROTTLE_MS = 3000;
+const CALENDAR_LOCAL_CACHE_KEY = "live2dassistant.calendar.cache.v1";
 
 const calendarState = {
     currentMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -16,7 +17,8 @@ const calendarState = {
     lastSyncedAt: 0,
     syncTimer: null,
     lastMonthKey: "",
-    clickTimer: null,
+    editingTodoId: "",
+    editingTodoDraft: "",
 };
 
 const dom = {
@@ -37,6 +39,52 @@ const dom = {
     diaryList: document.querySelector('[data-role="calendar-diary-list"]'),
     addTodo: document.querySelector('[data-role="calendar-add-todo"]'),
 };
+
+function normalizePlanData(data = {}) {
+    return {
+        todos: Array.isArray(data?.todos) ? data.todos : [],
+        aiDiaries: Array.isArray(data?.aiDiaries) ? data.aiDiaries : [],
+        holidays: Array.isArray(data?.holidays) ? data.holidays : [],
+    };
+}
+
+function readCachedCalendarData() {
+    try {
+        const storage = window.localStorage;
+        if (!storage) return null;
+        const raw = storage.getItem(CALENDAR_LOCAL_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        const savedAt = Number(parsed.savedAt || 0);
+        return {
+            data: normalizePlanData(parsed.data || {}),
+            savedAt: Number.isFinite(savedAt) && savedAt > 0 ? savedAt : 0,
+        };
+    } catch (error) {
+        return null;
+    }
+}
+
+function writeCachedCalendarData(data) {
+    try {
+        const storage = window.localStorage;
+        if (!storage) return;
+        storage.setItem(CALENDAR_LOCAL_CACHE_KEY, JSON.stringify({
+            savedAt: Date.now(),
+            data: normalizePlanData(data),
+        }));
+    } catch (error) {
+        // Ignore cache write failure.
+    }
+}
+
+function applyCalendarData(data, options = {}) {
+    calendarState.data = normalizePlanData(data);
+    calendarState.loaded = true;
+    calendarState.lastSyncedAt = Number(options?.syncedAt || Date.now());
+    renderCalendarGrid();
+}
 
 function formatDateKey(date) {
     const year = date.getFullYear();
@@ -242,11 +290,10 @@ function getBadgesForDate(dateKey, indexes = buildCalendarIndexes()) {
     const holidayFlags = getHolidayFlagsForDate(dateKey, indexes);
     const badges = [];
     if (detail.todos.length) {
-        const doneCount = detail.todos.filter((item) => item.status === "done").length;
-        badges.push({type: "todo", text: `待办 ${doneCount}/${detail.todos.length}`});
+        badges.push({type: "todo", text: `待办 ${detail.todos.length}`});
     }
     if (detail.aiDiaries.length) {
-        badges.push({type: "diary", text: `AI日记 ${detail.aiDiaries.length}`});
+        badges.push({type: "diary", text: "AI日记"});
     }
     for (const holidayName of holidayFlags.holidayBadgeNames) {
         badges.push({type: "holiday", text: holidayName || "节日"});
@@ -282,15 +329,22 @@ function renderCalendarGrid() {
             >
                 <div class="calendar-cell__day">
                     <span class="calendar-cell__dayNumber">${date.getDate()}</span>
-                    ${badges.length ? '<span class="calendar-cell__dot"></span>' : ""}
                 </div>
                 <div class="calendar-cell__badges">
-                    ${badges.slice(0, 3).map((badge) => `<span class="calendar-badge calendar-badge--${badge.type}">${escapeHtml(badge.text)}</span>`).join("")}
+                    ${badges.slice(0, 2).map((badge) => `<span class="calendar-badge calendar-badge--${badge.type}">${escapeHtml(badge.text)}</span>`).join("")}
                 </div>
             </article>
         `;
     }).join("");
     dom.grid.classList.toggle("is-switching", monthChanged);
+}
+
+function updateSelectedCell(dateKey) {
+    if (!dom.grid) return;
+    const cells = dom.grid.querySelectorAll('[data-role="calendar-cell"]');
+    cells.forEach((cell) => {
+        cell.classList.toggle("is-selected", (cell.dataset.date || "") === dateKey);
+    });
 }
 
 function renderBlankCard() {
@@ -306,60 +360,91 @@ function renderModalBadges(detail) {
     const holidayNameBadges = detail.holidays
         .slice(0, 4)
         .map((item) => `<span class="calendar-badge calendar-badge--holiday">${escapeHtml(item.name || "节日")}</span>`);
+    const diaryBadge = detail.aiDiaries.length
+        ? [`<span class="calendar-badge calendar-badge--diary">AI日记</span>`]
+        : [];
     dom.modalBadges.innerHTML = [
         `<span class="calendar-badge calendar-badge--todo">待办 ${detail.todos.length}</span>`,
-        `<span class="calendar-badge calendar-badge--diary">AI日记 ${detail.aiDiaries.length}</span>`,
         `<span class="calendar-badge calendar-badge--holiday">节假日 ${detail.holidays.length}</span>`,
+        ...diaryBadge,
         ...holidayNameBadges,
     ].join("");
 }
 
 function renderTodoList(detail) {
     if (!dom.todoList) return;
-    if (!detail.todos.length) {
-        dom.todoList.innerHTML = renderBlankCard();
-        return;
-    }
     dom.todoList.innerHTML = `
-        <section class="calendar-todoTable" aria-label="待办事项列表">
-            <header class="calendar-todoTable__head">
-                <span class="calendar-todoTable__cell calendar-todoTable__cell--status">状态</span>
-                <span class="calendar-todoTable__cell calendar-todoTable__cell--content">事项</span>
-                <span class="calendar-todoTable__cell calendar-todoTable__cell--priority">优先级</span>
-                <span class="calendar-todoTable__cell calendar-todoTable__cell--time">更新时间</span>
-                <span class="calendar-todoTable__cell calendar-todoTable__cell--actions">操作</span>
-            </header>
-            <div class="calendar-todoTable__body">
-                ${detail.todos.map((item) => `
-                    <article class="calendar-todoTable__row" data-status="${escapeHtml(item.status || "todo")}">
-                        <div class="calendar-todoTable__cell calendar-todoTable__cell--status">
-                            <span class="calendar-todoStatus" data-status="${escapeHtml(item.status || "todo")}">
-                                <span class="calendar-todoStatus__check">${item.status === "done" ? "✓" : ""}</span>
-                                <span class="calendar-todoStatus__label">${item.status === "done" ? "已完成" : "待处理"}</span>
-                            </span>
-                        </div>
-                        <div class="calendar-todoTable__cell calendar-todoTable__cell--content">
-                            <h6 class="calendar-record__title">${escapeHtml(item.title)}</h6>
-                            ${item.description ? `<p class="calendar-record__body">${escapeHtml(item.description)}</p>` : `<p class="calendar-record__body calendar-record__body--muted">暂无补充说明</p>`}
-                        </div>
-                        <div class="calendar-todoTable__cell calendar-todoTable__cell--priority">
-                            <span class="calendar-priorityTag">${escapeHtml(item.priority || "medium")}</span>
-                        </div>
-                        <div class="calendar-todoTable__cell calendar-todoTable__cell--time">
-                            <span class="calendar-todoTable__timeText">${escapeHtml(item.updatedAt || item.createdAt || "") || "未记录"}</span>
-                        </div>
-                        <div class="calendar-todoTable__cell calendar-todoTable__cell--actions">
-                            <div class="calendar-record__actions">
-                                <button type="button" class="calendar-record__btn" data-action="toggle-todo" data-id="${escapeHtml(item.id)}">${item.status === "done" ? "改为未完成" : "标记完成"}</button>
-                                <button type="button" class="calendar-record__btn" data-action="edit-todo" data-id="${escapeHtml(item.id)}">编辑</button>
-                                <button type="button" class="calendar-record__btn" data-action="delete-todo" data-id="${escapeHtml(item.id)}">删除</button>
-                            </div>
-                        </div>
-                    </article>
-                `).join("")}
-            </div>
+        <form class="calendar-todoComposer" data-role="calendar-todo-composer">
+            <input
+                type="text"
+                class="calendar-todoComposer__input"
+                data-role="calendar-todo-draft"
+                placeholder="输入待办标题（回车新增）"
+                autocomplete="off"
+                spellcheck="false"
+            />
+            <button type="submit" class="calendar-btn calendar-btn--small">新增</button>
+        </form>
+        <section class="calendar-todoList" aria-label="待办事项列表">
+            ${detail.todos.length ? detail.todos.map((item) => `
+                <article class="calendar-todoItem" data-status="${escapeHtml(item.status || "todo")}">
+                    <div class="calendar-todoItem__checkWrap">
+                        <input
+                            type="checkbox"
+                            class="calendar-todoItem__check"
+                            data-action="toggle-todo"
+                            data-id="${escapeHtml(item.id)}"
+                            ${item.status === "done" ? "checked" : ""}
+                            aria-label="${item.status === "done" ? "取消完成" : "标记完成"}"
+                        />
+                    </div>
+                    ${calendarState.editingTodoId === item.id ? `
+                        <input
+                            type="text"
+                            class="calendar-todoItem__editInput"
+                            data-role="calendar-todo-inline-input"
+                            data-id="${escapeHtml(item.id)}"
+                            value="${escapeHtml(calendarState.editingTodoDraft || item.title || "")}"
+                            autocomplete="off"
+                            spellcheck="false"
+                        />
+                        <button type="button" class="calendar-record__btn calendar-todoItem__btn" data-action="save-todo-edit" data-id="${escapeHtml(item.id)}">保存</button>
+                        <button type="button" class="calendar-record__btn calendar-todoItem__btn" data-action="cancel-todo-edit" data-id="${escapeHtml(item.id)}">取消</button>
+                    ` : `
+                        <p class="calendar-todoItem__title">${escapeHtml(item.title || "")}</p>
+                        <button type="button" class="calendar-record__btn calendar-todoItem__btn" data-action="edit-todo" data-id="${escapeHtml(item.id)}">编辑</button>
+                        <button type="button" class="calendar-record__btn calendar-todoItem__btn" data-action="delete-todo" data-id="${escapeHtml(item.id)}">删除</button>
+                    `}
+                </article>
+            `).join("") : `
+                <article class="calendar-todoItem calendar-todoItem--empty">
+                    <p class="calendar-todoItem__emptyText">暂无待办，点击上方“新增待办”</p>
+                </article>
+            `}
         </section>
     `;
+}
+
+function resetTodoEditingState() {
+    calendarState.editingTodoId = "";
+    calendarState.editingTodoDraft = "";
+}
+
+function renderTodoListForSelectedDate() {
+    if (!calendarState.selectedDate) return;
+    const detail = getDateDetailFromState(calendarState.selectedDate, buildCalendarIndexes());
+    renderTodoList(detail);
+}
+
+function focusTodoInlineInput(id) {
+    if (!dom.todoList || !id) return;
+    window.requestAnimationFrame(() => {
+        const inputs = dom.todoList.querySelectorAll('[data-role="calendar-todo-inline-input"]');
+        const input = [...inputs].find((item) => (item.dataset.id || "") === id);
+        if (!input) return;
+        input.focus();
+        input.select();
+    });
 }
 
 function renderDiaryList(detail) {
@@ -385,21 +470,20 @@ function renderDiaryList(detail) {
 
 async function openDateDetail(dateKey) {
     if (!dom.modal || !dom.modalTitle || !dom.modalMeta) return;
-    calendarState.selectedDate = dateKey;
-    renderCalendarGrid();
-
-    let detail = getDateDetailFromState(dateKey, buildCalendarIndexes());
-    if (window.api?.getCalendarDayDetail) {
-        try {
-            detail = await window.api.getCalendarDayDetail(dateKey);
-        } catch (error) {
-            console.error(error);
-        }
+    if (!calendarState.loaded && window.api?.loadCalendarPlan) {
+        await syncCalendarData();
     }
+    calendarState.selectedDate = dateKey;
+    updateSelectedCell(dateKey);
+    if (dom.jumpDate) {
+        dom.jumpDate.value = dateKey;
+    }
+
+    const detail = getDateDetailFromState(dateKey, buildCalendarIndexes());
 
     const date = parseDateKey(dateKey);
     dom.modalTitle.textContent = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    dom.modalMeta.textContent = `待办 ${detail.todos.length} 条 · AI日记 ${detail.aiDiaries.length} 条 · 节假日 ${detail.holidays.length} 条`;
+    dom.modalMeta.textContent = `待办 ${detail.todos.length} 条 · AI日记：${detail.aiDiaries.length ? "有" : "无"} · 节假日 ${detail.holidays.length} 条`;
     renderModalBadges(detail);
     renderTodoList(detail);
     renderDiaryList(detail);
@@ -414,19 +498,16 @@ function closeModal() {
 
 async function syncCalendarData() {
     if (!window.api?.loadCalendarPlan) return;
-    const data = await window.api.loadCalendarPlan();
-    calendarState.data = {
-        todos: Array.isArray(data?.todos) ? data.todos : [],
-        aiDiaries: Array.isArray(data?.aiDiaries) ? data.aiDiaries : [],
-        holidays: Array.isArray(data?.holidays) ? data.holidays : [],
-    };
-    calendarState.loaded = true;
-    calendarState.lastSyncedAt = Date.now();
-    renderCalendarGrid();
+    const data = normalizePlanData(await window.api.loadCalendarPlan());
+    applyCalendarData(data, {syncedAt: Date.now()});
+    writeCachedCalendarData(data);
 }
 
 async function reloadAndRefreshModal() {
     await syncCalendarData();
+    if (calendarState.editingTodoId && !findTodoById(calendarState.editingTodoId)) {
+        resetTodoEditingState();
+    }
     if (calendarState.selectedDate && dom.modal && !dom.modal.hidden) {
         await openDateDetail(calendarState.selectedDate);
     }
@@ -442,30 +523,51 @@ function findDiaryById(id) {
 
 async function handleTodoAction(action, id) {
     const todo = findTodoById(id);
-    if (!todo) return;
+    if (!todo && action !== "cancel-todo-edit") return;
 
     if (action === "toggle-todo") {
         await window.api.updateCalendarTodo({
             id: todo.id,
             status: todo.status === "done" ? "todo" : "done",
         });
+        if (calendarState.editingTodoId === todo.id) {
+            resetTodoEditingState();
+        }
         await reloadAndRefreshModal();
         return;
     }
     if (action === "edit-todo") {
-        const nextTitle = window.prompt("编辑待办标题", todo.title || "");
-        if (nextTitle == null) return;
-        const nextDesc = window.prompt("编辑待办描述", todo.description || "") || "";
+        calendarState.editingTodoId = todo.id;
+        calendarState.editingTodoDraft = String(todo.title || "");
+        renderTodoListForSelectedDate();
+        focusTodoInlineInput(todo.id);
+        return;
+    }
+    if (action === "save-todo-edit") {
+        const title = String(calendarState.editingTodoDraft || "").trim();
+        if (!title) {
+            focusTodoInlineInput(id);
+            return;
+        }
         await window.api.updateCalendarTodo({
-            id: todo.id,
-            title: nextTitle,
-            description: nextDesc,
+            id,
+            title,
         });
+        resetTodoEditingState();
         await reloadAndRefreshModal();
         return;
     }
+    if (action === "cancel-todo-edit") {
+        resetTodoEditingState();
+        renderTodoListForSelectedDate();
+        return;
+    }
     if (action === "delete-todo") {
-        if (!window.confirm(`确认删除待办：${todo.title}？`)) return;
+        const confirmed = window.confirm(`确认删除待办：${todo.title}？`);
+        if (!confirmed) return;
+        if (calendarState.editingTodoId === todo.id) {
+            resetTodoEditingState();
+        }
         await window.api.deleteCalendarTodo(todo.id);
         await reloadAndRefreshModal();
     }
@@ -491,6 +593,20 @@ async function handleDiaryAction(action, id) {
     }
 }
 
+async function createTodoByTitle(rawTitle) {
+    const title = String(rawTitle || "").trim();
+    if (!title) return;
+    const date = calendarState.selectedDate || formatDateKey(new Date());
+    await window.api.createCalendarTodo({
+        title,
+        description: "",
+        priority: "medium",
+        date,
+        status: "todo",
+    });
+    await reloadAndRefreshModal();
+}
+
 function jumpToDate(dateKey, openModal = true) {
     if (!dateKey) return;
     const target = parseDateKey(dateKey);
@@ -511,7 +627,7 @@ function selectDate(dateKey) {
     if (dom.jumpDate) {
         dom.jumpDate.value = dateKey;
     }
-    renderCalendarGrid();
+    updateSelectedCell(dateKey);
 }
 
 function wireJumpActions() {
@@ -547,18 +663,11 @@ function wireGridActions() {
         if (!cell) return;
         const date = cell.dataset.date || "";
         if (!date) return;
-        if (calendarState.clickTimer) {
-            clearTimeout(calendarState.clickTimer);
-            calendarState.clickTimer = null;
-        }
         if (event.detail >= 2) {
             jumpToDate(date, true);
             return;
         }
-        calendarState.clickTimer = window.setTimeout(() => {
-            calendarState.clickTimer = null;
-            selectDate(date);
-        }, 220);
+        selectDate(date);
     });
 
     dom.grid?.addEventListener("keydown", (event) => {
@@ -580,16 +689,40 @@ function wireGridActions() {
 }
 
 function wireModalActions() {
-    dom.modal?.addEventListener("click", (event) => {
-        if (event.target.closest('[data-role="calendar-close"]')) {
+    const closeTriggers = dom.modal?.querySelectorAll('[data-role="calendar-close"]') || [];
+    closeTriggers.forEach((trigger) => {
+        trigger.addEventListener("click", () => {
             closeModal();
+        });
+    });
+
+    const modalDialog = dom.modal?.querySelector(".calendar-modal__dialog");
+    modalDialog?.addEventListener("submit", (event) => {
+        const form = event.target.closest('[data-role="calendar-todo-composer"]');
+        if (!form) return;
+        event.preventDefault();
+        const input = form.querySelector('[data-role="calendar-todo-draft"]');
+        const title = String(input?.value || "").trim();
+        if (!title) {
+            input?.focus();
             return;
         }
-        const btn = event.target.closest(".calendar-record__btn");
-        if (!btn) return;
-        const action = btn.dataset.action || "";
-        const id = btn.dataset.id || "";
-        if (!action || !id) return;
+        createTodoByTitle(title)
+            .then(() => {
+                if (input) {
+                    input.value = "";
+                }
+            })
+            .catch((error) => console.error(error));
+    });
+
+    modalDialog?.addEventListener("click", (event) => {
+        const actionEl = event.target.closest("[data-action]");
+        if (!actionEl) return;
+        const action = actionEl.dataset.action || "";
+        const id = actionEl.dataset.id || "";
+        if (!action) return;
+        if (action.includes("todo") && !id) return;
         if (action.includes("todo")) {
             handleTodoAction(action, id).catch((error) => console.error(error));
             return;
@@ -599,21 +732,47 @@ function wireModalActions() {
         }
     });
 
+    modalDialog?.addEventListener("input", (event) => {
+        const inlineInput = event.target.closest('[data-role="calendar-todo-inline-input"]');
+        if (!inlineInput) return;
+        const id = inlineInput.dataset.id || "";
+        if (!id || id !== calendarState.editingTodoId) return;
+        calendarState.editingTodoDraft = String(inlineInput.value || "");
+    });
+
+    modalDialog?.addEventListener("keydown", (event) => {
+        const inlineInput = event.target.closest('[data-role="calendar-todo-inline-input"]');
+        if (!inlineInput) return;
+        const id = inlineInput.dataset.id || "";
+        if (!id) return;
+        if (event.key === "Enter") {
+            event.preventDefault();
+            event.stopPropagation();
+            handleTodoAction("save-todo-edit", id).catch((error) => console.error(error));
+            return;
+        }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            handleTodoAction("cancel-todo-edit", id).catch((error) => console.error(error));
+        }
+    });
+
     dom.addTodo?.addEventListener("click", async () => {
-        const date = calendarState.selectedDate || formatDateKey(new Date());
-        const title = window.prompt("输入待办标题", "");
-        if (!title) return;
-        const description = window.prompt("输入待办描述（可选）", "") || "";
-        const priorityInput = String(window.prompt("优先级（low/medium/high）", "medium") || "medium").trim().toLowerCase();
-        const priority = ["low", "medium", "high"].includes(priorityInput) ? priorityInput : "medium";
-        await window.api.createCalendarTodo({
-            title,
-            description,
-            priority,
-            date,
-            status: "todo",
-        });
-        await reloadAndRefreshModal();
+        const input = dom.todoList?.querySelector('[data-role="calendar-todo-draft"]');
+        let title = String(input?.value || "").trim();
+        if (!title) {
+            const promptTitle = window.prompt("输入待办标题", "");
+            title = String(promptTitle || "").trim();
+            if (!title) {
+                input?.focus();
+                return;
+            }
+        }
+        await createTodoByTitle(title);
+        if (input) {
+            input.value = "";
+        }
     });
 
     window.addEventListener("keydown", (event) => {
@@ -625,7 +784,12 @@ function wireModalActions() {
 
 function wireViewSync() {
     window.addEventListener("shell:viewchange", (event) => {
-        if (event.detail?.viewKey !== "calendar") return;
+        if (event.detail?.viewKey !== "calendar") {
+            if (dom.modal && !dom.modal.hidden) {
+                closeModal();
+            }
+            return;
+        }
         if (calendarState.syncTimer) {
             clearTimeout(calendarState.syncTimer);
             calendarState.syncTimer = null;
@@ -650,7 +814,12 @@ function bootCalendar() {
         dom.jumpDate.value = todayKey;
     }
     renderGridHead();
-    renderCalendarGrid();
+    const cached = readCachedCalendarData();
+    if (cached) {
+        applyCalendarData(cached.data, {syncedAt: cached.savedAt || Date.now()});
+    } else {
+        renderCalendarGrid();
+    }
     wireJumpActions();
     wireMonthActions();
     wireGridActions();

@@ -8,7 +8,9 @@
     "test:auto": "node scripts/auto-test.js",
     "start": "electron-forge start",
     "make": "electron-forge make",
-    "package": "electron-forge package"
+    "package": "electron-forge package",
+    "lint:css": "stylelint \"src/renderer/css/**/*.css\"",
+    "lint:css:fix": "stylelint \"src/renderer/css/**/*.css\" --fix"
   },
   "repository": {
     "type": "git",
@@ -31,7 +33,9 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron/fuses": "^1.8.0",
-    "electron": "^40.1.0"
+    "electron": "^40.1.0",
+    "stylelint": "^17.4.0",
+    "stylelint-config-standard": "^40.0.0"
   },
   "dependencies": {
     "@prisma/client": "^7.4.2",

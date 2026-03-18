@@ -11,6 +11,11 @@ function ensureAgentService(registry) {
     return registry.agentService;
 }
 
+function resolveRunId(value = "") {
+    const runId = String(value || "").trim();
+    return runId || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function registerCoreHandlers(registry, {wm, WINDOW_KEYS, AI_TOUCH_RESPONSE}) {
     ipcMain.handle("app:ping", () => "pong");
 
@@ -77,16 +82,28 @@ function registerAgentHandlers(registry) {
             : payload?.message;
         const allowedTools = Array.isArray(payload?.allowedTools) ? payload.allowedTools : null;
         const directMode = payload?.directMode === true;
+        const runId = resolveRunId(payload?.runId);
         if (typeof message !== "string" || !message.trim()) {
             throw new Error("Message is required.");
         }
-        const result = await ensureAgentService(registry).chat(message.trim(), {}, {allowedTools, directMode});
-        await registry.recordAssistantExchange(message.trim(), result?.content || "");
+        const result = await ensureAgentService(registry).chat(message.trim(), {}, {allowedTools, directMode, runId});
+        await registry.recordAssistantExchange(message.trim(), result?.content || "", {
+            mode: "agent",
+            directMode,
+            run: result?.run || {
+                runId,
+                directMode,
+                status: "success",
+                traces: Array.isArray(result?.traces) ? result.traces : [],
+                callChain: Array.isArray(result?.callChain) ? result.callChain : [],
+            },
+        });
         return result;
     });
     ipcMain.handle("app:agentChatStream", async (event, payload) => {
         const message = typeof payload?.message === "string" ? payload.message.trim() : "";
         const requestId = typeof payload?.requestId === "string" ? payload.requestId : "";
+        const runId = resolveRunId(payload?.runId || requestId);
         if (!message) {
             throw new Error("Message is required.");
         }
@@ -109,8 +126,18 @@ function registerAgentHandlers(registry) {
                 onTrace: directMode ? null : async (trace, traces) => send({type: "trace", trace, traces}),
                 onText: async (content) => send({type: "content", content}),
                 signal: abortController.signal,
-            }, {allowedTools, directMode});
-            await registry.recordAssistantExchange(message, result?.content || "");
+            }, {allowedTools, directMode, runId});
+            await registry.recordAssistantExchange(message, result?.content || "", {
+                mode: "agent",
+                directMode,
+                run: result?.run || {
+                    runId,
+                    directMode,
+                    status: "success",
+                    traces: Array.isArray(result?.traces) ? result.traces : [],
+                    callChain: Array.isArray(result?.callChain) ? result.callChain : [],
+                },
+            });
             send({type: "complete", result});
             return result;
         } catch (error) {

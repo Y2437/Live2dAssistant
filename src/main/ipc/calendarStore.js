@@ -739,9 +739,10 @@ async function deleteAiDiaryRecord(dataPath, id) {
     return await writeCalendarData(dataPath, data);
 }
 
-async function getCalendarDayDetail(dataPath, date) {
+async function getCalendarDayDetail(dataPath, date, options = {}) {
     const targetDate = normalizeDateText(date, "date");
-    const data = await readCalendarData(dataPath);
+    const useRemote = options?.useRemote !== false;
+    const data = await readCalendarData(dataPath, {useRemote});
     return {
         date: targetDate,
         todos: data.todos.filter((item) => item.date === targetDate),

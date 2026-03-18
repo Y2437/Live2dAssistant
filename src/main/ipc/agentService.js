@@ -47,6 +47,7 @@ class AgentService {
         this.createAiDiary = options.createAiDiary;
         this.updateAiDiary = options.updateAiDiary;
         this.deleteAiDiary = options.deleteAiDiary;
+        this.readAgentCallChain = options.getAgentCallChain;
         this.requestCameraCapture = options.requestCameraCapture;
         this.currentUserMessage = "";
     }
@@ -128,6 +129,52 @@ class AgentService {
         return parts.length ? ` (${parts.join(", ")})` : "";
     }
 
+    resolveRunId(value = "") {
+        const runId = String(value || "").trim();
+        return runId || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
+    formatContextItemWithTimestamp(item = {}, maxLength = 120) {
+        const role = String(item?.role || "unknown");
+        const createdAt = typeof item?.createdAt === "string" ? item.createdAt.trim() : "";
+        const message = summarizeText(item?.message ?? item?.content ?? "", maxLength);
+        const timestamp = createdAt ? `[${createdAt}] ` : "";
+        return `${role}: ${timestamp}${message}`;
+    }
+
+    buildRunInfo({
+        runId = "",
+        startedAt = "",
+        finishedAt = "",
+        directMode = false,
+        allowedTools = [],
+        status = "success",
+        error = "",
+        traces = [],
+        callChain = [],
+    } = {}) {
+        return {
+            runId: this.resolveRunId(runId),
+            startedAt: startedAt || new Date().toISOString(),
+            finishedAt: finishedAt || new Date().toISOString(),
+            directMode: directMode === true,
+            allowedTools: Array.isArray(allowedTools) ? [...allowedTools] : [],
+            status,
+            error: String(error || ""),
+            traceCount: Array.isArray(traces) ? traces.length : 0,
+            traces: Array.isArray(traces) ? traces : [],
+            callChain: Array.isArray(callChain) ? callChain : [],
+        };
+    }
+
+    attachRunInfo(result = {}, runInfo = {}) {
+        return {
+            ...result,
+            runId: runInfo.runId || "",
+            run: runInfo,
+        };
+    }
+
     getToolSpecs() {
         return getAgentToolSpecs();
     }
@@ -196,7 +243,7 @@ class AgentService {
                         userMessage,
                         allowedTools,
                         contextText: context.length
-                            ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n")
+                            ? context.map((item) => this.formatContextItemWithTimestamp(item, 120)).join("\n")
                             : "没有最近对话上下文。",
                     }),
                 }],
@@ -320,7 +367,7 @@ class AgentService {
 
     buildDirectContextText(context = []) {
         return context.length
-            ? context.map((item) => `${item.role}: ${summarizeText(item.message, 120)}`).join("\n")
+            ? context.map((item) => this.formatContextItemWithTimestamp(item, 120)).join("\n")
             : "没有最近对话上下文。";
     }
 
@@ -360,12 +407,15 @@ class AgentService {
     async chatDirect(userMessage, hooks = {}, options = {}) {
         this.ensureNotAborted(hooks.signal);
         this.currentUserMessage = String(userMessage || "");
+        const runId = this.resolveRunId(options.runId);
+        const runStartedAt = new Date().toISOString();
         const context = this.getAssistantContext().slice(-8);
         const allowedTools = this.normalizeAllowedTools(options.allowedTools);
         const memories = this.getLongTermMemory().slice(-10).map((item) => ({
             title: item.title,
             content: summarizeText(item.content, 160),
         }));
+        const callChain = [];
         const plannerConversation = [
             {
                 role: "system",
@@ -394,6 +444,11 @@ class AgentService {
             model: plannerModel,
         });
         const plannerAction = this.parseAgentResponse(plannerTurn.content) || {type: "none"};
+        callChain.push({
+            phase: "direct-planner",
+            status: "done",
+            output: plannerAction,
+        });
         let toolName = "";
         let toolArgs = {};
         let toolResult = null;
@@ -403,8 +458,22 @@ class AgentService {
             toolArgs = normalizeToolArgs(plannerAction.args);
             try {
                 toolResult = await this.runTool(toolName, toolArgs, allowedTools);
+                callChain.push({
+                    phase: "direct-tool",
+                    tool: toolName,
+                    status: "success",
+                    input: toolArgs,
+                    output: toolResult,
+                });
             } catch (error) {
                 toolResult = {error: error?.message || String(error)};
+                callChain.push({
+                    phase: "direct-tool",
+                    tool: toolName,
+                    status: "error",
+                    input: toolArgs,
+                    output: toolResult,
+                });
             }
         }
 
@@ -419,10 +488,34 @@ class AgentService {
             }, hooks);
 
             return {
-                mode: "agent",
-                content: String(finalContent || "").trim() || "我暂时没有生成可用回复。",
-                traces: [],
+                ...this.attachRunInfo({
+                    mode: "agent",
+                    content: String(finalContent || "").trim() || "我暂时没有生成可用回复。",
+                    traces: [],
+                }, this.buildRunInfo({
+                    runId,
+                    startedAt: runStartedAt,
+                    finishedAt: new Date().toISOString(),
+                    directMode: true,
+                    allowedTools,
+                    status: "success",
+                    traces: [],
+                    callChain,
+                })),
             };
+        } catch (error) {
+            error.run = this.buildRunInfo({
+                runId,
+                startedAt: runStartedAt,
+                finishedAt: new Date().toISOString(),
+                directMode: true,
+                allowedTools,
+                status: "error",
+                error: error?.message || String(error),
+                traces: [],
+                callChain,
+            });
+            throw error;
         } finally {
             this.currentUserMessage = "";
         }
@@ -431,14 +524,17 @@ class AgentService {
     async chat(userMessage, hooks = {}, options = {}) {
         this.ensureNotAborted(hooks.signal);
         this.currentUserMessage = String(userMessage || "");
+        const runId = this.resolveRunId(options.runId);
+        const runStartedAt = new Date().toISOString();
         const traces = [];
+        const callChain = [];
         const planningConversation = [];
         const context = this.getAssistantContext().slice(-8);
         const allowedTools = this.normalizeAllowedTools(options.allowedTools);
         const directMode = options.directMode === true;
         try {
             if (directMode) {
-                return await this.chatDirect(userMessage, hooks, options);
+                return await this.chatDirect(userMessage, hooks, {...options, runId});
             }
             const memories = this.getLongTermMemory().slice(-10).map((item) => ({
                 title: item.title,
@@ -464,6 +560,13 @@ class AgentService {
                 plan: prefetchPlan,
                 allowedTools,
                 onTrace: async (trace, nextTraces) => {
+                    callChain.push({
+                        phase: trace?.phase || "prefetch",
+                        tool: trace?.tool || "",
+                        status: trace?.status || "done",
+                        input: trace?.input || {},
+                        output: trace?.output || null,
+                    });
                     await this.emitHook(hooks.onTrace, trace, [...nextTraces]);
                 },
             });
@@ -479,9 +582,15 @@ class AgentService {
                 const turn = await this.requestAgentTurn(planningConversation, hooks, {enableThinking: true});
                 const content = turn.content;
                 const action = this.parseAgentResponse(content);
+                callChain.push({
+                    phase: "thinking",
+                    step: step + 1,
+                    status: action?.type || "draft",
+                    output: action || {type: "draft", content},
+                });
                 await this.pushWorkflowTrace(traces, hooks, this.createThinkingTrace(step, action));
                 if (!action) {
-                    return await this.finalizeAgentResponse({
+                    const result = await this.finalizeAgentResponse({
                         userMessage,
                         context,
                         traces,
@@ -489,9 +598,19 @@ class AgentService {
                         plannerDraft: content || "",
                         thinkingMode: true,
                     });
+                    return this.attachRunInfo(result, this.buildRunInfo({
+                        runId,
+                        startedAt: runStartedAt,
+                        finishedAt: new Date().toISOString(),
+                        directMode: false,
+                        allowedTools,
+                        status: "success",
+                        traces: result.traces,
+                        callChain,
+                    }));
                 }
                 if (action.type === "final") {
-                    return await this.finalizeAgentResponse({
+                    const result = await this.finalizeAgentResponse({
                         userMessage,
                         context,
                         traces,
@@ -499,9 +618,19 @@ class AgentService {
                         plannerDraft: action.content || content || "",
                         thinkingMode: true,
                     });
+                    return this.attachRunInfo(result, this.buildRunInfo({
+                        runId,
+                        startedAt: runStartedAt,
+                        finishedAt: new Date().toISOString(),
+                        directMode: false,
+                        allowedTools,
+                        status: "success",
+                        traces: result.traces,
+                        callChain,
+                    }));
                 }
                 if (action.type !== "tool") {
-                    return await this.finalizeAgentResponse({
+                    const result = await this.finalizeAgentResponse({
                         userMessage,
                         context,
                         traces,
@@ -509,6 +638,16 @@ class AgentService {
                         plannerDraft: content || "",
                         thinkingMode: true,
                     });
+                    return this.attachRunInfo(result, this.buildRunInfo({
+                        runId,
+                        startedAt: runStartedAt,
+                        finishedAt: new Date().toISOString(),
+                        directMode: false,
+                        allowedTools,
+                        status: "success",
+                        traces: result.traces,
+                        callChain,
+                    }));
                 }
 
                 const args = normalizeToolArgs(action.args);
@@ -522,21 +661,41 @@ class AgentService {
                         message: `Running ${action.tool}`,
                     });
                     toolResult = await this.runTool(action.tool, args, allowedTools);
-                    await this.pushWorkflowTrace(traces, hooks, {
+                    const successTrace = {
                         tool: action.tool,
                         status: "success",
                         input: args,
+                        output: toolResult,
                         outputPreview: clampTraceOutput(toolResult),
+                    };
+                    await this.pushWorkflowTrace(traces, hooks, successTrace);
+                    callChain.push({
+                        phase: "tool",
+                        step: step + 1,
+                        tool: action.tool,
+                        status: "success",
+                        input: args,
+                        output: toolResult,
                     });
                 } catch (error) {
                     toolResult = {
                         error: error?.message || String(error),
                     };
-                    await this.pushWorkflowTrace(traces, hooks, {
+                    const errorTrace = {
                         tool: action.tool,
                         status: "error",
                         input: args,
+                        output: toolResult,
                         outputPreview: clampTraceOutput(toolResult),
+                    };
+                    await this.pushWorkflowTrace(traces, hooks, errorTrace);
+                    callChain.push({
+                        phase: "tool",
+                        step: step + 1,
+                        tool: action.tool,
+                        status: "error",
+                        input: args,
+                        output: toolResult,
                     });
                 }
                 this.ensureNotAborted(hooks.signal);
@@ -554,7 +713,7 @@ class AgentService {
                 });
             }
 
-            return await this.finalizeAgentResponse({
+            const result = await this.finalizeAgentResponse({
                 userMessage,
                 context,
                 traces,
@@ -562,6 +721,31 @@ class AgentService {
                 plannerDraft: "",
                 thinkingMode: true,
             });
+            return this.attachRunInfo(result, this.buildRunInfo({
+                runId,
+                startedAt: runStartedAt,
+                finishedAt: new Date().toISOString(),
+                directMode: false,
+                allowedTools,
+                status: "success",
+                traces: result.traces,
+                callChain,
+            }));
+        } catch (error) {
+            if (!error.run) {
+                error.run = this.buildRunInfo({
+                    runId,
+                    startedAt: runStartedAt,
+                    finishedAt: new Date().toISOString(),
+                    directMode,
+                    allowedTools,
+                    status: "error",
+                    error: error?.message || String(error),
+                    traces,
+                    callChain,
+                });
+            }
+            throw error;
         } finally {
             this.currentUserMessage = "";
         }
@@ -571,7 +755,7 @@ class AgentService {
         const traces = [];
         const results = [];
         const suite = [
-            {tool: "get_context", args: {}},
+            {tool: "get_agent_call_chain", args: {allowEmpty: true}},
             {tool: "get_memory", args: {}},
             {tool: "search_memory", args: {query: userMessage}},
             {tool: "get_memory_routine_status", args: {}},
@@ -581,6 +765,7 @@ class AgentService {
             {tool: "list_pomodoro_tasks", args: {}},
             {tool: "get_calendar_day_plan", args: {date: new Date().toISOString().slice(0, 10)}},
             {tool: "list_calendar_todos", args: {}},
+            {tool: "list_todo_items", args: {}},
             {tool: "list_ai_diaries", args: {}},
             {tool: "get_clipboard", args: {}},
             {tool: "list_screenshots", args: {}},
@@ -602,6 +787,7 @@ class AgentService {
                     tool: item.tool,
                     status: "success",
                     input: item.args,
+                    output,
                     outputPreview: clampTraceOutput(output),
                     phase: "self-test",
                 };
@@ -609,11 +795,13 @@ class AgentService {
                 await this.emitHook(hooks.onTrace, trace, [...traces]);
                 results.push(`- ${item.tool}: success`);
             } catch (error) {
+                const errorPayload = {error: error?.message || String(error)};
                 const trace = {
                     tool: item.tool,
                     status: "error",
                     input: item.args,
-                    outputPreview: clampTraceOutput({error: error?.message || String(error)}),
+                    output: errorPayload,
+                    outputPreview: clampTraceOutput(errorPayload),
                     phase: "self-test",
                 };
                 traces.push(trace);
@@ -637,7 +825,7 @@ class AgentService {
                 "",
                 ...results,
                 "",
-                "Skipped state-changing or environment-dependent tools: add_memory, delete_memory, extract_memory, create_card, update_card, delete_card, create_pomodoro_task, update_pomodoro_task, delete_pomodoro_task, create_calendar_todo, update_calendar_todo, delete_calendar_todo, create_ai_diary, update_ai_diary, delete_ai_diary, capture_screen, analyze_clipboard_image, analyze_image, get_card.",
+                "Skipped state-changing or environment-dependent tools: add_memory, delete_memory, extract_memory, create_card, update_card, delete_card, create_pomodoro_task, update_pomodoro_task, delete_pomodoro_task, create_calendar_todo, update_calendar_todo, delete_calendar_todo, create_todo_item, update_todo_item, delete_todo_item, create_ai_diary, update_ai_diary, delete_ai_diary, capture_screen, analyze_clipboard_image, analyze_image, get_card.",
             ].join("\n"),
             traces,
         };
@@ -719,6 +907,13 @@ class AgentService {
 
     searchMemory(query) {
         return searchTools.searchMemory(this, query);
+    }
+
+    async getAgentCallChain(args = {}) {
+        if (typeof this.readAgentCallChain !== "function") {
+            throw new Error("Agent call chain store is not available.");
+        }
+        return await this.readAgentCallChain(args);
     }
 
     getCapabilities() {

@@ -4,10 +4,25 @@ const {
     buildAssistantFinalAnswerUserPrompt,
 } = require("./promptRegistry");
 
+function withTimestampPrefix(message = "", createdAt = "") {
+    const text = String(message || "").trim();
+    const stamp = typeof createdAt === "string" ? createdAt.trim() : "";
+    if (!text) {
+        return "";
+    }
+    return stamp ? `[${stamp}] ${text}` : text;
+}
+
 function buildAssistantChatMessages(contextItems = [], message = "") {
+    const contextWithTimestamps = Array.isArray(contextItems)
+        ? contextItems.map((item) => ({
+            role: item?.role,
+            message: withTimestampPrefix(item?.message ?? item?.content ?? "", item?.createdAt),
+        }))
+        : [];
     return [
         {role: "system", message: getAssistantPersonaPrompt()},
-        ...contextItems,
+        ...contextWithTimestamps,
         {role: "user", message},
     ];
 }

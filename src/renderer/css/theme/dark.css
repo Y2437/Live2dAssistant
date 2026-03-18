@@ -3,27 +3,21 @@
     --c-panel: #0f1622;
     --c-text: #e9eef6;
     --c-muted: #a3b0c2;
-
     --c-border: #223046;
     --c-border-strong: #2b3c56;
-
     --c-btn: #0f1622;
     --c-btn-hover: #121c2c;
-
     --c-active: #e9eef6;
     --c-active-text: #0a0d12;
-
-    --c-focus: rgba(183,95,21,0.52);
+    --c-focus: rgb(183 95 21 / 52%);
     --c-accent: #b75f15;
-
-    --shadow-1: 0 1px 0 rgba(255,255,255,0.03), 0 10px 20px rgba(0,0,0,0.25);
-    --shadow-2: 0 1px 0 rgba(255,255,255,0.04), 0 18px 50px rgba(0,0,0,0.45);
-
+    --c-danger: #f87171;
+    --shadow-1: 0 1px 0 rgb(255 255 255 / 3%), 0 10px 20px rgb(0 0 0 / 25%);
+    --shadow-2: 0 1px 0 rgb(255 255 255 / 4%), 0 18px 50px rgb(0 0 0 / 45%);
     --pomo-side-bg: var(--c-bg);
-    --pomo-mid-bg: linear-gradient(180deg, rgba(245,158,11,0.16) 0%, rgba(245,158,11,0.08) 100%);
-
-    --pomo-emboss-hi: rgba(255,255,255,0.10);
-    --pomo-emboss-lo: rgba(0,0,0,0.55);
+    --pomo-mid-bg: linear-gradient(180deg, rgb(245 158 11 / 16%) 0%, rgb(245 158 11 / 8%) 100%);
+    --pomo-emboss-hi: rgb(255 255 255 / 10%);
+    --pomo-emboss-lo: rgb(0 0 0 / 55%);
     --calendar-workday-bg: #151d2b;
     --calendar-sunday-bg: #2b4164;
     --calendar-holiday-bg: #63412a;
@@ -43,7 +37,7 @@
 }
 
 :root[data-theme="dark"] ::selection{
-    background-color: rgba(56,189,248,0.28);
+    background-color: rgb(56 189 248 / 28%);
     color: var(--c-text);
 }
 
@@ -178,7 +172,6 @@
 :root[data-theme="dark"] .cards-pageBtn,
 :root[data-theme="dark"] .cards-pageNum,
 :root[data-theme="dark"] .cards-pagination,
-:root[data-theme="dark"] .cards-preview,
 :root[data-theme="dark"] .cards-modal__close,
 :root[data-theme="dark"] .cards-suggest,
 :root[data-theme="dark"] .cards-suggest__item,
@@ -236,11 +229,13 @@
     background-color: var(--c-btn);
     color: var(--c-text);
 }
+
 :root[data-theme="dark"] .nav__btn:hover{
     background-color: var(--c-btn-hover);
 }
+
 :root[data-theme="dark"] .nav__btn.is-active{
-    background-color: rgba(233,238,246,0.06);
+    background-color: rgb(233 238 246 / 6%);
 }
 
 /* active indicator */
@@ -278,12 +273,12 @@
 }
 
 :root[data-theme="dark"] .settings-statusPill[data-status="success"]{
-    background-color: rgba(34, 197, 94, 0.12);
+    background-color: rgb(34 197 94 / 12%);
     color: #86efac;
 }
 
 :root[data-theme="dark"] .settings-statusPill[data-status="error"]{
-    background-color: rgba(248, 113, 113, 0.12);
+    background-color: rgb(248 113 113 / 12%);
     color: #fca5a5;
 }
 
@@ -328,13 +323,13 @@
 }
 
 :root[data-theme="dark"] .assistant-thinkToggle[data-enabled="true"]{
-    border-color: rgba(210,132,58,0.58);
-    background: rgba(183,95,21,0.12);
+    border-color: rgb(210 132 58 / 58%);
+    background: rgb(183 95 21 / 12%);
 }
 
 :root[data-theme="dark"] .assistant-thinkToggle[data-enabled="true"] .assistant-thinkToggle__track{
-    border-color: rgba(244,195,143,0.62);
-    background-color: rgba(183,95,21,0.2);
+    border-color: rgb(244 195 143 / 62%);
+    background-color: rgb(183 95 21 / 20%);
 }
 
 :root[data-theme="dark"] .assistant-thinkToggle[data-enabled="true"] .assistant-thinkToggle__knob{
@@ -343,28 +338,28 @@
 }
 
 :root[data-theme="dark"] .assistant-thinkToggle:not([data-enabled="true"]){
-    border-color: rgba(232,236,241,0.14);
+    border-color: rgb(232 236 241 / 14%);
     background: transparent;
 }
 
 :root[data-theme="dark"] .assistant-thinkToggle:not([data-enabled="true"]) .assistant-thinkToggle__track{
-    border-color: rgba(232,236,241,0.16);
-    background-color: rgba(232,236,241,0.05);
+    border-color: rgb(232 236 241 / 16%);
+    background-color: rgb(232 236 241 / 5%);
 }
 
 :root[data-theme="dark"] .assistant-thinkToggle:not([data-enabled="true"]) .assistant-thinkToggle__knob{
-    border-color: rgba(232,236,241,0.18);
+    border-color: rgb(232 236 241 / 18%);
     background-color: #f3f4f6;
 }
 
 :root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:checked){
-    border-color: rgba(183,95,21,0.52);
-    background-color: rgba(183,95,21,0.07);
+    border-color: rgb(183 95 21 / 52%);
+    background-color: rgb(183 95 21 / 7%);
 }
 
 :root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:checked) .assistant-scope__checkmark{
-    border-color: rgba(244,195,143,0.72);
-    background-color: rgba(183,95,21,0.2);
+    border-color: rgb(244 195 143 / 72%);
+    background-color: rgb(183 95 21 / 20%);
 }
 
 :root[data-theme="dark"] .assistant-scope__option:has(.assistant-scope__checkbox:checked) .assistant-scope__checkmark::after{
@@ -382,30 +377,30 @@
 :root[data-theme="dark"] .cards-filter.is-active,
 :root[data-theme="dark"] .cards-toolbarBtn,
 :root[data-theme="dark"] .cards-submit{
-    background-color: rgba(233,238,246,0.06);
+    background-color: rgb(233 238 246 / 6%);
 }
 
 :root[data-theme="dark"] .cards-pageNum.is-active,
 :root[data-theme="dark"] .cards-filter.is-active{
-    background-color: rgba(233,238,246,0.08);
+    background-color: rgb(233 238 246 / 8%);
 }
 
 :root[data-theme="dark"] .cards-toolbarBtn--danger,
 :root[data-theme="dark"] .cards-card__btn--danger{
-    background-color: rgba(239,68,68,0.12);
+    background-color: rgb(239 68 68 / 12%);
 }
 
 :root[data-theme="dark"] .cards-card.is-selected{
     border-color: var(--c-accent);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(183,95,21,0.24);
+    box-shadow: 0 1px 0 rgb(255 255 255 / 4%), 0 0 0 1px rgb(183 95 21 / 24%);
 }
 
 :root[data-theme="dark"] .cards-card__blur{
-    background: linear-gradient(180deg, rgba(15,22,34,0) 0%, rgba(15,22,34,0.86) 55%, rgba(15,22,34,1) 100%);
+    background: linear-gradient(180deg, rgb(15 22 34 / 0%) 0%, rgb(15 22 34 / 86%) 55%, rgb(15 22 34 / 100%) 100%);
 }
 
 :root[data-theme="dark"] .cards-modal__backdrop{
-    background-color: rgba(0,0,0,0.52);
+    background-color: rgb(0 0 0 / 52%);
 }
 
 :root[data-theme="dark"] .calendar-panel,
@@ -440,15 +435,15 @@
 }
 
 :root[data-theme="dark"] .calendar-badge--todo{
-    background-color: rgba(233,238,246,0.08);
+    background-color: rgb(233 238 246 / 8%);
 }
 
 :root[data-theme="dark"] .calendar-badge--diary{
-    background-color: rgba(16,185,129,0.20);
+    background-color: rgb(16 185 129 / 20%);
 }
 
 :root[data-theme="dark"] .calendar-badge--holiday{
-    background-color: rgba(245,158,11,0.22);
+    background-color: rgb(245 158 11 / 22%);
 }
 
 :root[data-theme="dark"] .calendar-cell__dot{
@@ -456,7 +451,7 @@
 }
 
 :root[data-theme="dark"] .calendar-modal__backdrop{
-    background-color: rgba(0,0,0,0.52);
+    background-color: rgb(0 0 0 / 52%);
 }
 
 :root[data-theme="dark"] .calendar-monthArrow,
@@ -480,31 +475,34 @@
     width: 10px;
     height: 10px;
 }
+
 :root[data-theme="dark"] *::-webkit-scrollbar-thumb{
-    background-color: rgba(233,238,246,0.14);
-    border: 2px solid rgba(0,0,0,0);
+    background-color: rgb(233 238 246 / 14%);
+    border: 2px solid rgb(0 0 0 / 0%);
     background-clip: padding-box;
 }
+
 :root[data-theme="dark"] *::-webkit-scrollbar-thumb:hover{
-    background-color: rgba(233,238,246,0.22);
+    background-color: rgb(233 238 246 / 22%);
 }
+
 :root[data-theme="dark"] *::-webkit-scrollbar-track{
-    background-color: rgba(0,0,0,0);
+    background-color: rgb(0 0 0 / 0%);
 }
 
 :root[data-theme="dark"] .assistant-scope__option[data-danger="true"]{
     border-color: #ef4444;
-    background: linear-gradient(180deg, rgba(60, 13, 18, 0.9), rgba(42, 10, 15, 0.94));
+    background: linear-gradient(180deg, rgb(60 13 18 / 90%), rgb(42 10 15 / 94%));
 }
 
 :root[data-theme="dark"] .assistant-scope__option[data-danger="true"]:hover{
     border-color: #f87171;
-    background: linear-gradient(180deg, rgba(78, 17, 23, 0.94), rgba(54, 16, 21, 0.98));
+    background: linear-gradient(180deg, rgb(78 17 23 / 94%), rgb(54 16 21 / 98%));
 }
 
 :root[data-theme="dark"] .assistant-scope__option[data-danger="true"] .assistant-scope__checkmark{
     border-color: #ef4444;
-    background: rgba(22, 11, 13, 0.92);
+    background: rgb(22 11 13 / 92%);
 }
 
 :root[data-theme="dark"] .assistant-scope__option[data-danger="true"] .assistant-scope__optionTitle{
@@ -519,9 +517,9 @@
 :root[data-theme="dark"] .assistant-scope__option[data-danger="true"] .assistant-scope__optionMeta::after{
     color: #fecaca;
     border-color: #ef4444;
-    background-color: rgba(17, 24, 39, 0.32);
+    background-color: rgb(17 24 39 / 32%);
 }
 
 :root[data-theme="dark"] .assistant-scope__option[data-danger="true"]:has(.assistant-scope__checkbox:checked){
-    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.22) inset, var(--shadow-1);
+    box-shadow: 0 0 0 1px rgb(248 113 113 / 22%) inset, var(--shadow-1);
 }

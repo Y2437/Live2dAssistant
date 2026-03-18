@@ -5,18 +5,14 @@
    ========================= */
 
 :root{
-    --ui-font: system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
-
+    --ui-font: system-ui, -apple-system, "Segoe UI", arial, "PingFang SC", "Microsoft YaHei", sans-serif;
     --space-1: 6px;
     --space-2: 10px;
     --space-3: 14px;
     --space-4: 18px;
-
     --line-1: 1px;
-
     --motion-fast: 120ms;
     --motion-mid: 160ms;
-
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
 }
@@ -33,7 +29,7 @@ html, body{
     margin: 0;
     font-family: var(--ui-font);
     font-variant-numeric: tabular-nums;
-    text-rendering: geometricPrecision;
+    text-rendering: geometricprecision;
 }
 
 body{
@@ -60,12 +56,9 @@ body{
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-
     padding: var(--space-3);
-
     border-right-style: solid;
     border-right-width: var(--line-1);
-
     overflow: auto;
     scrollbar-gutter: stable;
 }
@@ -75,7 +68,6 @@ body{
     font-weight: 800;
     letter-spacing: 0.9px;
     text-transform: uppercase;
-
     user-select: none;
 }
 
@@ -90,29 +82,21 @@ body{
     align-items: center;
     justify-content: flex-start;
     gap: 10px;
-
     padding: 11px 12px;
-
     border-style: solid;
     border-width: var(--line-1);
-
     border-radius: 0;
-
     appearance: none;
     -webkit-appearance: none;
-
     cursor: pointer;
     user-select: none;
-
     line-height: 1;
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.25px;
-
     position: relative;
     overflow: hidden;
     isolation: isolate;
-
     transition: transform var(--motion-fast) var(--ease-out),
     box-shadow var(--motion-fast) var(--ease-out),
     opacity var(--motion-fast) var(--ease-out);
@@ -131,12 +115,10 @@ body{
     top: 0;
     bottom: 0;
     width: 3px;
-
     opacity: 0;
     transform: translateX(-2px);
     transition: opacity var(--motion-fast) var(--ease-out),
     transform var(--motion-fast) var(--ease-out);
-
     z-index: 0;
 }
 
@@ -167,12 +149,9 @@ body{
 
 .nav__footer{
     margin-top: auto;
-
     display: grid;
     gap: var(--space-2);
-
     padding-top: var(--space-3);
-
     border-top-style: solid;
     border-top-width: var(--line-1);
 }
@@ -193,7 +172,7 @@ body{
     overflow: hidden;
 }
 
-@media (max-width: 860px){
+@media (width <= 860px){
     .shell{
         /* 改动点
            仍然是两列，只是进一步收窄左侧
@@ -215,10 +194,12 @@ body{
     .nav__btn{
         transition: none;
     }
+
     .nav__btn:hover,
     .nav__btn:active{
         transform: none;
     }
+
     .nav__btn::before{
         transition: none;
     }

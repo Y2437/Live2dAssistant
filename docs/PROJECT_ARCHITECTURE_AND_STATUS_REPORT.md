@@ -191,7 +191,7 @@
 
 ### 7.3 当前工具清单（promptRegistry）
 
-- 上下文/记忆：`get_context/get_memory/search_memory/get_memory_routine_status/add_memory/delete_memory/extract_memory`
+- 上下文/记忆：`get_memory/search_memory/get_memory_routine_status/add_memory/delete_memory/extract_memory`
 - 卡片：`list_cards/search_cards/get_card/create_card`
 - 任务/系统：`get_pomodoro_status/get_clipboard`
 - 视觉：`analyze_clipboard_image/capture_screen/list_screenshots/analyze_image`
@@ -516,7 +516,6 @@
 - extract_memory
 - get_card
 - get_clipboard
-- get_context
 - get_memory
 - get_memory_routine_status
 - get_pomodoro_status

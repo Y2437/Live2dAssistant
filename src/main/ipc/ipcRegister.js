@@ -63,6 +63,7 @@ const {
     AI_TOUCH_RESPONSE,
     POMODORO_JSON_PATH,
     AI_CONTEXT_JSON_PATH,
+    AI_CONVERSATION_LOG_JSONL_PATH,
     AI_LONG_TERM_MEMORY_JSON_PATH,
     KNOWLEDGE_CARDS_JSON_PATH,
     AI_MEMORY_ROUTINE_JSON_PATH,
@@ -520,20 +521,118 @@ class IpcRegister{
             return this.getLocalDateKey(item.createdAt) === targetDate;
         });
     }
-    static async recordAssistantExchange(userMessage, assistantMessage){
+    static buildConversationLogId(){
+        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+    static async appendConversationLog(entry = {}){
+        const line = `${JSON.stringify(entry)}\n`;
+        await fs.appendFile(AI_CONVERSATION_LOG_JSONL_PATH, line, "utf-8");
+    }
+    static async readConversationLogEntries(){
+        try{
+            const raw = await fs.readFile(AI_CONVERSATION_LOG_JSONL_PATH, "utf8");
+            return raw
+                .split(/\r?\n/)
+                .map((line)=>line.trim())
+                .filter(Boolean)
+                .map((line)=>{
+                    try{
+                        return JSON.parse(line);
+                    }catch(err){
+                        return null;
+                    }
+                })
+                .filter((item)=>item && typeof item === "object");
+        }catch(err){
+            if(err.code === "ENOENT"){
+                return [];
+            }
+            throw err;
+        }
+    }
+    static async getAgentCallChain(args = {}){
+        const runId = typeof args?.runId === "string" ? args.runId.trim() : "";
+        const allowEmpty = args?.allowEmpty === true;
+        const entries = await this.readConversationLogEntries();
+        const agentEntries = entries.filter((item)=>item?.type === "assistant-exchange" && item?.mode === "agent");
+        const target = runId
+            ? agentEntries.find((item)=>String(item?.run?.runId || item?.runId || "").trim() === runId)
+            : [...agentEntries].reverse().find((item)=>Boolean(item?.run?.runId || item?.runId));
+        if(!target){
+            if(allowEmpty){
+                return {
+                    runId: "",
+                    createdAt: "",
+                    traceCount: 0,
+                    callChain: [],
+                    traces: [],
+                    userMessage: "",
+                    assistantMessage: "",
+                    availableRunIds: [],
+                };
+            }
+            throw new Error(runId ? `Agent run not found: ${runId}` : "No recorded agent run is available.");
+        }
+        const traces = Array.isArray(target?.run?.traces) ? target.run.traces : [];
+        const callChain = Array.isArray(target?.run?.callChain) ? target.run.callChain : [];
+        const availableRunIds = agentEntries
+            .map((item)=>String(item?.run?.runId || item?.runId || "").trim())
+            .filter(Boolean)
+            .filter((item, index, array)=>array.indexOf(item) === index)
+            .slice(-24);
+        return {
+            runId: String(target?.run?.runId || target?.runId || "").trim(),
+            createdAt: typeof target?.createdAt === "string" ? target.createdAt : "",
+            mode: target?.mode || "agent",
+            directMode: target?.run?.directMode === true || target?.directMode === true,
+            status: target?.run?.status || "success",
+            traceCount: traces.length,
+            callChain,
+            traces,
+            userMessage: typeof target?.userMessage === "string" ? target.userMessage : "",
+            assistantMessage: typeof target?.assistantMessage === "string" ? target.assistantMessage : "",
+            availableRunIds,
+        };
+    }
+    static async recordAssistantExchange(userMessage, assistantMessage, meta = {}){
         const createdAt = new Date().toISOString();
-        this.assistantContext.push(this.createAssistantContextRecord("user", userMessage, createdAt));
-        if(assistantMessage){
-            this.assistantContext.push(this.createAssistantContextRecord("assistant", assistantMessage, createdAt));
+        const userRecord = this.createAssistantContextRecord("user", userMessage, createdAt);
+        const assistantRecord = this.createAssistantContextRecord("assistant", assistantMessage, createdAt);
+        this.assistantContext.push(userRecord);
+        if(assistantRecord.message){
+            this.assistantContext.push(assistantRecord);
         }
         this.trimAssistantContext();
         await this.saveAssistantContext();
+        const runMeta = meta?.run && typeof meta.run === "object" ? meta.run : null;
+        const logEntry = {
+            id: this.buildConversationLogId(),
+            type: "assistant-exchange",
+            mode: typeof meta?.mode === "string" && meta.mode.trim() ? meta.mode.trim() : "assistant",
+            directMode: meta?.directMode === true,
+            createdAt,
+            userMessage: userRecord.message,
+            assistantMessage: assistantRecord.message,
+            entries: assistantRecord.message ? [userRecord, assistantRecord] : [userRecord],
+            contextWindow: {
+                maxMessages: this.MAX_CONTEXT_MESSAGES,
+                currentMessages: this.assistantContext.length,
+            },
+            runId: runMeta?.runId || "",
+            run: runMeta || null,
+        };
+        try{
+            await this.appendConversationLog(logEntry);
+        }catch(err){
+            console.warn("[conversation-log] append failed:", err?.message || err);
+        }
+        return logEntry;
     }
     static async runAiChat(message){
         const aiChatMessage = this.buildAiChatMessages(message);
         const response = await aiChat(aiChatMessage);
         const assistantReply = this.getAssistantReplyContent(response);
-        await this.recordAssistantExchange(message, assistantReply);
+        await this.recordAssistantExchange(message, assistantReply, {mode: "assistant"});
         return response;
     }
     static async sleep(ms = 120){
@@ -874,10 +973,10 @@ class IpcRegister{
         return await ensureCalendarPlanJson(dataPath);
     }
     static async getCalendarPlanData(){
-        return await readCalendarData(CALENDAR_PLAN_JSON_PATH);
+        return await readCalendarData(CALENDAR_PLAN_JSON_PATH, {useRemote: false});
     }
     static async getCalendarDayDetail(date){
-        return await getCalendarDayDetail(CALENDAR_PLAN_JSON_PATH, date);
+        return await getCalendarDayDetail(CALENDAR_PLAN_JSON_PATH, date, {useRemote: false});
     }
     static async listCalendarTodos(filters = {}){
         return await listCalendarTodos(CALENDAR_PLAN_JSON_PATH, filters);
@@ -1114,6 +1213,7 @@ class IpcRegister{
             createAiDiary: async (data)=>await this.createAiDiary(data),
             updateAiDiary: async (data)=>await this.updateAiDiary(data),
             deleteAiDiary: async (id)=>await this.deleteAiDiary(id),
+            getAgentCallChain: async (args)=>await this.getAgentCallChain(args),
             requestCameraCapture: async (name = "camera") => {
                 const targetWindow = wm.get("assistant");
                 if (!targetWindow || targetWindow.isDestroyed()) {

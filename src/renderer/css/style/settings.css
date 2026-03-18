@@ -221,7 +221,7 @@
     font-size: 12px;
     line-height: 1.65;
     white-space: pre-wrap;
-    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .settings-record--empty{
@@ -244,10 +244,11 @@
     text-transform: uppercase;
 }
 
-@media (max-width: 1040px){
+@media (width <= 1040px){
     .settings-layout{
         grid-template-columns: minmax(0, 1fr);
     }
+
     .settings-card--memory{
         grid-row: auto;
     }

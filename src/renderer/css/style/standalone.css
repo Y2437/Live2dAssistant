@@ -48,7 +48,7 @@
     margin: 0 auto;
 }
 
-@media (max-width: 720px){
+@media (width <= 720px){
     .window-main{
         padding: 14px;
     }
