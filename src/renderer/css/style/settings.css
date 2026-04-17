@@ -255,6 +255,47 @@
     text-transform: uppercase;
 }
 
+
+@media (width >= 1280px){
+    .settings-root{
+        width: min(100%, var(--content-max-wide));
+        margin-inline: auto;
+        gap: 18px;
+    }
+
+    .settings-layout{
+        gap: 18px;
+    }
+
+    .settings-card,
+    .settings-hero{
+        padding: 20px;
+    }
+
+    .settings-recordList{
+        max-height: 420px;
+    }
+
+    .settings-record__body{
+        max-width: 86ch;
+    }
+}
+
+@media (width >= 1680px){
+    .settings-root{
+        width: min(100%, var(--content-max-ultra));
+    }
+
+    .settings-layout{
+        grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.35fr);
+        gap: 22px;
+    }
+
+    .settings-recordList{
+        max-height: 520px;
+    }
+}
+
 @media (width <= 1040px){
     .settings-layout{
         grid-template-columns: minmax(0, 1fr);

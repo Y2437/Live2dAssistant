@@ -111,37 +111,12 @@ const SPECIAL_AGENT_CATEGORY_LABELS = {
 const AGENT_SCOPE_STORAGE_KEY = "assistant.agentScope.specialTools.v1";
 const ASSISTANT_DIRECT_MODE_STORAGE_KEY = "assistant.directMode.v1";
 const LIVE2D_IDLE_MOTION_COUNT = 9;
-const LIVE2D_TAPBODY_MOTION_COUNT = 1;
-const EMOTION_LOG_PREFIX = "[emotion-client]";
 const CHAT_TIME_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
 });
-const EMOTION_DEBUG_STORAGE_KEY = "assistant.emotion.debug.v1";
-
-function isEmotionDebugEnabled() {
-    try {
-        return window.localStorage?.getItem(EMOTION_DEBUG_STORAGE_KEY) === "true";
-    } catch (error) {
-        return false;
-    }
-}
-
-function emotionLog(...args) {
-    if (!isEmotionDebugEnabled()) {
-        return;
-    }
-    console.log(...args);
-}
-
-function emotionWarn(...args) {
-    if (!isEmotionDebugEnabled()) {
-        return;
-    }
-    console.warn(...args);
-}
 
 function dispatchNavigate(viewKey) {
     window.dispatchEvent(new CustomEvent("shell:navigate", { detail: { viewKey } }));
@@ -938,91 +913,45 @@ function hashText(value = "") {
     return Math.abs(hash);
 }
 
-function normalizeMotionHint(signal = {}) {
-    const emotion = String(signal?.emotion || "neutral").toLowerCase();
-    const tone = String(signal?.tone || "flat").toLowerCase();
-    const intensity = Number.isFinite(Number(signal?.intensity)) ? Number(signal.intensity) : 0.5;
-    let group = signal?.motionHint?.group === "TapBody" ? "TapBody" : "Idle";
-    let index = Number.isFinite(Number(signal?.motionHint?.index)) ? Number(signal.motionHint.index) : 0;
-
-    if (emotion === "sad" || emotion === "angry" || emotion === "surprised") {
-        group = "TapBody";
-    }
-    if (group === "TapBody") {
-        return {
-            group,
-            index: Math.max(0, Math.floor(index)) % LIVE2D_TAPBODY_MOTION_COUNT,
-        };
-    }
-    const toneIndexMap = {
-        excited: 6,
-        warm: 2,
-        low: 4,
-        steady: 0,
-        serious: 7,
-        light: 1,
-        flat: 0,
-    };
-    const seedText = `${emotion}:${(signal?.keywords || []).join("|")}`;
-    if (!Number.isFinite(index) || index < 0 || index >= LIVE2D_IDLE_MOTION_COUNT) {
-        index = Number.isFinite(toneIndexMap[tone]) ? toneIndexMap[tone] : (hashText(seedText) % LIVE2D_IDLE_MOTION_COUNT);
-    }
-    if (intensity > 0.82 && index < LIVE2D_IDLE_MOTION_COUNT - 1) {
-        index += 1;
-    }
+function pickIdleMotionFromText(text = "") {
+    const index = hashText(text) % LIVE2D_IDLE_MOTION_COUNT;
     return {
         group: "Idle",
-        index: Math.max(0, Math.floor(index)) % LIVE2D_IDLE_MOTION_COUNT,
+        index,
     };
 }
 
 async function playLive2dMotion(motion = {group: "Idle", index: 0}) {
     const live2d = assistantState.live2d;
     if (!live2d) {
-        emotionLog(`${EMOTION_LOG_PREFIX} step5 no-live2d-instance`);
         return;
     }
     try {
         if (typeof live2d.motion === "function") {
-            emotionLog(`${EMOTION_LOG_PREFIX} step5 play-motion`, motion);
             await live2d.motion(motion.group, motion.index);
-            emotionLog(`${EMOTION_LOG_PREFIX} step6 motion-done`, motion);
             return;
         }
     } catch (error) {
-        emotionWarn(`${EMOTION_LOG_PREFIX} step5 motion(group,index) failed, fallback`, error?.message || error);
+        console.warn("[live2d-motion] motion(group,index) failed, fallback", error?.message || error);
     }
     try {
         if (typeof live2d.motion === "function") {
-            emotionLog(`${EMOTION_LOG_PREFIX} step5b play-motion-fallback-group`, motion.group);
             await live2d.motion(motion.group);
-            emotionLog(`${EMOTION_LOG_PREFIX} step6 motion-fallback-done`, motion.group);
         }
     } catch (error) {
-        console.error(`${EMOTION_LOG_PREFIX} stepX motion-failed`, error);
+        console.error("[live2d-motion] motion failed", error);
     }
 }
 
-async function syncEmotionMotionFromText(text) {
+async function syncLive2dMotionFromText(text) {
     if (!text || !assistantState.live2d) {
-        emotionLog(`${EMOTION_LOG_PREFIX} step0 skip`, {
-            hasText: Boolean(text),
-            hasLive2d: Boolean(assistantState.live2d),
-        });
         return;
     }
     try {
-        emotionLog(`${EMOTION_LOG_PREFIX} step1 start`, {textLength: text.length});
-        const signal = window.api.extractEmotionForLive2d
-            ? await window.api.extractEmotionForLive2d(text)
-            : {emotion: "neutral", motionHint: {group: "Idle", index: hashText(text) % LIVE2D_IDLE_MOTION_COUNT}};
-        emotionLog(`${EMOTION_LOG_PREFIX} step2 signal`, signal);
-        const motion = normalizeMotionHint(signal);
-        emotionLog(`${EMOTION_LOG_PREFIX} step3 mapped-motion`, motion);
+        const motion = pickIdleMotionFromText(text);
         await playLive2dMotion(motion);
-        emotionLog(`${EMOTION_LOG_PREFIX} step4 done`);
     } catch (error) {
-        console.error(`${EMOTION_LOG_PREFIX} stepX failed`, error);
+        console.error("[live2d-motion] sync failed", error);
     }
 }
 
@@ -1143,8 +1072,7 @@ async function handleChat(text, allowedTools = getAllowedToolsForRequest()) {
             updateAssistantContent(responseText);
         }
         if (responseText) {
-            emotionLog(`${EMOTION_LOG_PREFIX} trigger-after-response`, {length: responseText.length});
-            void syncEmotionMotionFromText(responseText);
+            void syncLive2dMotionFromText(responseText);
         }
         if (!directMode && (!assistantState.runtimeTraces || !assistantState.runtimeTraces.length) && Array.isArray(response?.traces) && response.traces.length) {
             setRuntimeTraces(response.traces);

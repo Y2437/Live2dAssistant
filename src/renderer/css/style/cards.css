@@ -969,6 +969,59 @@
     }
 }
 
+
+@media (width >= 1280px){
+    .cards-root{
+        width: min(100%, var(--content-max-wide));
+        margin-inline: auto;
+    }
+
+    .cards-hero{
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 14px;
+    }
+
+    .cards-browser{
+        grid-template-columns: minmax(0, 1fr) 240px;
+        gap: 18px;
+    }
+
+    .cards-grid{
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .cards-editorMetaCluster{
+        grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    }
+
+    .cards-editorSplit{
+        grid-template-columns: minmax(0, 1.15fr) minmax(420px, 0.85fr);
+    }
+}
+
+@media (width >= 1680px){
+    .cards-root{
+        width: min(100%, var(--content-max-ultra));
+    }
+
+    .cards-hero{
+        grid-template-columns: minmax(0, 1fr) 400px;
+    }
+
+    .cards-browser{
+        grid-template-columns: minmax(0, 1fr) 280px;
+    }
+
+    .cards-grid{
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .cards-panel,
+    .cards-stat{
+        padding: 14px;
+    }
+}
+
 @media (width <= 1080px){
     .cards-browser,
     .cards-hero{

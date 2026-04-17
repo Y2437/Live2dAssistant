@@ -13,6 +13,7 @@ function withTimestampPrefix(message = "", createdAt = "") {
     return stamp ? `[${stamp}] ${text}` : text;
 }
 
+
 function buildAssistantChatMessages(contextItems = [], message = "") {
     const contextWithTimestamps = Array.isArray(contextItems)
         ? contextItems.map((item) => ({

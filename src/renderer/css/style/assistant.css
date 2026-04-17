@@ -153,7 +153,63 @@
     margin-bottom: 0;
 }
 
-@keyframes bubble-glow {
+
+@media (width >= 1280px){
+    .assistant-root{
+        width: min(100%, var(--content-max-wide));
+        margin-inline: auto;
+        gap: 20px;
+    }
+
+    .assistant-workspace{
+        gap: 20px;
+    }
+
+    .assistant-root[data-assistant-layout="expanded"] .assistant-workspace{
+        --assistant-pane-height: min(820px, calc(100vh - 150px));
+
+        grid-template-columns: minmax(520px, 1.12fr) minmax(440px, 0.88fr);
+    }
+
+    .assistant-live2dWrap{
+        min-height: 680px;
+    }
+
+    .assistant-live2d{
+        width: min(100%, 660px);
+        min-height: 640px;
+    }
+
+    .assistant-root[data-assistant-layout="expanded"] .assistant-live2d{
+        width: min(100%, 620px);
+    }
+
+    .assistant-root[data-assistant-layout="expanded"] .assistant-bubble{
+        width: min(420px, calc(100% - 32px));
+        max-height: min(42%, 300px);
+    }
+}
+
+@media (width >= 1680px){
+    .assistant-root{
+        width: min(100%, var(--content-max-ultra));
+    }
+
+    .assistant-root[data-assistant-layout="expanded"] .assistant-workspace{
+        --assistant-pane-height: min(900px, calc(100vh - 170px));
+
+        grid-template-columns: minmax(640px, 1.16fr) minmax(520px, 0.84fr);
+    }
+
+    .assistant-live2d{
+        width: min(100%, 760px);
+        min-height: 720px;
+    }
+
+    .assistant-root[data-assistant-layout="expanded"] .assistant-live2d{
+        width: min(100%, 720px);
+    }
+}
     0%, 100% { box-shadow: 0 2px 8px rgb(0 0 0 / 8%); }
     50% { box-shadow: 0 4px 16px rgb(0 0 0 / 12%); }
 }

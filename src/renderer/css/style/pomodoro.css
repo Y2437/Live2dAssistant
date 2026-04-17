@@ -176,9 +176,34 @@
     cursor: not-allowed;
 }
 
-/* =========================================
-   Header Styling
-   ========================================= */
+
+@media (width >= 1280px){
+    .pomo{
+        width: min(760px, 100%);
+    }
+
+    .pomo{
+        --pomo-pad: 24px;
+        --pomo-gap: 16px;
+        --pomo-digit-w: 98px;
+        --pomo-digit-h: 136px;
+        --pomo-cell-h: 136px;
+    }
+}
+
+@media (width >= 1680px){
+    .pomo{
+        width: min(920px, 100%);
+    }
+
+    .pomo{
+        --pomo-pad: 28px;
+        --pomo-gap: 18px;
+        --pomo-digit-w: 112px;
+        --pomo-digit-h: 150px;
+        --pomo-cell-h: 150px;
+    }
+}
 .pomoHeader {
     position: relative;
     width: 100%;

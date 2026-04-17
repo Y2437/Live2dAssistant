@@ -133,22 +133,108 @@ test("getCalendarDayDetail includes local todos/diaries and builtin holidays", a
     }
 });
 
-test("readCalendarData drops broken records during normalization", async () => {
+test("calendar store rejects impossible dates", async () => {
     const temp = await createTempCalendarPath();
     try {
-        const broken = {
-            todos: [{title: "", date: "bad-date"}, {title: "ok", date: "2026-03-20"}],
-            aiDiaries: [{date: "2026-03-20", content: ""}, {date: "2026-03-20", content: "valid"}],
-            holidays: [{name: "", date: "2026-01-01"}],
-            workdays: [{date: "2026-02-08", name: "调休"}],
-        };
-        await fs.writeFile(temp.dataPath, JSON.stringify(broken, null, 2), "utf8");
-        const data = await calendarStore.readCalendarData(temp.dataPath, {useRemote: false});
-        assert.equal(data.todos.length, 1);
-        assert.equal(data.aiDiaries.length, 1);
-        assert.ok(data.holidays.length > 0);
-        assert.equal(data.workdays.length, 1);
+        await assert.rejects(
+            () => calendarStore.createCalendarTodoRecord(temp.dataPath, {
+                title: "无效日期待办",
+                date: "2026-02-31",
+            }),
+            /valid YYYY-MM-DD date/
+        );
+
+        await assert.rejects(
+            () => calendarStore.createAiDiaryRecord(temp.dataPath, {
+                date: "2026-13-01",
+                content: "bad date",
+            }),
+            /valid YYYY-MM-DD date/
+        );
+
+        await assert.rejects(
+            () => calendarStore.getCalendarDayDetail(temp.dataPath, "2026-00-01", {useRemote: false}),
+            /valid YYYY-MM-DD date/
+        );
     } finally {
+        await temp.cleanup();
+    }
+});
+
+test("calendar store rejects inverted date range filters", async () => {
+    const temp = await createTempCalendarPath();
+    try {
+        await assert.rejects(
+            () => calendarStore.listCalendarTodos(temp.dataPath, {
+                startDate: "2026-03-31",
+                endDate: "2026-03-01",
+            }),
+            /endDate must be greater than or equal to startDate/
+        );
+
+        await assert.rejects(
+            () => calendarStore.listAiDiaries(temp.dataPath, {
+                startDate: "2026-03-31",
+                endDate: "2026-03-01",
+            }),
+            /endDate must be greater than or equal to startDate/
+        );
+    } finally {
+        await temp.cleanup();
+    }
+});
+
+test("getCalendarDayDetail includes workdays and computed flags", async () => {
+    const temp = await createTempCalendarPath();
+    try {
+        const seeded = {
+            todos: [],
+            aiDiaries: [],
+            holidays: [
+                {name: "劳动节", startDate: "2026-05-01", endDate: "2026-05-03", type: "public", source: "local"},
+            ],
+            workdays: [
+                {name: "调休补班", date: "2026-05-02", type: "workday", source: "local"},
+            ],
+        };
+        await fs.writeFile(temp.dataPath, JSON.stringify(seeded, null, 2), "utf8");
+
+        const detail = await calendarStore.getCalendarDayDetail(temp.dataPath, "2026-05-02", {useRemote: false});
+        assert.equal(detail.date, "2026-05-02");
+        assert.ok(detail.holidays.some((item) => item.name === "劳动节"));
+        assert.equal(detail.workdays.length, 1);
+        assert.equal(detail.isHoliday, true);
+        assert.equal(detail.isWorkday, true);
+
+        const normalWeekend = await calendarStore.getCalendarDayDetail(temp.dataPath, "2026-05-09", {useRemote: false});
+        assert.equal(normalWeekend.isHoliday, false);
+        assert.equal(normalWeekend.isWorkday, false);
+    } finally {
+        await temp.cleanup();
+    }
+});
+
+test("readCalendarData overlays remote holiday and workday fallback", async () => {
+    const temp = await createTempCalendarPath();
+    const originalFetch = global.fetch;
+    global.fetch = async () => ({
+        ok: true,
+        async json() {
+            return {
+                code: 0,
+                holiday: {
+                    "05-01": {holiday: true, name: "劳动节", target: "劳动节"},
+                    "05-02": {holiday: false, name: "补班", target: "调休补班"},
+                },
+            };
+        },
+    });
+    try {
+        const data = await calendarStore.readCalendarData(temp.dataPath, {useRemote: true});
+        assert.ok(data.holidays.some((item) => item.name.includes("劳动节")));
+        assert.ok(data.workdays.some((item) => item.name.includes("调休补班") || item.name.includes("补班")));
+    } finally {
+        global.fetch = originalFetch;
         await temp.cleanup();
     }
 });

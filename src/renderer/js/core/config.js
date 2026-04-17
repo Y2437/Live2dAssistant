@@ -60,6 +60,8 @@ export const CONFIG = {
     },
     CARDS_CONFIG: {
         PAGE_SIZE: 8,
+        PAGE_SIZE_WIDE: 10,
+        PAGE_SIZE_ULTRA: 12,
         COPY: {
             cardsTotal: "卡片总数",
             categoryTotal: "分类数",

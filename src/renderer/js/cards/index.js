@@ -4,7 +4,7 @@ import { formatDate, stripMarkdown } from "./markdown.js";
 import { escapeHtml } from "../shared/dom.js";
 import { measureAsync, measureSync } from "../shared/perf.js";
 
-const { COPY, PAGE_SIZE } = CONFIG.CARDS_CONFIG;
+const { COPY, PAGE_SIZE, PAGE_SIZE_WIDE, PAGE_SIZE_ULTRA } = CONFIG.CARDS_CONFIG;
 
 const cardsState = {
     items: [],
@@ -87,13 +87,25 @@ function getVisibleCards() {
     });
 }
 
+function getResponsivePageSize() {
+    const width = window.innerWidth || 0;
+    if (width >= 1680) {
+        return PAGE_SIZE_ULTRA || PAGE_SIZE_WIDE || PAGE_SIZE;
+    }
+    if (width >= 1280) {
+        return PAGE_SIZE_WIDE || PAGE_SIZE;
+    }
+    return PAGE_SIZE;
+}
+
 function getPagedCards() {
     const items = getVisibleCards();
-    const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+    const pageSize = getResponsivePageSize();
+    const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
     cardsState.currentPage = Math.min(cardsState.currentPage, totalPages);
-    const startIndex = (cardsState.currentPage - 1) * PAGE_SIZE;
+    const startIndex = (cardsState.currentPage - 1) * pageSize;
     return {
-        items: items.slice(startIndex, startIndex + PAGE_SIZE),
+        items: items.slice(startIndex, startIndex + pageSize),
         totalItems: items.length,
         totalPages,
     };
@@ -716,7 +728,9 @@ function wirePagination() {
 }
 
 function wireToolbar() {
-    cardsDom.createBtn?.addEventListener("click", openCreateEditor);
+    window.addEventListener("resize", () => {
+        renderGrid();
+    });
     cardsDom.editSelectedBtn?.addEventListener("click", () => {
         if (cardsState.selectedCardId) {
             openEditEditor(cardsState.selectedCardId);

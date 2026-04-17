@@ -210,8 +210,36 @@
     background-color: var(--calendar-sunday-bg, rgb(0 0 0 / 4%)) !important;
 }
 
-.calendar-cell.is-holiday{
-    background-color: var(--calendar-holiday-bg, rgb(0 0 0 / 8%)) !important;
+
+.calendar-cell.is-workday{
+    background-color: var(--calendar-workday-highlight-bg, rgb(59 130 246 / 10%)) !important;
+}
+
+.calendar-status,
+.calendar-modal__status{
+    margin: 0;
+    min-height: 20px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.calendar-status[data-state="error"],
+.calendar-modal__status[data-state="error"]{
+    color: var(--c-danger, #c62828);
+}
+
+.calendar-status[data-state="success"],
+.calendar-modal__status[data-state="success"]{
+    color: var(--c-success, #2e7d32);
+}
+
+.calendar-status[data-state="warning"],
+.calendar-modal__status[data-state="warning"]{
+    color: var(--c-warning, #b26a00);
+}
+
+.calendar-badge--workday{
+    border-color: var(--c-info, currentColor);
 }
 
 .calendar-cell:nth-child(7n){
@@ -262,9 +290,8 @@
     color: var(--c-muted, #8d96a3);
 }
 
-.calendar-cell.is-outside .calendar-cell__dot,
 .calendar-cell.is-outside .calendar-cell__badges{
-    display: none;
+    opacity: 0.72;
 }
 
 .calendar-cell.is-selected::after{
@@ -409,7 +436,7 @@
     gap: 10px;
     min-height: 0;
     min-width: 0;
-    overflow: hidden;
+    overflow: auto;
 }
 
 .calendar-modal__list[data-role="calendar-todo-list"]{
@@ -616,6 +643,59 @@
     outline-style: solid;
     outline-width: 2px;
     outline-offset: 2px;
+}
+
+
+@media (width >= 1280px){
+    .calendar-root{
+        width: min(100%, var(--content-max-wide));
+        margin-inline: auto;
+    }
+
+    .calendar-shell{
+        gap: 16px;
+        padding: 18px;
+    }
+
+    .calendar-grid{
+        grid-auto-rows: minmax(96px, 1fr);
+    }
+
+    .calendar-cell{
+        padding: 10px;
+    }
+
+    .calendar-modal__dialog{
+        width: min(1120px, calc(100vw - 48px));
+    }
+}
+
+@media (width >= 1680px){
+    .calendar-root{
+        width: min(100%, var(--content-max-ultra));
+    }
+
+    .calendar-shell{
+        gap: 20px;
+        padding: 22px;
+    }
+
+    .calendar-stage{
+        grid-template-columns: 64px minmax(0, 1fr) 64px;
+        gap: 14px;
+    }
+
+    .calendar-grid{
+        grid-auto-rows: minmax(108px, 1fr);
+    }
+
+    .calendar-cell{
+        padding: 12px;
+    }
+
+    .calendar-modal__dialog{
+        width: min(1280px, calc(100vw - 56px));
+    }
 }
 
 @media (width <= 1120px){

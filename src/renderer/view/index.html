@@ -410,7 +410,9 @@
                             <span class="calendar-legend__item calendar-badge calendar-badge--todo">待办</span>
                             <span class="calendar-legend__item calendar-badge calendar-badge--diary">AI日记</span>
                             <span class="calendar-legend__item calendar-badge calendar-badge--holiday">节假日</span>
+                            <span class="calendar-legend__item calendar-badge calendar-badge--workday">调休工作日</span>
                         </div>
+                        <p class="calendar-status" data-role="calendar-status" aria-live="polite">正在准备日历数据…</p>
                         <section class="calendar-stage">
                             <button type="button" class="calendar-monthArrow calendar-monthArrow--left" data-role="calendar-prev-month" aria-label="上个月">
                                 <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
@@ -430,16 +432,17 @@
                     </section>
                     <div class="calendar-modal" data-role="calendar-modal" hidden>
                         <div class="calendar-modal__backdrop" data-role="calendar-close"></div>
-                        <article class="calendar-modal__dialog" aria-modal="true" role="dialog" aria-label="日历日期详情">
+                        <article class="calendar-modal__dialog" data-role="calendar-modal-dialog" tabindex="-1" aria-modal="true" role="dialog" aria-labelledby="calendar-modal-title">
                             <button type="button" class="calendar-modal__close" data-role="calendar-close" aria-label="关闭详情">
                                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                                     <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2"/>
                                 </svg>
                             </button>
                             <header class="calendar-modal__head">
-                                <h4 class="calendar-modal__title" data-role="calendar-modal-title"></h4>
+                                <h4 class="calendar-modal__title" id="calendar-modal-title" data-role="calendar-modal-title"></h4>
                                 <p class="calendar-modal__meta" data-role="calendar-modal-meta"></p>
                                 <div class="calendar-modal__badges" data-role="calendar-modal-badges"></div>
+                                <p class="calendar-modal__status" data-role="calendar-modal-status" aria-live="polite"></p>
                             </header>
                             <div class="calendar-modal__layout">
                                 <section class="calendar-modal__section">

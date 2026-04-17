@@ -114,8 +114,7 @@ const AI_TOUCH_RESPONSE = {
 }
 const AI_CHAT_SYSTEM_PROMPT = ASSISTANT_PERSONA_PROMPT;
 const IPC_RUNTIME_CONFIG = {
-    emotionLogPrefix: "[emotion-pipeline]",
-    maxContextMessages: 128,
+    maxContextMessages: 512,
     clipboardMaxItems: 120,
     memoryExtractionContextWindow: 16,
     aiDiaryContextWindow: 8,
@@ -123,10 +122,6 @@ const IPC_RUNTIME_CONFIG = {
         memoryExtraction: {
             temperature: 0.2,
             maxTokens: 512,
-        },
-        emotionExtraction: {
-            temperature: 0,
-            maxTokens: 180,
         },
         knowledgeCardSummary: {
             temperature: 0.2,

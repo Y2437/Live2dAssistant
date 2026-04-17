@@ -46,16 +46,6 @@ function registerAiChatHandlers(registry) {
     ipcMain.handle("app:aiChat", async (event, message) => registry.runAiChat(message));
 }
 
-function registerEmotionHandlers(registry) {
-    ipcMain.handle("app:extractEmotionForLive2d", async (event, payload) => {
-        const text = typeof payload?.text === "string" ? payload.text : "";
-        console.log("[emotion-ipc] request", {textLength: text.length});
-        const result = await registry.extractEmotionForLive2d(text);
-        console.log("[emotion-ipc] response", result);
-        return result;
-    });
-}
-
 function registerContextHandlers(registry) {
     ipcMain.handle("app:getAiContextMeta", async () => registry.getAssistantContextMeta());
     ipcMain.handle("app:getAiContextData", async () => registry.getAssistantContextData());
@@ -227,9 +217,12 @@ function registerKnowledgeCardHandlers(registry) {
 function registerCalendarHandlers(registry) {
     ipcMain.handle("app:loadCalendarPlan", async () => registry.getCalendarPlanData());
     ipcMain.handle("app:getCalendarDayDetail", async (event, payload) => {
-        const date = typeof payload?.date === "string" ? payload.date : "";
+        const date = typeof payload === "string"
+            ? payload
+            : (typeof payload?.date === "string" ? payload.date : "");
         return registry.getCalendarDayDetail(date);
     });
+    ipcMain.handle("app:listCalendarTodos", async (event, payload) => registry.listCalendarTodos(payload || {}));
     ipcMain.handle("app:createCalendarTodo", async (event, payload) => registry.createCalendarTodo(payload));
     ipcMain.handle("app:updateCalendarTodo", async (event, payload) => registry.updateCalendarTodo(payload));
     ipcMain.handle("app:deleteCalendarTodo", async (event, payload) => {
@@ -249,7 +242,6 @@ module.exports = {
     AGENT_STREAM_EVENT,
     registerCoreHandlers,
     registerAiChatHandlers,
-    registerEmotionHandlers,
     registerContextHandlers,
     registerModelProviderHandlers,
     registerAgentHandlers,

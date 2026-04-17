@@ -26,10 +26,28 @@ function createId(prefix = "id") {
     return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function isValidDateText(value) {
+    const text = String(value || "").trim();
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+        return false;
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+        return false;
+    }
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year
+        && date.getUTCMonth() === month - 1
+        && date.getUTCDate() === day;
+}
+
 function normalizeDateText(value, fieldName = "date") {
     const text = String(value || "").trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-        throw new Error(`${fieldName} must be in YYYY-MM-DD format.`);
+    if (!isValidDateText(text)) {
+        throw new Error(`${fieldName} must be a valid YYYY-MM-DD date.`);
     }
     return text;
 }
@@ -63,9 +81,9 @@ function resolveHolidayRange(item = {}) {
     };
 }
 
-function isHolidayOnDate(item, targetDate) {
-    const startDate = normalizeOptionalDateText(item?.startDate || item?.date, "Holiday startDate");
-    const endDate = normalizeOptionalDateText(item?.endDate || item?.date, "Holiday endDate");
+function isDateInRange(item, targetDate) {
+    const startDate = normalizeOptionalDateText(item?.startDate || item?.date, "Range startDate");
+    const endDate = normalizeOptionalDateText(item?.endDate || item?.date, "Range endDate");
     if (!startDate || !endDate) {
         return false;
     }
@@ -269,13 +287,14 @@ async function requestRemoteHolidayYearPayload(year, timeoutMs = REMOTE_HOLIDAY_
 function resolveRemoteDateText(monthDay, raw, year) {
     const keyText = String(monthDay || "").trim();
     const rawDate = String(raw?.date || "").trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    if (isValidDateText(rawDate)) {
         return rawDate;
     }
     if (/^\d{2}-\d{2}$/.test(keyText)) {
-        return `${year}-${keyText}`;
+        const dateText = `${year}-${keyText}`;
+        return isValidDateText(dateText) ? dateText : "";
     }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(keyText)) {
+    if (isValidDateText(keyText)) {
         return keyText;
     }
     return "";
@@ -292,7 +311,7 @@ function parseRemoteHolidayDays(payload, year) {
             continue;
         }
         const date = resolveRemoteDateText(monthDay, raw, year);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        if (!isValidDateText(date)) {
             continue;
         }
         const target = String(raw?.target || "").trim();
@@ -326,7 +345,7 @@ function parseRemoteWorkdayDays(payload, year) {
             continue;
         }
         const date = resolveRemoteDateText(monthDay, raw, year);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        if (!isValidDateText(date)) {
             continue;
         }
         const target = String(raw?.target || "").trim();
@@ -466,7 +485,7 @@ async function loadRemoteHolidayRanges(years = []) {
     };
 }
 
-function mergeRemoteDateRangeItems(localItems = [], remoteItems = [], successYears = []) {
+function mergeRemoteDateRangeItems(localItems = [], remoteItems = [], successYears = [], idPrefix = "date-range") {
     if (!remoteItems.length || !successYears.length) {
         return sortHolidayItems(localItems);
     }
@@ -480,12 +499,12 @@ function mergeRemoteDateRangeItems(localItems = [], remoteItems = [], successYea
         const shouldOverrideByRemote = successYearSet.has(year)
             && (source === "builtin" || source === REMOTE_HOLIDAY_SOURCE);
         if (!shouldOverrideByRemote) {
-            merged.set(String(item?.id || createId("holiday")), item);
+            merged.set(String(item?.id || createId(idPrefix)), item);
         }
     }
 
     for (const item of remoteItems) {
-        merged.set(String(item?.id || createId("holiday")), item);
+        merged.set(String(item?.id || createId(idPrefix)), item);
     }
     return sortHolidayItems(merged.values());
 }
@@ -501,8 +520,8 @@ async function withRemoteHolidayFallback(data = {}) {
         }
         return {
             ...data,
-            holidays: mergeRemoteDateRangeItems(baseHolidays, remote.holidays, remote.successYears),
-            workdays: mergeRemoteDateRangeItems(baseWorkdays, remote.workdays, remote.successYears),
+            holidays: mergeRemoteDateRangeItems(baseHolidays, remote.holidays, remote.successYears, "holiday"),
+            workdays: mergeRemoteDateRangeItems(baseWorkdays, remote.workdays, remote.successYears, "workday"),
         };
     } catch (error) {
         return data;
@@ -590,6 +609,9 @@ function filterByDateRange(items = [], {date = "", startDate = "", endDate = ""}
     const exactDate = normalizeOptionalDateText(date, "date");
     const from = normalizeOptionalDateText(startDate, "startDate");
     const to = normalizeOptionalDateText(endDate, "endDate");
+    if (from && to && to < from) {
+        throw new Error("endDate must be greater than or equal to startDate.");
+    }
 
     return items.filter((item) => {
         const itemDate = String(item?.date || "");
@@ -749,15 +771,40 @@ async function deleteAiDiaryRecord(dataPath, id) {
 }
 
 async function getCalendarDayDetail(dataPath, date, options = {}) {
-    const targetDate = normalizeDateText(date, "date");
     const useRemote = options?.useRemote !== false;
     const data = await readCalendarData(dataPath, {useRemote});
+    return buildCalendarDayDetail(data, date);
+}
+
+function computeIsWorkday(targetDate, {workdays = [], holidays = []} = {}) {
+    if (Array.isArray(workdays) && workdays.length > 0) {
+        return true;
+    }
+    if (Array.isArray(holidays) && holidays.some((item) => String(item?.type || "").trim() === "public")) {
+        return false;
+    }
+    const [year, month, day] = String(targetDate || "").split("-").map((item) => Number(item));
+    const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1));
+    const weekday = date.getUTCDay();
+    return weekday !== 0 && weekday !== 6;
+}
+
+function buildCalendarDayDetail(data = {}, date) {
+    const targetDate = normalizeDateText(date, "date");
+    const todos = Array.isArray(data?.todos) ? data.todos.filter((item) => item.date === targetDate) : [];
+    const aiDiaries = Array.isArray(data?.aiDiaries) ? data.aiDiaries.filter((item) => item.date === targetDate) : [];
+    const holidays = Array.isArray(data?.holidays) ? data.holidays.filter((item) => isDateInRange(item, targetDate)) : [];
+    const workdays = Array.isArray(data?.workdays) ? data.workdays.filter((item) => isDateInRange(item, targetDate)) : [];
+    const isHoliday = holidays.length > 0;
+    const isWorkday = computeIsWorkday(targetDate, {workdays, holidays});
     return {
         date: targetDate,
-        todos: data.todos.filter((item) => item.date === targetDate),
-        aiDiaries: data.aiDiaries.filter((item) => item.date === targetDate),
-        holidays: data.holidays.filter((item) => isHolidayOnDate(item, targetDate)),
-        workdays: (Array.isArray(data.workdays) ? data.workdays : []).filter((item) => isHolidayOnDate(item, targetDate)),
+        todos,
+        aiDiaries,
+        holidays,
+        workdays,
+        isHoliday,
+        isWorkday,
     };
 }
 
@@ -774,4 +821,5 @@ module.exports = {
     updateAiDiaryRecord,
     deleteAiDiaryRecord,
     getCalendarDayDetail,
+    buildCalendarDayDetail,
 };

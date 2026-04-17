@@ -25,7 +25,6 @@ const {
 const {
     registerCoreHandlers,
     registerAiChatHandlers,
-    registerEmotionHandlers,
     registerContextHandlers,
     registerModelProviderHandlers,
     registerAgentHandlers,
@@ -77,7 +76,6 @@ const {
 } = require('../config');
 // Main-process IPC orchestration for chat, memory, cards, and agent wiring.
 class IpcRegister{
-    static EMOTION_LOG_PREFIX = IPC_RUNTIME_CONFIG.emotionLogPrefix;
     static assistantContext = [];
     static assistantLongTermMemory = [];
     static longTermMemoryFingerprintIndex = new Map();
@@ -119,6 +117,7 @@ class IpcRegister{
         apiKeys: {},
         updatedAt: "",
     };
+    static deferredDiaryStartupTimer = null;
     static conversationLogEntriesCache = null;
     static execFileAsync = promisify(execFile);
     constructor(ipc){
@@ -993,130 +992,6 @@ class IpcRegister{
             }
         }
     }
-    static parseEmotionExtractionJson(text){
-        return this.parseLooseJson(text);
-    }
-    static ruleBasedEmotionSignal(text){
-        const source = String(text || "").toLowerCase();
-        if(!source.trim()){
-            return {
-                emotion: "neutral",
-                tone: "flat",
-                intensity: 0.45,
-                confidence: 0.5,
-                keywords: [],
-                motionHint: {group: "Idle", index: 0},
-            };
-        }
-        const groups = [
-            {emotion: "joy", tone: "excited", words: ["开心", "高兴", "太好了", "太棒了", "快乐", "哈哈", "great", "awesome"], motionHint: {group: "Idle", index: 6}, intensity: 0.86},
-            {emotion: "joy", tone: "warm", words: ["喜欢", "幸福", "温暖", "谢谢你", "感动", "嘿嘿"], motionHint: {group: "Idle", index: 2}, intensity: 0.68},
-            {emotion: "sad", tone: "low", words: ["难过", "伤心", "失落", "遗憾", "沮丧", "sad", "upset"], motionHint: {group: "Idle", index: 4}, intensity: 0.62},
-            {emotion: "angry", tone: "sharp", words: ["生气", "愤怒", "烦", "气死", "angry", "mad"], motionHint: {group: "TapBody", index: 0}, intensity: 0.8},
-            {emotion: "surprised", tone: "sudden", words: ["惊讶", "震惊", "诶", "哇", "surprise", "unexpected"], motionHint: {group: "TapBody", index: 0}, intensity: 0.84},
-            {emotion: "calm", tone: "steady", words: ["冷静", "平静", "稳定", "安心", "calm", "steady", "relax"], motionHint: {group: "Idle", index: 0}, intensity: 0.48},
-            {emotion: "thinking", tone: "serious", words: ["分析", "推理", "步骤", "计划", "方案", "思考"], motionHint: {group: "Idle", index: 7}, intensity: 0.52},
-            {emotion: "curious", tone: "light", words: ["为什么", "怎么", "是否", "能不能", "好奇", "想知道"], motionHint: {group: "Idle", index: 1}, intensity: 0.56},
-        ];
-        for(const group of groups){
-            const hits = group.words.filter((word)=>source.includes(word));
-            if(hits.length){
-                return {
-                    emotion: group.emotion,
-                    tone: group.tone,
-                    intensity: Math.min(0.95, group.intensity + Math.min(0.08, hits.length * 0.03)),
-                    confidence: Math.min(0.95, 0.6 + hits.length * 0.12),
-                    keywords: hits.slice(0, 4),
-                    motionHint: group.motionHint,
-                };
-            }
-        }
-        return {
-            emotion: "neutral",
-            tone: "flat",
-            intensity: 0.5,
-            confidence: 0.55,
-            keywords: [],
-            motionHint: {group: "Idle", index: 0},
-        };
-    }
-    static async extractEmotionForLive2d(text){
-        const fallback = this.ruleBasedEmotionSignal(text);
-        const model = ENV_CONFIG.AI_SUMMARY_MODEL || ENV_CONFIG.AI_MODEL;
-        console.log(`${this.EMOTION_LOG_PREFIX} step1 input`, {
-            hasText: Boolean(String(text || "").trim()),
-            textLength: String(text || "").length,
-            model: model || "none",
-        });
-        if(!model || !String(text || "").trim()){
-            console.log(`${this.EMOTION_LOG_PREFIX} step2 skip-model use-fallback`, fallback);
-            return fallback;
-        }
-        try{
-            console.log(`${this.EMOTION_LOG_PREFIX} step2 model-request`);
-            const response = await aiChatWithModel([
-                {
-                    role: "system",
-                    message: [
-                        "你是情绪标签提取器。",
-                        "请从给定文本中提取主情绪，并映射一个 Live2D 动作建议。",
-                        "只输出 JSON，不要输出任何额外文字。",
-                        "JSON 格式：",
-                        "{\"emotion\":\"joy|sad|angry|surprised|calm|thinking|curious|neutral\",\"tone\":\"excited|warm|low|sharp|sudden|steady|serious|light|flat\",\"intensity\":0.0,\"confidence\":0.0,\"keywords\":[\"词1\"],\"motionHint\":{\"group\":\"Idle|TapBody\",\"index\":0}}",
-                    ].join("\n"),
-                },
-                {
-                    role: "user",
-                    message: String(text || "").slice(0, 2000),
-                },
-            ], {
-                model,
-                ...IPC_RUNTIME_CONFIG.modelParams.emotionExtraction,
-            });
-            const raw = this.getAssistantReplyContent(response);
-            console.log(`${this.EMOTION_LOG_PREFIX} step3 model-raw`, raw);
-            const parsed = this.parseEmotionExtractionJson(raw);
-            if(!parsed || typeof parsed !== "object"){
-                console.log(`${this.EMOTION_LOG_PREFIX} step4 parse-failed use-fallback`, fallback);
-                return fallback;
-            }
-            const emotion = ["joy", "sad", "angry", "surprised", "calm", "thinking", "curious", "neutral"].includes(parsed.emotion)
-                ? parsed.emotion
-                : fallback.emotion;
-            const tone = ["excited", "warm", "low", "sharp", "sudden", "steady", "serious", "light", "flat"].includes(parsed.tone)
-                ? parsed.tone
-                : (fallback.tone || "flat");
-            const intensityNumber = Number(parsed.intensity);
-            const intensity = Number.isFinite(intensityNumber)
-                ? Math.max(0, Math.min(1, Number(intensityNumber.toFixed(2))))
-                : (fallback.intensity ?? 0.5);
-            const confidenceNumber = Number(parsed.confidence);
-            const confidence = Number.isFinite(confidenceNumber)
-                ? Math.max(0, Math.min(1, Number(confidenceNumber.toFixed(2))))
-                : fallback.confidence;
-            const keywords = Array.isArray(parsed.keywords)
-                ? parsed.keywords.filter((item)=>typeof item === "string" && item.trim()).slice(0, 4)
-                : fallback.keywords;
-            const hintGroup = parsed?.motionHint?.group === "TapBody" ? "TapBody" : "Idle";
-            const hintIndex = Number.isFinite(Number(parsed?.motionHint?.index)) ? Number(parsed.motionHint.index) : (fallback?.motionHint?.index ?? 0);
-            const normalized = {
-                emotion,
-                tone,
-                intensity,
-                confidence,
-                keywords,
-                motionHint: {
-                    group: hintGroup,
-                    index: Math.max(0, Math.floor(hintIndex)),
-                },
-            };
-            console.log(`${this.EMOTION_LOG_PREFIX} step5 model-normalized`, normalized);
-            return normalized;
-        }catch(err){
-            console.warn(`${this.EMOTION_LOG_PREFIX} stepX model-error use-fallback`, err?.message || err);
-            return fallback;
-        }
-    }
     static stripMarkdownForSummary(content){
         return stripMarkdownForSummary(content);
     }
@@ -1242,10 +1117,10 @@ class IpcRegister{
         return await ensureCalendarPlanJson(dataPath);
     }
     static async getCalendarPlanData(){
-        return await readCalendarData(CALENDAR_PLAN_JSON_PATH, {useRemote: false});
+        return await readCalendarData(CALENDAR_PLAN_JSON_PATH, {useRemote: true});
     }
     static async getCalendarDayDetail(date){
-        return await getCalendarDayDetail(CALENDAR_PLAN_JSON_PATH, date, {useRemote: false});
+        return await getCalendarDayDetail(CALENDAR_PLAN_JSON_PATH, date, {useRemote: true});
     }
     static async listCalendarTodos(filters = {}){
         return await listCalendarTodos(CALENDAR_PLAN_JSON_PATH, filters);
@@ -1269,7 +1144,7 @@ class IpcRegister{
     static buildAiDiaryWriterMessages(payload = {}){
         const date = typeof payload?.date === "string" && payload.date.trim()
             ? payload.date.trim()
-            : new Date().toISOString().slice(0, 10);
+            : this.getLocalDateKey(new Date());
         const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : "";
         const sourceContextItems = Array.isArray(payload?.contextItems)
             ? payload.contextItems
@@ -1301,7 +1176,7 @@ class IpcRegister{
                 mood: typeof payload?.mood === "string" ? payload.mood.trim() : "",
             };
         }
-        const model = ENV_CONFIG.AI_SUMMARY_MODEL || ENV_CONFIG.AI_MODEL;
+        const model = ENV_CONFIG.AI_MODEL || ENV_CONFIG.AI_SUMMARY_MODEL;
         if(!model){
             throw new Error("Missing model configuration for AI diary.");
         }
@@ -1336,7 +1211,7 @@ class IpcRegister{
     static async createAiDiary(payload = {}){
         const date = typeof payload?.date === "string" && payload.date.trim()
             ? payload.date.trim()
-            : new Date().toISOString().slice(0, 10);
+            : this.getLocalDateKey(new Date());
         if(payload?.dedupeByDate === true){
             const existing = await this.findAiDiaryByDate(date);
             if(existing){
@@ -1376,6 +1251,21 @@ class IpcRegister{
             contextItems: yesterdayContext,
         });
         return {ok: true, created: true, date: yesterday, diaryId: result?.item?.id || ""};
+    }
+    static scheduleDeferredAiDiaryGeneration(delayMs = 2600){
+        if(this.deferredDiaryStartupTimer){
+            clearTimeout(this.deferredDiaryStartupTimer);
+            this.deferredDiaryStartupTimer = null;
+        }
+        const waitMs = Number.isFinite(Number(delayMs)) ? Math.max(0, Number(delayMs)) : 2600;
+        this.deferredDiaryStartupTimer = setTimeout(async ()=>{
+            this.deferredDiaryStartupTimer = null;
+            try{
+                await this.maybeGenerateYesterdayAiDiaryOnStartup();
+            }catch(err){
+                console.warn("[ai-diary] deferred startup generation failed:", err?.message || err);
+            }
+        }, waitMs);
     }
     static async updateAiDiary(payload = {}){
         return await updateAiDiaryRecord(CALENDAR_PLAN_JSON_PATH, payload);
@@ -1425,9 +1315,6 @@ class IpcRegister{
     }
     static registerAiChat(){
         registerAiChatHandlers(this);
-    }
-    static registerEmotionTools(){
-        registerEmotionHandlers(this);
     }
     static registerAiContextManager(){
         registerContextHandlers(this);
@@ -1544,14 +1431,8 @@ class IpcRegister{
         });
         await this.agentService.ensureReady();
         await this.maybeRunDailyMemoryExtraction();
-        try{
-            await this.maybeGenerateYesterdayAiDiaryOnStartup();
-        }catch(err){
-            console.warn("[ai-diary] startup generation failed:", err?.message || err);
-        }
         this.registerPing();
         this.registerAiChat();
-        this.registerEmotionTools();
         this.registerAiContextManager();
         this.registerModelProvider();
         this.registerAgent();
@@ -1559,6 +1440,7 @@ class IpcRegister{
         this.registerClipboard();
         this.registerKnowledgeCards();
         this.registerCalendar();
+        this.scheduleDeferredAiDiaryGeneration();
     }
 
 }

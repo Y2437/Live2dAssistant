@@ -9,7 +9,6 @@ const IPC_CHANNELS = {
     ping: "app:ping",
     openWindow: "app:openWindow",
     chat: "app:aiChat",
-    extractEmotionForLive2d: "app:extractEmotionForLive2d",
     agentChat: "app:agentChat",
     agentChatStream: "app:agentChatStream",
     cancelAgentChat: "app:agentChatCancel",
@@ -42,6 +41,7 @@ const IPC_CHANNELS = {
     deleteKnowledgeCard: "app:deleteKnowledgeCard",
     loadCalendarPlan: "app:loadCalendarPlan",
     getCalendarDayDetail: "app:getCalendarDayDetail",
+    listCalendarTodos: "app:listCalendarTodos",
     createCalendarTodo: "app:createCalendarTodo",
     updateCalendarTodo: "app:updateCalendarTodo",
     deleteCalendarTodo: "app:deleteCalendarTodo",
@@ -64,7 +64,6 @@ contextBridge.exposeInMainWorld("api", {
     },
     openWindow: createInvoker(IPC_CHANNELS.openWindow),
     chat: createInvoker(IPC_CHANNELS.chat),
-    extractEmotionForLive2d: (text) => ipcRenderer.invoke(IPC_CHANNELS.extractEmotionForLive2d, {text}),
     agentChat: (message, options = {}) => ipcRenderer.invoke(IPC_CHANNELS.agentChat, {
         message,
         allowedTools: Array.isArray(options?.allowedTools) ? options.allowedTools : null,
@@ -130,7 +129,11 @@ contextBridge.exposeInMainWorld("api", {
     generateKnowledgeCardSummary: createInvoker(IPC_CHANNELS.generateKnowledgeCardSummary),
     deleteKnowledgeCard: createInvoker(IPC_CHANNELS.deleteKnowledgeCard),
     loadCalendarPlan: createInvoker(IPC_CHANNELS.loadCalendarPlan),
-    getCalendarDayDetail: (date) => ipcRenderer.invoke(IPC_CHANNELS.getCalendarDayDetail, {date}),
+    getCalendarDayDetail: (dateOrPayload) => {
+        const payload = typeof dateOrPayload === "string" ? {date: dateOrPayload} : (dateOrPayload || {});
+        return ipcRenderer.invoke(IPC_CHANNELS.getCalendarDayDetail, payload);
+    },
+    listCalendarTodos: createInvoker(IPC_CHANNELS.listCalendarTodos),
     createCalendarTodo: createInvoker(IPC_CHANNELS.createCalendarTodo),
     updateCalendarTodo: createInvoker(IPC_CHANNELS.updateCalendarTodo),
     deleteCalendarTodo: (id) => ipcRenderer.invoke(IPC_CHANNELS.deleteCalendarTodo, {id}),

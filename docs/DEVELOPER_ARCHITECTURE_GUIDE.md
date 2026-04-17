@@ -1,92 +1,105 @@
-﻿# Live2dAssistant 开发者架构手册
+# Live2dAssistant 开发者架构手册
 
-文档版本：v1.0  
-快照日期：2026-03-06  
-适用分支：当前仓库工作区（Electron 主进程 + Renderer 单壳模式）
+文档版本：v2.0  
+快照日期：2026-04-16  
+适用范围：当前仓库工作区（Electron 主进程 + preload + renderer 单壳模式）
 
 ## 1. 文档目标
 
-本手册用于给后续开发人员提供可执行的工程参考，覆盖以下内容：
+本手册用于给后续开发人员提供当前代码结构的可执行参考，重点说明：
 
-- 当前架构分层与职责边界
-- 主流程启动链路与关键运行机制
-- IPC 契约、数据持久化模型、Agent 编排机制
-- 新功能接入与重构时必须遵守的工程规范
-- 交付前测试基线与风险清单
+- 当前运行时分层与职责边界
+- 启动链路、窗口模型与 `devShell` 单壳模式
+- IPC 契约、主进程聚合层、Agent 编排与本地持久化
+- renderer 侧壳层与功能模块拆分
+- 新功能接入时应复用的现有路径
+- 文档与代码如何保持一致
 
-本手册是“工程实施文档”，不是产品 PRD。重点是：如何安全迭代而不破坏现有系统。
+这是一份工程实现文档，不是产品 PRD。所有结论均应以当前源码为准。
 
 ## 2. 项目概览
 
-Live2dAssistant 是一个基于 Electron 的桌面助手应用。当前主交互模式为 `devShell` 单壳窗口，核心能力包括：
+`Live2dAssistant` 是一个基于 Electron Forge 的桌面助手应用。当前主交互模式是 `devShell` 单壳窗口，核心功能包括：
 
-- Live2D 看板娘交互与情绪动作映射
-- AI 对话（普通模式 + Agent 模式）
-- 知识卡片管理（本地 JSON 持久化）
+- Live2D 看板娘交互与情绪反馈
+- 普通对话与 Agent 对话
+- 知识卡片管理
 - 番茄钟任务管理
-- 短期上下文与长期记忆管理
 - 剪贴板快照与历史管理
-- QuickFloat（选中文本捕获 + 快速翻译/解释）
+- 日历计划、待办与 AI 日记
+- 短期上下文与长期记忆系统
+- 模型提供商与模型配置管理
 
 ## 3. 技术栈与工程形态
 
 - 运行时：`electron@^40.1.0`
-- 语言：JavaScript（CommonJS + ESM 混合，Renderer 侧以 ESM 为主）
 - 打包：Electron Forge
-- 关键依赖：`pixi.js`, `pixi-live2d-display`, `marked`, `highlight.js`, `dotenv`
-- 持久化：主进程本地 JSON 文件
-- Agent：主进程编排 + 多工具调用 + 流式输出
+- 语言：JavaScript（项目为 `commonjs`，renderer 侧通过 `<script type="module">` 组织模块）
+- 关键依赖：`pixi.js`, `pixi-live2d-display`, `marked`, `highlight.js`, `dotenv`, `zod`, `pdf-parse`
+- 持久化：主进程本地 JSON / JSONL 文件
+- Agent：主进程编排 + 工具调用 + 流式输出
 
-工程脚本（`package.json`）：
+`package.json` 当前脚本：
 
-- `npm start`: 本地开发启动
-- `npm test`: 自动化基线检查（`scripts/auto-test.js`）
-- `npm package`: 打包目录产物
-- `npm make`: 生成安装包
+- `npm start`
+- `npm test`
+- `npm run test:auto`
+- `npm run test:unit`
+- `npm run lint:css`
+- `npm run lint:css:fix`
+- `npm run package`
+- `npm run make`
 
-## 4. 仓库结构（与开发最相关）
+## 4. 仓库结构（开发最相关部分）
 
 ```text
 src/
   main/
     main.js                         # 主进程入口
-    preload.js                      # Renderer 安全桥接 API
+    preload.js                      # renderer 安全桥接 API
     config/
-      index.js                      # 常量、路径、窗口映射、触摸文案
+      index.js                      # 常量、路径、窗口映射、运行时配置
       env.js                        # 环境变量装配
     window/
-      WindowManager.js              # 窗口创建与切换策略
+      WindowManager.js              # 窗口创建与单壳路由策略
     ipc/
-      ipcRegister.js                # 主进程状态编排中心（聚合层）
-      ipcRegisterHandlers.js        # IPC channel 注册层（契约层）
-      aiService.js                  # 大模型调用与流式实现
+      ipcRegister.js                # 主进程聚合层
+      ipcRegisterHandlers.js        # IPC channel 注册层
+      aiService.js                  # 模型请求与 SSE 流式解析
       agentService.js               # Agent 主循环编排
-      agentSearchTools.js           # 搜索/网页/卡片/记忆检索工具
-      agentVisionTools.js           # 视觉相关工具
+      agentSearchTools.js           # 搜索 / 网页 / 检索类工具
+      agentVisionTools.js           # 截图 / 图像相关工具
       agentShared.js                # Agent 公共函数
-      assistantPrompt.js            # 助手回复提示词
-      promptRegistry.js             # Agent 工具说明与提示词
+      assistantPrompt.js            # 对话 prompt 组装
+      promptRegistry.js             # persona / tool spec / prompt 模板
       ipcDataUtils.js               # 数据归一化与校验工具
-      pomodoroStore.js              # 番茄钟领域存储（新拆分）
-      clipboardStore.js             # 剪贴板领域存储（新拆分）
-    quickFloat/
-      selectionCoordinator.js       # 选区监控与 quickFloat 协调
+      pomodoroStore.js              # 番茄钟领域存储
+      clipboardStore.js             # 剪贴板领域存储
+      calendarStore.js              # 日历 / todo / diary 领域存储
+      modelProviderCatalog.js       # 模型提供商目录
   renderer/
     view/                           # HTML 视图
     js/
-      shell/app.js                  # 单壳导航与设置页聚合
-      assistant/index.js            # 对话页 + Live2D + 流式呈现
+      shell/app.js                  # 单壳导航与视图切换
+      assistant/index.js            # 对话 + Live2D + 流式呈现
       cards/index.js                # 卡片页
       pomodoro/index.js             # 番茄钟页
       clipboard/index.js            # 剪贴板页
-      settings/view.js              # 设置页视图渲染函数
-      core/config.js                # Renderer 侧常量
-    css/                            # 主题与模块样式
-docs/
-  PROJECT_ARCHITECTURE_AND_STATUS_REPORT.md
-  roadmap.md
+      calendar/index.js             # 日历页
+      settings/view.js              # 设置页渲染函数
+      core/config.js                # renderer 常量
+      shared/                       # DOM / perf 共享工具
+    css/
+      style/                        # 功能与布局样式
+      theme/                        # 明暗主题 token 与映射
+    assets/                         # Live2D 资源
+    vendor/                         # vendored 前端依赖
 scripts/
-  auto-test.js                      # 当前自动化检查基线
+  run-tests.js
+  auto-test.js
+  run-unit-tests.js
+tests/
+docs/
 ```
 
 ## 5. 运行时架构
@@ -94,416 +107,444 @@ scripts/
 ### 5.1 进程分层
 
 1. 主进程（`src/main/**`）
-- 生命周期、窗口、IPC、持久化、Agent 编排
+- Electron 生命周期
+- 窗口创建与 `devShell` 路由
+- IPC channel 注册
+- 本地 JSON / JSONL 持久化
+- Agent、memory、calendar、clipboard 等业务编排
 
-2. 预加载层（`src/main/preload.js`）
-- 通过 `contextBridge` 暴露 `window.api`
-- Renderer 不能直接访问 Node API
+2. preload 层（`src/main/preload.js`）
+- 通过 `contextBridge.exposeInMainWorld("api", ...)` 暴露受控 API
+- renderer 仅通过 `window.api` 调主进程
+- 负责流式事件监听与 invoke 包装
 
 3. 渲染进程（`src/renderer/**`）
-- 页面渲染、交互逻辑、Live2D 动画
+- 壳层导航与 view 切换
+- Assistant / Cards / Pomodoro / Clipboard / Calendar / Settings UI
+- Live2D/Pixi 渲染与用户交互
 
-### 5.2 启动链路（关键）
+### 5.2 启动链路
 
-应用启动顺序如下：
+启动顺序以 `src/main/main.js` 为准：
 
-1. `main.js` 初始化 Electron 存储路径（`sessionData/cache`）
-2. `app.whenReady()` 后执行 `ipcRegister.registerAll()`
-3. 初始化 QuickFloat 协调器并注册全局快捷键
-4. 启动每小时一次的后台记忆维护任务
-5. 打开 `assistant`（在 `devShell` 下实际为壳窗口切视图）
+1. `configureElectronStoragePaths()` 初始化 `sessionData`、`cache` 等 Electron 存储路径。
+2. `app.whenReady()` 后调用 `ipcRegister.registerAll()`。
+3. 启动每小时一次的后台维护任务，当前维护项是 `maybeRunDailyMemoryExtraction()`。
+4. 调用 `wm.open("assistant")` 打开主界面。
+5. 当 `WINDOW_MODE === "devShell"` 时，实际显示的是壳窗口 `src/renderer/view/index.html`，业务视图在壳内切换。
 
-## 6. 窗口与路由模型
-
-### 6.1 当前默认模式：`devShell`
+### 5.3 窗口与路由模型
 
 配置位于 `src/main/config/index.js`：
 
 - `WINDOW_MODE = "devShell"`
-- 业务视图在同一壳窗口内切换（`assistant/pomodoro/cards/clipboard/settings`）
-- 主进程通过 `ui:showView` 事件通知壳页面切换
+- `WINDOW_KEYS = [assistant, pomodoro, cards, clipboard, devShell]`
+- `WINDOW_FILE_MAP` 指向对应 HTML 文件
 
-### 6.2 特殊独立窗口：`quickFloat`
+`src/main/window/WindowManager.js` 的行为：
 
-`WindowManager` 将 `quickFloat` 视为独立窗口，具备：
+- 在 `devShell` 模式下，`assistant` / `pomodoro` / `cards` / `clipboard` 这类非独立窗口实际被路由到 `devShell` 壳窗口。
+- 主进程通过 `ui:showView` 事件通知 renderer 壳层切换视图。
+- 统一使用：
+  - `nodeIntegration: false`
+  - `contextIsolation: true`
+  - `preload: src/main/preload.js`
 
-- 无边框、置顶、最小高度约束
-- 支持动态切换展开/收起尺寸
-- 与壳窗口并行存在
+## 6. 主进程模块职责边界
 
-## 7. 主进程模块职责边界
+### 6.1 `ipcRegister.js`：主进程聚合层
 
-### 7.1 `ipcRegister.js`（聚合层）
+这是当前主进程的组合中心，负责：
 
-职责定位：
+- 持有与加载短期上下文、长期记忆、知识卡片、剪贴板、日历计划、模型设置等状态
+- 初始化 `AgentService`
+- 调用各领域 store 与工具服务
+- 对外暴露统一业务方法供 handlers 调用
+- 启动时执行 register/load/ensure 逻辑
 
-- 持有跨域状态（上下文、记忆、卡片缓存、routine 元数据）
-- 对外暴露统一业务方法，供 handlers 调用
-- 在 `registerAll()` 完成所有初始化与依赖注入
+当前 `registerAll()` 中的核心工作包括：
 
-不再承担的职责（已拆分）：
+- 加载 assistant context
+- 加载长期记忆
+- 加载 knowledge cards
+- 加载 memory routine metadata
+- 加载 model provider settings
+- 初始化 clipboard store / calendar plan / pomodoro 相关数据
+- 初始化 `AgentService`
+- 注册全部 IPC handlers
+- 触发每日记忆提炼与 AI diary 启动流程
 
-- 番茄钟数据校验/CRUD 细节 -> `pomodoroStore.js`
-- 剪贴板历史去重/置顶/回写细节 -> `clipboardStore.js`
-
-### 7.2 `ipcRegisterHandlers.js`（契约层）
-
-职责定位：
-
-- 唯一的 `ipcMain.handle` 注册点
-- 做参数入口校验 + 调用 registry 方法
-- 不直接操作业务状态
-
-这样可以将“协议层”和“业务层”解耦，便于后续单测。
-
-### 7.3 `pomodoroStore.js`（领域存储）
-
-职责：
-
-- `pomodoro.json` 文件存在性保障
-- 任务入参校验（分钟范围、重复次数、ID）
-- 列表归一化、创建/更新/删除持久化
-
-### 7.4 `clipboardStore.js`（领域存储）
+### 6.2 `ipcRegisterHandlers.js`：IPC 契约层
 
 职责：
 
-- 剪贴板快照读取（文本 + 图片预览）
-- 指纹去重、置顶顺序维护、容量裁剪
-- 历史持久化、回写系统剪贴板
+- 统一注册 `ipcMain.handle(...)`
+- 将 channel 按领域分组
+- 保持 handlers 只做协议映射，不直接持有业务状态
 
-当前默认容量：120 条（由 `createClipboardStore` 初始化参数提供）。
+当前分组：
 
-### 7.5 `agentService.js`（编排核心）
+- `registerCoreHandlers`
+- `registerAiChatHandlers`
+- `registerContextHandlers`
+- `registerModelProviderHandlers`
+- `registerAgentHandlers`
+- `registerPomodoroHandlers`
+- `registerClipboardHandlers`
+- `registerKnowledgeCardHandlers`
+- `registerCalendarHandlers`
+
+### 6.3 `aiService.js`：模型调用层
 
 职责：
 
-- Agent 思考循环（最大步数限制）
-- 工具调用权限控制（allowlist）
-- 轨迹输出（trace/status）与流式文本回调
-- direct mode 与 normal mode 分流
+- 封装模型请求
+- 处理流式输出解析
+- 为普通对话、Agent、摘要、视觉分析等能力提供统一请求接口
 
-### 7.6 `ipcDataUtils.js`（数据规范化）
+模型相关运行时配置最终由：
+
+- `src/main/config/env.js`
+- `src/main/ipc/modelProviderCatalog.js`
+- `src/main/ipc/ipcRegister.js` 中的 model provider settings
+
+共同决定。
+
+### 6.4 `agentService.js`：Agent 编排核心
 
 职责：
 
-- 上下文/记忆/卡片字段归一化
-- 记忆分类、标签、置信度、状态规则
-- 摘要 fallback 文本处理
+- Agent 多步循环
+- direct mode / normal mode 分流
+- `allowedTools` 白名单控制
+- trace / status / final answer 流式回调
+- 与 search/vision/shared 工具层协作
 
-## 8. Renderer 架构
+相关辅助模块：
 
-### 8.1 壳层（`shell/app.js`）
+- `agentSearchTools.js`
+- `agentVisionTools.js`
+- `agentShared.js`
+- `promptRegistry.js`
+- `assistantPrompt.js`
 
-- 统一导航切换
-- 设置页数据聚合拉取
-- 监听 `ui:showView` 实现主进程驱动的视图切换
+### 6.5 领域存储模块
 
-### 8.2 助手页（`assistant/index.js`）
+当前已经拆分出的领域持久化模块包括：
 
-- Live2D/Pixi 初始化与生命周期控制
-- 气泡模式 + 右侧聊天面板自动切换
-- Agent 流式输出与取消、超时、重试
-- 运行轨迹面板（status + traces）
-- 工具范围选择（allowedTools）与 direct mode
+- `pomodoroStore.js`
+- `clipboardStore.js`
+- `calendarStore.js`
 
-### 8.3 卡片页（`cards/index.js`）
+这些模块负责各自领域的：
 
-- 列表、筛选、搜索、分页
-- 新建/编辑/删除
-- 摘要生成与 Markdown 预览
+- JSON 文件存在性保障
+- 入参校验
+- 归一化
+- create / update / delete / list 等持久化操作
 
-### 8.4 番茄钟页（`pomodoro/index.js`）
+### 6.6 `ipcDataUtils.js`
 
-- 任务 CRUD 与排序
-- 计时阶段控制与回合逻辑
+职责：
 
-### 8.5 剪贴板页（`clipboard/index.js`）
+- assistant context 归一化
+- long-term memory 归一化与去噪/指纹辅助
+- knowledge card payload 校验与标准化
+- memory category / tags / confidence / status 规范化
 
-- 当前剪贴板快照展示
-- 历史记录管理与回填
+## 7. preload API 与 IPC 契约
 
-### 8.6 设置页（`settings/view.js`）
+### 7.1 preload 暴露方式
 
-- 上下文、记忆、能力、自测结果渲染
+`src/main/preload.js` 中通过 `contextBridge.exposeInMainWorld("api", ...)` 暴露 `window.api`。
 
-## 9. IPC 契约（当前完整集合）
+当前重要事件：
 
-说明：以下均为 Renderer 通过 `window.api` 调用主进程 `app:*` channel。
+- `app:agentChatStream:event`
+- `ui:showView`
 
-### 9.1 基础与窗口
+### 7.2 当前 API 分组
 
-- `app:ping`
-- `app:openWindow`
-- `app:touch`
+#### 基础与窗口
+- `ping`
+- `openWindow`
+- `touch`
+- `onShowView`
 
-### 9.2 对话与 Agent
+#### 对话与 Agent
+- `chat`
+- `agentChat`
+- `agentChatStream`
+- `cancelAgentChat`
+- `getAgentCapabilities`
+- `runAgentSelfTest`
 
-- `app:aiChat`
-- `app:extractEmotionForLive2d`
-- `app:agentChat`
-- `app:agentChatStream`
-- `app:agentChatCancel`
-- `app:getAgentCapabilities`
-- `app:runAgentSelfTest`
+#### 上下文与记忆
+- `getAiContextMeta`
+- `getAiContextData`
+- `clearAiContext`
+- `getLongTermMemoryData`
+- `getMemoryRoutineMeta`
+- `extractLongTermMemories`
+- `deleteLongTermMemory`
 
-流式事件：
+#### 模型提供商设置
+- `getModelProviderSettings`
+- `updateModelProviderSettings`
+- `testModelProviderPrompt`
 
-- 主进程 -> Renderer: `app:agentChatStream:event`
+#### 番茄钟
+- `loadPomodoroJson`
+- `savePomodoroJson`
 
-### 9.3 上下文与记忆
+#### 剪贴板
+- `getClipboardSnapshot`
+- `getClipboardHistory`
+- `captureClipboard`
+- `clearClipboardHistory`
+- `deleteClipboardItem`
+- `pinClipboardItem`
+- `copyClipboardItem`
 
-- `app:getAiContextMeta`
-- `app:getAiContextData`
-- `app:clearAiContext`
-- `app:getLongTermMemoryData`
-- `app:getMemoryRoutineMeta`
-- `app:extractLongTermMemories`
-- `app:deleteLongTermMemory`
+#### 知识卡片
+- `loadKnowledgeCards`
+- `createKnowledgeCard`
+- `updateKnowledgeCard`
+- `generateKnowledgeCardSummary`
+- `deleteKnowledgeCard`
 
-### 9.4 知识卡片
+#### 日历 / todo / AI diary
+- `loadCalendarPlan`
+- `getCalendarDayDetail`
+- `createCalendarTodo`
+- `updateCalendarTodo`
+- `deleteCalendarTodo`
+- `listAiDiaries`
+- `createAiDiary`
+- `updateAiDiary`
+- `deleteAiDiary`
 
-- `app:loadKnowledgeCards`
-- `app:createKnowledgeCard`
-- `app:updateKnowledgeCard`
-- `app:generateKnowledgeCardSummary`
-- `app:deleteKnowledgeCard`
+### 7.3 Agent 流式链路
 
-### 9.5 番茄钟
+- renderer 调用 `window.api.agentChatStream(...)`
+- preload 监听 `app:agentChatStream:event`
+- main 侧 `ipcRegisterHandlers.js` 中使用 `event.sender.send(...)` 回推：
+  - `status`
+  - `trace`
+  - `content`
+  - `error`
+  - `canceled`
+  - `complete`
+- 取消通过 `app:agentChatCancel`
+- main 内部使用 `AbortController` 管理活跃请求
 
-- `app:loadPomodoroJson`
-- `app:savePomodoroJson`
+## 8. renderer 架构
 
-### 9.6 剪贴板
+### 8.1 壳层 `src/renderer/js/shell/app.js`
 
-- `app:getClipboardSnapshot`
-- `app:getClipboardHistory`
-- `app:captureClipboard`
-- `app:clearClipboardHistory`
-- `app:deleteClipboardItem`
-- `app:pinClipboardItem`
-- `app:copyClipboardItem`
+职责：
 
-### 9.7 QuickFloat
+- 导航按钮绑定
+- 当前 view 切换
+- 接收 `ui:showView`
+- 与 settings / feature view 做基础联动
 
-- `app:getQuickFloatFeatureState`
-- `app:quickFloatCaptureSelectionText`
-- `app:quickTranslateText`
-- `app:quickExplainText`
-- `app:quickFloatSetWindowMode`
-- `app:quickFloatSetInteractionState`
+`src/renderer/view/index.html` 当前实际导航视图：
 
-QuickFloat 事件：
+- `assistant`
+- `pomodoro`
+- `cards`
+- `calendar`
+- `clipboard`
+- `settings`
 
-- `quick-float:feature-toggled`
-- `quick-float:selection-ready`
-- `quick-float:selection-error`
+### 8.2 Assistant
+
+文件：`src/renderer/js/assistant/index.js`
+
+职责：
+
+- Live2D 与 Pixi 初始化
+- 气泡模式 + 右侧聊天面板双形态
+- Agent 流式文本渲染
+- 重试 / 取消 / 超时处理
+- 执行摘要与 traces 面板
+- 扩展工具范围选择与 direct mode 开关
+
+### 8.3 Cards
+
+文件：`src/renderer/js/cards/index.js`
+
+职责：
+
+- 卡片列表、筛选、分页
+- 新建 / 更新 / 删除
+- 摘要生成
+- Markdown 预览
+
+### 8.4 Pomodoro
+
+文件：`src/renderer/js/pomodoro/index.js`
+
+职责：
+
+- 任务 CRUD
+- list / edit / run 视图切换
+- 工作 / 休息阶段循环控制
+
+### 8.5 Clipboard
+
+文件：`src/renderer/js/clipboard/index.js`
+
+职责：
+
+- 当前剪贴板快照
+- 历史列表
+- 手动捕获 / 删除 / 置顶 / 回写
+
+### 8.6 Calendar
+
+文件：`src/renderer/js/calendar/index.js`
+
+职责：
+
+- 日历面板
+- 日期详情
+- todo 管理
+- AI diary 相关视图与调用
+
+### 8.7 Settings
+
+文件：`src/renderer/js/settings/view.js`
+
+职责：
+
+- 上下文、长期记忆、能力、自测、模型设置等视图渲染辅助
+
+## 9. 视图与样式层
+
+### 9.1 HTML 视图
+
+当前主要视图：
+
+- `src/renderer/view/index.html`
+- `src/renderer/view/assistant.html`
+- `src/renderer/view/pomodoro.html`
+- `src/renderer/view/cards.html`
+- `src/renderer/view/clipboard.html`
+- `src/renderer/view/Live2d.html`
+
+其中 `index.html` 是当前主壳入口。
+
+### 9.2 CSS 分层
+
+- `src/renderer/css/theme/*.css`：主题 token 与明暗模式映射
+- `src/renderer/css/style/shell.css`：壳层与导航
+- `src/renderer/css/style/views.css`：视图容器与转场基础
+- `src/renderer/css/style/assistant.css`
+- `src/renderer/css/style/cards.css`
+- `src/renderer/css/style/pomodoro.css`
+- `src/renderer/css/style/clipboard.css`
+- `src/renderer/css/style/calendar.css`
+- `src/renderer/css/style/settings.css`
+- `src/renderer/css/style/standalone.css`
 
 ## 10. 持久化数据模型
 
-所有数据均落在 `app.getPath("userData")` 下。
+所有业务数据均落在 Electron `userData` 路径下，关键路径定义在 `src/main/config/index.js`：
 
-### 10.1 `assistant-context.json`
+- `assistant-context.json`：短期上下文
+- `assistant-conversation-log.jsonl`：对话日志
+- `assistant-long-term-memory.json`：长期记忆
+- `assistant-model-settings.json`：模型提供商与模型设置
+- `assistant-memory-routine.json`：每日记忆提炼元数据
+- `knowledge-cards.json`：知识卡片
+- `pomodoro.json`：番茄钟任务
+- `clipboard-history.json`：剪贴板历史
+- `calendar-plan.json`：日历计划/待办/AI diary 相关数据
+- `agent-screenshots/`：截图与视觉工具输出目录
 
-用途：短期对话上下文  
-结构：
+## 11. 环境变量与模型配置
 
-```json
-[
-  {"role":"user|assistant","message":"string"}
-]
-```
+### 11.1 环境变量
 
-约束：最多保留 48 条。
+`src/main/config/env.js` 当前读取：
 
-### 10.2 `assistant-long-term-memory.json`
-
-用途：长期记忆  
-核心字段：
-
-- `id`
-- `title`
-- `content`
-- `source`
-- `category`
-- `tags`
-- `confidence`
-- `status`
-- `fingerprint`
-- `createdAt`
-- `updatedAt`
-
-包含去重策略：指纹命中 + 标题/内容相似性检查。
-
-### 10.3 `assistant-memory-routine.json`
-
-用途：每日自动提炼任务状态  
-字段：
-
-- `lastExtractionDate`
-- `lastRunAt`
-- `lastStatus`
-- `lastAddedCount`
-- `lastSkippedCount`
-- `lastError`
-
-### 10.4 `knowledge-cards.json`
-
-用途：知识卡片  
-字段：
-
-- `id`
-- `title`
-- `content`
-- `summary`
-- `category`
-- `source`
-- `createdAt`
-- `updatedAt`
-
-### 10.5 `pomodoro.json`
-
-用途：番茄钟任务  
-字段：
-
-- `id`
-- `title`
-- `workTime`（毫秒）
-- `restTime`（毫秒）
-- `repeatTimes`
-
-### 10.6 `clipboard-history.json`
-
-用途：剪贴板历史  
-字段：
-
-- `id`
-- `type` (`text|image|mixed`)
-- `text`
-- `textPreview`
-- `hasImage`
-- `imageWidth`
-- `imageHeight`
-- `imageDataUrl`
-- `source`
-- `pinned`
-- `fingerprint`
-- `createdAt`
-
-### 10.7 `agent-screenshots/`
-
-用途：Agent 视觉工具截图输出目录。
-
-## 11. Agent 运行机制（开发必读）
-
-### 11.1 模式
-
-- Normal：多步推理 + 工具循环 + 最终回答
-- Direct：最多 0~1 次工具调用，快速返回
-
-### 11.2 能力边界控制
-
-- 每次请求允许指定 `allowedTools`
-- `AgentService` 会进行白名单过滤
-- 任何未授权工具调用会被拒绝
-
-### 11.3 流式链路
-
-- `app:agentChatStream` 建立一次请求
-- 主进程向 `app:agentChatStream:event` 持续推送 `status/trace/content`
-- 取消通过 `app:agentChatCancel`，内部 `AbortController` 中止
-
-## 12. 配置与环境变量
-
-### 12.1 环境变量（`.env`）
-
-由 `src/main/config/env.js` 读取：
-
+- `AI_PROVIDER`
 - `AI_MODEL`
 - `AI_SUMMARY_MODEL`
 - `AI_VISION_MODEL`
 - `VISION_MODEL`
+- `AI_API_PATH`
+- `AI_REQUEST_FORMAT`
 - `BASE_URL`
 - `API_KEY`
 
-### 12.2 关键常量
+### 11.2 运行时模型设置
 
-位于 `src/main/config/index.js`：
+模型相关配置支持两层来源：
 
-- 窗口模式与窗口映射
-- 各业务 JSON 路径
-- 触摸响应文案
+1. `.env` 默认值
+2. `assistant-model-settings.json` 中的用户本地设置
 
-## 13. 安全边界与工程约束
+模型提供商相关逻辑集中在 `ipcRegister.js` 与 `modelProviderCatalog.js`。
 
-- `BrowserWindow` 默认 `nodeIntegration: false`
+## 12. 安全边界与工程约束
+
+- `BrowserWindow` 使用 `nodeIntegration: false`
 - `contextIsolation: true`
-- Renderer 仅通过 `window.api` 调主进程
-- 不允许在 Renderer 直接访问文件系统
-- 所有持久化由主进程集中处理
+- renderer 不直接访问文件系统或 Node API
+- 所有业务持久化由 main 进程集中处理
+- renderer 必须通过 preload 暴露的 `window.api` 与 main 通信
 
-## 14. 自动化基线
+## 13. 自动化与验证基线
 
-当前 `npm test` 执行 `scripts/auto-test.js`，包括：
+当前可用验证命令：
 
-- 关键入口文件存在性
-- JSON 文件可解析性
-- HTML 本地资源引用完整性
-- IPC invoke/handle 一致性
-- 遗留关键字清理
-- 主进程 JS 语法检查
+- `npm test`
+- `npm run test:auto`
+- `npm run test:unit`
+- `npm run lint:css`
 
-注意：当前无单元测试框架与 E2E 测试，属于后续应补齐的工程项。
+已知测试重点偏向主进程 / store / utils / prompt 模块，renderer UI 自动化仍未建立完整体系。
 
-## 15. 开发扩展指南
+## 14. 新功能接入建议
 
-### 15.1 新增一个 IPC 能力（推荐流程）
+### 14.1 新增一个 IPC 能力
 
-1. 在 `ipcRegister.js` 增加业务方法（或先建领域模块）
+推荐顺序：
+
+1. 在 `ipcRegister.js` 增加或复用业务方法
 2. 在 `ipcRegisterHandlers.js` 注册 `ipcMain.handle`
 3. 在 `preload.js` 暴露 `window.api` 方法
-4. 在 Renderer 页面调用并处理异常
-5. 运行 `npm test` 验证契约一致性
+4. 在 renderer 页面接入调用
+5. 更新相关文档与测试
 
-### 15.2 新增一个 Agent 工具（推荐流程）
+### 14.2 新增一个 Agent 工具
 
-1. 在 `promptRegistry.js` 增加工具 spec（名称/参数/说明）
-2. 在 `agentService.js` 路由到工具实现
-3. 在对应 `agentSearchTools.js` 或 `agentVisionTools.js` 落地逻辑
-4. 校验 `allowedTools` 过滤是否生效
-5. 使用 `runAgentSelfTest` 做能力自测
+推荐顺序：
 
-### 15.3 新增一个持久化领域（推荐流程）
+1. 在 `promptRegistry.js` 增加工具 spec
+2. 在 `agentService.js` 接入执行流
+3. 在 `agentSearchTools.js` 或 `agentVisionTools.js` 实现逻辑
+4. 检查 `allowedTools` 白名单行为
+5. 通过 `runAgentSelfTest` 或测试脚本验证
 
-优先采用当前重构后的模式：
+### 14.3 新增一个本地持久化领域
 
-- 新建 `xxxStore.js` 负责“校验 + 读写 + 索引维护”
-- `ipcRegister.js` 仅做聚合委托，不写大量领域细节
-- handlers 只做契约映射
+推荐模式：
 
-## 16. 当前已知工程风险
+- 新建 `xxxStore.js` 负责校验 + 读写 + 归一化
+- `ipcRegister.js` 做聚合与委托
+- `ipcRegisterHandlers.js` 只做协议映射
 
-- `ipcRegister.js` 仍然偏大（记忆、卡片、QuickFloat 逻辑仍集中）
-- 自动化测试覆盖深度不足（缺少单测/E2E）
-- 抓取类工具依赖外部页面结构，存在稳定性风险
-- 资源体积较大，打包优化空间明显
+## 15. 文档维护原则
 
-## 17. 建议的下一阶段重构顺序
-
-1. 拆分 `memoryStore`（从 `ipcRegister.js` 抽离记忆域）
-2. 拆分 `knowledgeCardStore`（统一卡片域校验与缓存更新）
-3. 为 `pomodoroStore/clipboardStore` 补齐单元测试
-4. 为关键 IPC 流程补回归测试（尤其 Agent 流式取消链路）
-5. 建立文档与代码变更联动机制（每次架构改动同步本手册）
-
-## 18. 交付前检查清单（建议放入 PR 模板）
-
-- 新增 channel 是否同步了 `preload` 与 `handlers`
-- 是否破坏 `npm test` 中的契约一致性检查
-- 是否引入跨层访问（Renderer 直接操作 Node）
-- 新增持久化是否具备 `ENOENT` 兜底与输入校验
-- Agent 新工具是否可被 `allowedTools` 限制
-- 文档是否同步更新（本手册 + 相关专题文档）
-
----
-
+- 文档中的路径、IPC channel、功能面必须能在当前代码中找到。
+- 结构真相优先写在本手册中，其他文档只写摘要或状态，不要重复维护整份大表。
+- 如果改动了以下任一内容，应同步更新本手册：
+  - preload API
+  - `ipcRegisterHandlers.js` channel 分组
+  - `index.html` 壳层视图结构
+  - `package.json` 脚本
+  - `config/index.js` 中的持久化路径

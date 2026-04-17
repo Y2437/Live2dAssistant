@@ -11,12 +11,12 @@
 }
 
 .window-panel{
-    width: min(960px, 100%);
+    width: min(1120px, 100%);
     margin: 0 auto;
 }
 
 .window-panel--wide{
-    width: min(1120px, 100%);
+    width: min(1360px, 100%);
 }
 
 .window-panel--center{

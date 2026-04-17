@@ -142,6 +142,17 @@ class AgentService {
         return `${role}: ${timestamp}${message}`;
     }
 
+    getLocalDateKey(value = new Date()) {
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return "";
+        }
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    }
+
     buildRunInfo({
         runId = "",
         startedAt = "",
@@ -887,19 +898,18 @@ class AgentService {
         if (!source) {
             return false;
         }
-        const hasToday = /(今天|今日|today)/i.test(source);
         const hasDiary = /ai日记|日记|diary/i.test(source);
         const hasCreateIntent = /(生成|写|创建|记录|produce|write|create|generate)/i.test(source);
-        const hasExplicitRefusalTarget = /(昨天|昨日|明天|tomorrow|yesterday)/i.test(source);
-        return hasToday && hasDiary && hasCreateIntent && !hasExplicitRefusalTarget;
+        const hasUnsupportedDateTarget = /(昨天|昨日|前天|明天|后天|tomorrow|yesterday)/i.test(source);
+        return hasDiary && hasCreateIntent && !hasUnsupportedDateTarget;
     }
 
     async generateTodayAiDiary(args = {}) {
         if (!this.canGenerateTodayDiaryFromCurrentRequest()) {
-            throw new Error("Only explicit requests to generate today's AI diary are allowed.");
+            throw new Error("Only explicit requests to generate AI diary for today are allowed.");
         }
         return await this.createAiDiary({
-            date: new Date().toISOString().slice(0, 10),
+            date: this.getLocalDateKey(new Date()),
             prompt: typeof args?.prompt === "string" ? args.prompt : "",
             autoGenerate: true,
             source: "agent",
